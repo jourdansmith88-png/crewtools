@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.npm/
+
+.DS_Store
+**/.DS_Store
+
+Delta data/parsed/
+
+*.log
