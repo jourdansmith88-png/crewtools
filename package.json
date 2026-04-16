@@ -1,5 +1,5 @@
 {
-  "name": "senority-plus",
+  "name": "crewtools",
   "version": "0.1.0",
   "private": true,
   "main": "node_modules/expo/AppEntry.js",
@@ -10,6 +10,7 @@
     "web": "expo start --web",
     "web:3000": "expo start --web --port 3000",
     "parse:delta": "node ./scripts/parse-delta-data.mjs",
+    "refresh:delta": "node ./scripts/refresh-delta.mjs",
     "build:web": "node ./scripts/export-web.mjs"
   },
   "dependencies": {

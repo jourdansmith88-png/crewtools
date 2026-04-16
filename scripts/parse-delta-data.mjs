@@ -237,7 +237,7 @@ function extractDateFromFilename(filePath) {
     return new Date(Number(year), monthMap[month], 1).getTime();
   }
 
-  match = name.match(/([A-Z]+)\s+(\d{4})/);
+  match = name.match(/([A-Z]+)[\s_]+(\d{4})/);
   if (match) {
     const month = match[1].slice(0, 3);
     const year = match[2];
@@ -301,6 +301,13 @@ const latestCategoryRankings = new Map(
   ])
 );
 
+const seniorityByNumber = new Map(
+  latestSeniorityRows.map((row) => [row.seniorityNumber, row])
+);
+const seniorityByEmployeeNumber = new Map(
+  latestSeniorityRows.map((row) => [row.employeeNumber, row])
+);
+
 const latestCategoryAssignments = latestCategoryRows
   .map((row) => {
     const seniorityRecord = seniorityByEmployeeNumber.get(row.employeeNumber) ?? null;
@@ -317,13 +324,6 @@ const latestCategoryAssignments = latestCategoryRows
     };
   })
   .sort((a, b) => a.seniorityNumber - b.seniorityNumber);
-
-const seniorityByNumber = new Map(
-  latestSeniorityRows.map((row) => [row.seniorityNumber, row])
-);
-const seniorityByEmployeeNumber = new Map(
-  latestSeniorityRows.map((row) => [row.employeeNumber, row])
-);
 
 const categorySummary = Object.values(
   categoryRows.reduce((acc, row) => {

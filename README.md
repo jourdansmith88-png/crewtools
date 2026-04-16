@@ -1,6 +1,6 @@
-# Senority+
+# CrewTools
 
-Senority+ is a mobile-first pilot toolkit concept that combines three common Delta pilot workflows into one app:
+CrewTools is a mobile-first pilot toolkit concept that combines three common Delta pilot workflows into one app:
 
 - schedule and pairing health checks inspired by John Bell tools
 - pay audit calculations inspired by WidgetCrew
@@ -36,6 +36,17 @@ Then run:
 npm run parse:delta
 ```
 
+For the normal monthly update flow, after you drop in a new Seniority list or AE posting, run:
+
+```bash
+npm run refresh:delta
+```
+
+That will:
+
+- parse the newest Delta PDFs
+- rebuild the web app with the latest data
+
 This writes normalized JSON files into:
 
 `/Users/StarJ/Desktop/Senority+/Delta data/parsed`
@@ -50,3 +61,8 @@ This writes normalized JSON files into:
 ## Notes
 
 This version does not scrape or log into any third-party site. It is a clean product prototype built around the workflows those sites support.
+
+Typical update cadence:
+
+- Seniority lists: beginning of the month
+- AE postings: usually mid-month

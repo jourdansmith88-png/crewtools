@@ -1329,7 +1329,7 @@ export default function App() {
       >
         <View style={styles.hero}>
           <Text style={styles.eyebrow}>Delta Pilot Toolkit</Text>
-          <Text style={styles.title}>Senority+</Text>
+          <Text style={styles.title}>CrewTools</Text>
           <Text style={styles.subtitle}>
             Built for fast category reads: identify the pilot, group the tables by base, and color what they can hold.
           </Text>
@@ -2711,6 +2711,12 @@ export default function App() {
       >
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
+            <TouchableOpacity
+              style={styles.modalFloatingCloseButton}
+              onPress={() => setSelectedCategoryDetail(null)}
+            >
+              <Text style={styles.modalFloatingCloseText}>X</Text>
+            </TouchableOpacity>
             <ScrollView
               style={styles.modalScroll}
               contentContainerStyle={styles.modalScrollContent}
@@ -2727,12 +2733,6 @@ export default function App() {
                     junior to you, retiring soon, and where you would slot into the category.
                   </Text>
                 </View>
-                <TouchableOpacity
-                  style={styles.modalCloseButton}
-                  onPress={() => setSelectedCategoryDetail(null)}
-                >
-                  <Text style={styles.modalCloseText}>Close</Text>
-                </TouchableOpacity>
               </View>
               <View style={styles.resultPanel}>
                 <ResultLine
@@ -2767,10 +2767,10 @@ export default function App() {
                 ) : null}
               </View>
               <View style={styles.legendRow}>
-                <LegendSwatch label="Senior to you" color="#CFEAFF" />
-                <LegendSwatch label="You / near your number" color="#E8F3D1" />
+                <LegendSwatch label="Senior to you" color="#F8E1E5" />
+                <LegendSwatch label="You" color="#E4EEF8" />
                 <LegendSwatch label="Retiring soon" color="#F6D6D6" />
-                <LegendSwatch label="Junior to you" color="#F6F1E8" />
+                <LegendSwatch label="Junior to you" color="#D8EFD2" />
               </View>
               <View style={styles.modalTableHeader}>
                 <Text style={[styles.tableHeaderCell, styles.modalNameCell]}>Pilot</Text>
@@ -2813,6 +2813,12 @@ export default function App() {
       >
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
+            <TouchableOpacity
+              style={styles.modalFloatingCloseButton}
+              onPress={() => setSelectedAeDetailCategory(null)}
+            >
+              <Text style={styles.modalFloatingCloseText}>X</Text>
+            </TouchableOpacity>
             <ScrollView
               style={styles.modalScroll}
               contentContainerStyle={styles.modalScrollContent}
@@ -2828,12 +2834,6 @@ export default function App() {
                     Latest posting awards in seniority order. Every pilot shown below was awarded this exact category.
                   </Text>
                 </View>
-                <TouchableOpacity
-                  style={styles.modalCloseButton}
-                  onPress={() => setSelectedAeDetailCategory(null)}
-                >
-                  <Text style={styles.modalCloseText}>Close</Text>
-                </TouchableOpacity>
               </View>
               <View style={styles.modalTableHeader}>
                 <Text style={[styles.tableHeaderCell, styles.modalNameCell]}>Pilot</Text>
@@ -2889,10 +2889,10 @@ export default function App() {
               {selectedAeDetailCategory ? (
                 <View style={styles.listCompareWrap}>
                   <View style={styles.legendRow}>
-                    <LegendSwatch label="Senior to you" color="#CFEAFF" />
-                    <LegendSwatch label="You / near your number" color="#E8F3D1" />
+                    <LegendSwatch label="Senior to you" color="#F8E1E5" />
+                    <LegendSwatch label="You" color="#E4EEF8" />
                     <LegendSwatch label="Retiring soon" color="#F6D6D6" />
-                    <LegendSwatch label="Junior to you" color="#F6F1E8" />
+                    <LegendSwatch label="Junior to you" color="#D8EFD2" />
                   </View>
                   <View style={styles.listCompareColumns}>
                     <View style={styles.listCompareCard}>
@@ -3069,13 +3069,6 @@ function getAeCompareRowState(
     return {
       style: styles.listCompareRowYou,
       label: "You",
-    };
-  }
-
-  if (Math.abs(pilot.seniorityNumber - currentPilot.seniorityNumber) <= 150) {
-    return {
-      style: styles.listCompareRowYou,
-      label: "Near your number",
     };
   }
 
@@ -4780,6 +4773,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#D9C9A5",
     padding: 18,
+    position: "relative",
   },
   modalHeader: {
     flexDirection: "row",
@@ -4790,6 +4784,7 @@ const styles = StyleSheet.create({
   modalHeaderCopy: {
     flex: 1,
     gap: 4,
+    paddingRight: 56,
   },
   modalTitle: {
     fontSize: 24,
@@ -4801,16 +4796,30 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     color: "#5F5A52",
   },
-  modalCloseButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
+  modalFloatingCloseButton: {
+    position: "absolute",
+    top: 14,
+    right: 14,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: "#E8DED0",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 10,
+    borderWidth: 1,
+    borderColor: "#D9C9A5",
+    shadowColor: "#0C2340",
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
   },
-  modalCloseText: {
-    fontSize: 13,
-    fontWeight: "700",
+  modalFloatingCloseText: {
+    fontSize: 16,
+    fontWeight: "800",
     color: "#173645",
+    lineHeight: 18,
   },
   modalTableHeader: {
     flexDirection: "row",
@@ -4826,6 +4835,7 @@ const styles = StyleSheet.create({
   modalScrollContent: {
     gap: 14,
     paddingBottom: 12,
+    paddingTop: 8,
   },
   modalTableRow: {
     flexDirection: "row",
@@ -4884,16 +4894,16 @@ const styles = StyleSheet.create({
     borderBottomColor: "#EEE5D6",
   },
   listCompareRowSenior: {
-    backgroundColor: "#CFEAFF",
+    backgroundColor: "#F8E1E5",
   },
   listCompareRowYou: {
-    backgroundColor: "#E8F3D1",
+    backgroundColor: "#E4EEF8",
   },
   listCompareRowRetiring: {
     backgroundColor: "#F6D6D6",
   },
   listCompareRowJunior: {
-    backgroundColor: "#F6F1E8",
+    backgroundColor: "#D8EFD2",
   },
   listCompareNameWrap: {
     flex: 1,
@@ -4907,7 +4917,7 @@ const styles = StyleSheet.create({
   listCompareStatus: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#5F5A52",
+    color: "#4E5968",
   },
   listCompareContext: {
     fontSize: 11,
@@ -4917,7 +4927,7 @@ const styles = StyleSheet.create({
   listCompareNumber: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#24535F",
+    color: "#173645",
   },
   baseNetBar: {
     marginTop: 10,
