@@ -1,4 +1,4 @@
-import { logoutAction } from "./actions";
+import Link from "next/link";
 
 export default function BetaPage() {
   return (
@@ -8,7 +8,7 @@ export default function BetaPage() {
           <div className="text-sm font-semibold uppercase tracking-[0.24em] text-white/75">
             CrewTools Beta
           </div>
-          <form action={logoutAction}>
+          <form action="/api/beta/logout" method="post">
             <button
               type="submit"
               className="rounded-full border border-white/15 px-4 py-2 text-sm font-medium text-white transition hover:border-white/30 hover:bg-white/5"
@@ -59,6 +59,15 @@ export default function BetaPage() {
                   Later, this page can link directly into the pilot tool or mobile beta builds.
                 </p>
               </div>
+            </div>
+
+            <div className="mt-10">
+              <Link
+                href="/"
+                className="inline-flex items-center rounded-full border border-white/15 px-4 py-2 text-sm font-medium text-white transition hover:border-white/30 hover:bg-white/5"
+              >
+                Back to site
+              </Link>
             </div>
           </div>
         </section>
