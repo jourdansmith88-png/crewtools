@@ -1,0 +1,22 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-ink text-white antialiased;
+  background-image:
+    radial-gradient(circle at top, rgba(166, 25, 46, 0.18), transparent 28%),
+    radial-gradient(circle at 80% 15%, rgba(12, 35, 64, 0.45), transparent 20%);
+}
+
+::selection {
+  @apply bg-red text-white;
+}
