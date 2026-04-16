@@ -1,3 +1,6 @@
+import Link from "next/link";
+import { EarlyAccessForm } from "../components/early-access-form";
+
 const previewCards = [
   {
     title: "Seniority clarity",
@@ -55,12 +58,20 @@ export default function HomePage() {
           <div className="text-sm font-semibold tracking-[0.24em] text-white/75 uppercase">
             CrewTools
           </div>
-          <a
-            href="#early-access"
-            className="rounded-full border border-white/15 px-4 py-2 text-sm font-medium text-white transition hover:border-white/30 hover:bg-white/5"
-          >
-            Get Early Access
-          </a>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/beta/login"
+              className="rounded-full border border-white/15 px-4 py-2 text-sm font-medium text-white transition hover:border-white/30 hover:bg-white/5"
+            >
+              Beta Login
+            </Link>
+            <a
+              href="#early-access"
+              className="rounded-full border border-white/15 px-4 py-2 text-sm font-medium text-white transition hover:border-white/30 hover:bg-white/5"
+            >
+              Get Early Access
+            </a>
+          </div>
         </header>
 
         <section className="grid flex-1 items-center gap-12 py-16 lg:grid-cols-[1.1fr_0.9fr] lg:py-24">
@@ -172,29 +183,7 @@ export default function HomePage() {
             </p>
           </div>
 
-          <form
-            className="mt-8 flex flex-col gap-3 sm:max-w-xl sm:flex-row"
-            action="#"
-            method="post"
-          >
-            {/* TODO: Wire this form to your email capture backend or provider. */}
-            <label htmlFor="email" className="sr-only">
-              Email address
-            </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              placeholder="Email address"
-              className="min-h-14 flex-1 rounded-full border border-white/15 bg-black/30 px-5 text-white outline-none transition placeholder:text-soft focus:border-red"
-            />
-            <button
-              type="submit"
-              className="min-h-14 rounded-full bg-white px-6 text-sm font-semibold text-black transition hover:bg-white/90"
-            >
-              Join
-            </button>
-          </form>
+          <EarlyAccessForm />
         </section>
       </div>
     </main>
