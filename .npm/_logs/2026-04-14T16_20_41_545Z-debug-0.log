@@ -1,0 +1,18 @@
+0 verbose cli /usr/local/bin/node /usr/local/lib/node_modules/npm/bin/npm-cli.js
+1 info using npm@11.9.0
+2 info using node@v24.14.0
+3 silly config load:file:/usr/local/lib/node_modules/npm/npmrc
+4 silly config load:file:/Users/StarJ/Desktop/Senority+/.npmrc
+5 silly config load:file:/usr/local/etc/npmrc
+6 verbose title npm exec expo export --platform web
+7 verbose argv "exec" "--" "expo" "export" "--platform" "web"
+8 verbose logfile logs-max:10 dir:/Users/StarJ/Desktop/Senority+/.npm/_logs/2026-04-14T16_20_41_545Z-
+9 verbose logfile /Users/StarJ/Desktop/Senority+/.npm/_logs/2026-04-14T16_20_41_545Z-debug-0.log
+10 silly logfile start cleaning logs, removing 1 files
+11 silly logfile done cleaning log files
+12 verbose cwd /Users/StarJ/Desktop/Senority+
+13 verbose os Darwin 22.6.0
+14 verbose node v24.14.0
+15 verbose npm  v11.9.0
+16 verbose exit 0
+17 info ok

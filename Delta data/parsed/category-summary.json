@@ -1,0 +1,842 @@
+[
+  {
+    "key": "330-A-Y",
+    "base": "330",
+    "fleet": "A",
+    "positionCode": "Y",
+    "instructorCount": 0,
+    "pilotCount": 10
+  },
+  {
+    "key": "73N-A-Y",
+    "base": "73N",
+    "fleet": "A",
+    "positionCode": "Y",
+    "instructorCount": 0,
+    "pilotCount": 25
+  },
+  {
+    "key": "7ER-B-Y",
+    "base": "7ER",
+    "fleet": "B",
+    "positionCode": "Y",
+    "instructorCount": 0,
+    "pilotCount": 1
+  },
+  {
+    "key": "ATL-320-A",
+    "base": "ATL",
+    "fleet": "320",
+    "positionCode": "A",
+    "instructorCount": 710,
+    "pilotCount": 13461
+  },
+  {
+    "key": "ATL-320-B",
+    "base": "ATL",
+    "fleet": "320",
+    "positionCode": "B",
+    "instructorCount": 402,
+    "pilotCount": 12658
+  },
+  {
+    "key": "ATL-330-A",
+    "base": "ATL",
+    "fleet": "330",
+    "positionCode": "A",
+    "instructorCount": 131,
+    "pilotCount": 3370
+  },
+  {
+    "key": "ATL-330-B",
+    "base": "ATL",
+    "fleet": "330",
+    "positionCode": "B",
+    "instructorCount": 258,
+    "pilotCount": 6103
+  },
+  {
+    "key": "ATL-350-A",
+    "base": "ATL",
+    "fleet": "350",
+    "positionCode": "A",
+    "instructorCount": 82,
+    "pilotCount": 4454
+  },
+  {
+    "key": "ATL-350-B",
+    "base": "ATL",
+    "fleet": "350",
+    "positionCode": "B",
+    "instructorCount": 138,
+    "pilotCount": 5740
+  },
+  {
+    "key": "ATL-717-A",
+    "base": "ATL",
+    "fleet": "717",
+    "positionCode": "A",
+    "instructorCount": 203,
+    "pilotCount": 6392
+  },
+  {
+    "key": "ATL-717-B",
+    "base": "ATL",
+    "fleet": "717",
+    "positionCode": "B",
+    "instructorCount": 191,
+    "pilotCount": 5962
+  },
+  {
+    "key": "ATL-73N-A",
+    "base": "ATL",
+    "fleet": "73N",
+    "positionCode": "A",
+    "instructorCount": 1070,
+    "pilotCount": 9363
+  },
+  {
+    "key": "ATL-73N-B",
+    "base": "ATL",
+    "fleet": "73N",
+    "positionCode": "B",
+    "instructorCount": 382,
+    "pilotCount": 8785
+  },
+  {
+    "key": "ATL-765-A",
+    "base": "ATL",
+    "fleet": "765",
+    "positionCode": "A",
+    "instructorCount": 19,
+    "pilotCount": 1079
+  },
+  {
+    "key": "ATL-765-B",
+    "base": "ATL",
+    "fleet": "765",
+    "positionCode": "B",
+    "instructorCount": 25,
+    "pilotCount": 2572
+  },
+  {
+    "key": "ATL-7ER-A",
+    "base": "ATL",
+    "fleet": "7ER",
+    "positionCode": "A",
+    "instructorCount": 448,
+    "pilotCount": 8322
+  },
+  {
+    "key": "ATL-7ER-B",
+    "base": "ATL",
+    "fleet": "7ER",
+    "positionCode": "B",
+    "instructorCount": 165,
+    "pilotCount": 9052
+  },
+  {
+    "key": "BOS-330-A",
+    "base": "BOS",
+    "fleet": "330",
+    "positionCode": "A",
+    "instructorCount": 4,
+    "pilotCount": 704
+  },
+  {
+    "key": "BOS-330-B",
+    "base": "BOS",
+    "fleet": "330",
+    "positionCode": "B",
+    "instructorCount": 0,
+    "pilotCount": 1938
+  },
+  {
+    "key": "DTW-320-A",
+    "base": "DTW",
+    "fleet": "320",
+    "positionCode": "A",
+    "instructorCount": 41,
+    "pilotCount": 6103
+  },
+  {
+    "key": "DTW-320-B",
+    "base": "DTW",
+    "fleet": "320",
+    "positionCode": "B",
+    "instructorCount": 5,
+    "pilotCount": 5372
+  },
+  {
+    "key": "DTW-330-A",
+    "base": "DTW",
+    "fleet": "330",
+    "positionCode": "A",
+    "instructorCount": 0,
+    "pilotCount": 982
+  },
+  {
+    "key": "DTW-330-B",
+    "base": "DTW",
+    "fleet": "330",
+    "positionCode": "B",
+    "instructorCount": 10,
+    "pilotCount": 2229
+  },
+  {
+    "key": "DTW-350-A",
+    "base": "DTW",
+    "fleet": "350",
+    "positionCode": "A",
+    "instructorCount": 20,
+    "pilotCount": 2462
+  },
+  {
+    "key": "DTW-350-B",
+    "base": "DTW",
+    "fleet": "350",
+    "positionCode": "B",
+    "instructorCount": 34,
+    "pilotCount": 2883
+  },
+  {
+    "key": "DTW-717-A",
+    "base": "DTW",
+    "fleet": "717",
+    "positionCode": "A",
+    "instructorCount": 0,
+    "pilotCount": 3144
+  },
+  {
+    "key": "DTW-717-B",
+    "base": "DTW",
+    "fleet": "717",
+    "positionCode": "B",
+    "instructorCount": 2,
+    "pilotCount": 2987
+  },
+  {
+    "key": "DTW-73N-A",
+    "base": "DTW",
+    "fleet": "73N",
+    "positionCode": "A",
+    "instructorCount": 25,
+    "pilotCount": 3297
+  },
+  {
+    "key": "DTW-73N-B",
+    "base": "DTW",
+    "fleet": "73N",
+    "positionCode": "B",
+    "instructorCount": 0,
+    "pilotCount": 3266
+  },
+  {
+    "key": "INS-220-A",
+    "base": "INS",
+    "fleet": "220",
+    "positionCode": "A",
+    "instructorCount": 240,
+    "pilotCount": 240
+  },
+  {
+    "key": "INS-220-B",
+    "base": "INS",
+    "fleet": "220",
+    "positionCode": "B",
+    "instructorCount": 207,
+    "pilotCount": 207
+  },
+  {
+    "key": "INS-320-A",
+    "base": "INS",
+    "fleet": "320",
+    "positionCode": "A",
+    "instructorCount": 394,
+    "pilotCount": 394
+  },
+  {
+    "key": "INS-320-B",
+    "base": "INS",
+    "fleet": "320",
+    "positionCode": "B",
+    "instructorCount": 434,
+    "pilotCount": 434
+  },
+  {
+    "key": "INS-330-A",
+    "base": "INS",
+    "fleet": "330",
+    "positionCode": "A",
+    "instructorCount": 338,
+    "pilotCount": 338
+  },
+  {
+    "key": "INS-330-B",
+    "base": "INS",
+    "fleet": "330",
+    "positionCode": "B",
+    "instructorCount": 220,
+    "pilotCount": 220
+  },
+  {
+    "key": "INS-350-A",
+    "base": "INS",
+    "fleet": "350",
+    "positionCode": "A",
+    "instructorCount": 388,
+    "pilotCount": 388
+  },
+  {
+    "key": "INS-350-B",
+    "base": "INS",
+    "fleet": "350",
+    "positionCode": "B",
+    "instructorCount": 137,
+    "pilotCount": 137
+  },
+  {
+    "key": "INS-717-A",
+    "base": "INS",
+    "fleet": "717",
+    "positionCode": "A",
+    "instructorCount": 132,
+    "pilotCount": 132
+  },
+  {
+    "key": "INS-717-B",
+    "base": "INS",
+    "fleet": "717",
+    "positionCode": "B",
+    "instructorCount": 154,
+    "pilotCount": 154
+  },
+  {
+    "key": "INS-73N-A",
+    "base": "INS",
+    "fleet": "73N",
+    "positionCode": "A",
+    "instructorCount": 311,
+    "pilotCount": 311
+  },
+  {
+    "key": "INS-73N-B",
+    "base": "INS",
+    "fleet": "73N",
+    "positionCode": "B",
+    "instructorCount": 346,
+    "pilotCount": 346
+  },
+  {
+    "key": "INS-7ER-A",
+    "base": "INS",
+    "fleet": "7ER",
+    "positionCode": "A",
+    "instructorCount": 227,
+    "pilotCount": 227
+  },
+  {
+    "key": "INS-7ER-B",
+    "base": "INS",
+    "fleet": "7ER",
+    "positionCode": "B",
+    "instructorCount": 391,
+    "pilotCount": 391
+  },
+  {
+    "key": "LAX-320-A",
+    "base": "LAX",
+    "fleet": "320",
+    "positionCode": "A",
+    "instructorCount": 2,
+    "pilotCount": 2811
+  },
+  {
+    "key": "LAX-320-B",
+    "base": "LAX",
+    "fleet": "320",
+    "positionCode": "B",
+    "instructorCount": 1,
+    "pilotCount": 2318
+  },
+  {
+    "key": "LAX-350-A",
+    "base": "LAX",
+    "fleet": "350",
+    "positionCode": "A",
+    "instructorCount": 8,
+    "pilotCount": 2558
+  },
+  {
+    "key": "LAX-350-B",
+    "base": "LAX",
+    "fleet": "350",
+    "positionCode": "B",
+    "instructorCount": 9,
+    "pilotCount": 3072
+  },
+  {
+    "key": "LAX-73N-A",
+    "base": "LAX",
+    "fleet": "73N",
+    "positionCode": "A",
+    "instructorCount": 0,
+    "pilotCount": 1518
+  },
+  {
+    "key": "LAX-73N-B",
+    "base": "LAX",
+    "fleet": "73N",
+    "positionCode": "B",
+    "instructorCount": 0,
+    "pilotCount": 1607
+  },
+  {
+    "key": "LAX-7ER-A",
+    "base": "LAX",
+    "fleet": "7ER",
+    "positionCode": "A",
+    "instructorCount": 2,
+    "pilotCount": 3457
+  },
+  {
+    "key": "LAX-7ER-B",
+    "base": "LAX",
+    "fleet": "7ER",
+    "positionCode": "B",
+    "instructorCount": 1,
+    "pilotCount": 3735
+  },
+  {
+    "key": "MSP-220-A",
+    "base": "MSP",
+    "fleet": "220",
+    "positionCode": "A",
+    "instructorCount": 0,
+    "pilotCount": 137
+  },
+  {
+    "key": "MSP-220-B",
+    "base": "MSP",
+    "fleet": "220",
+    "positionCode": "B",
+    "instructorCount": 0,
+    "pilotCount": 180
+  },
+  {
+    "key": "MSP-320-A",
+    "base": "MSP",
+    "fleet": "320",
+    "positionCode": "A",
+    "instructorCount": 63,
+    "pilotCount": 6229
+  },
+  {
+    "key": "MSP-320-B",
+    "base": "MSP",
+    "fleet": "320",
+    "positionCode": "B",
+    "instructorCount": 0,
+    "pilotCount": 5636
+  },
+  {
+    "key": "MSP-330-A",
+    "base": "MSP",
+    "fleet": "330",
+    "positionCode": "A",
+    "instructorCount": 10,
+    "pilotCount": 1811
+  },
+  {
+    "key": "MSP-330-B",
+    "base": "MSP",
+    "fleet": "330",
+    "positionCode": "B",
+    "instructorCount": 29,
+    "pilotCount": 3665
+  },
+  {
+    "key": "MSP-73N-A",
+    "base": "MSP",
+    "fleet": "73N",
+    "positionCode": "A",
+    "instructorCount": 12,
+    "pilotCount": 4115
+  },
+  {
+    "key": "MSP-73N-B",
+    "base": "MSP",
+    "fleet": "73N",
+    "positionCode": "B",
+    "instructorCount": 15,
+    "pilotCount": 4360
+  },
+  {
+    "key": "NBC-FML-A",
+    "base": "NBC",
+    "fleet": "FML",
+    "positionCode": "A",
+    "instructorCount": 0,
+    "pilotCount": 57
+  },
+  {
+    "key": "NBC-FML-B",
+    "base": "NBC",
+    "fleet": "FML",
+    "positionCode": "B",
+    "instructorCount": 0,
+    "pilotCount": 150
+  },
+  {
+    "key": "NBC-MIL-A",
+    "base": "NBC",
+    "fleet": "MIL",
+    "positionCode": "A",
+    "instructorCount": 0,
+    "pilotCount": 270
+  },
+  {
+    "key": "NBC-MIL-B",
+    "base": "NBC",
+    "fleet": "MIL",
+    "positionCode": "B",
+    "instructorCount": 0,
+    "pilotCount": 7286
+  },
+  {
+    "key": "NBC-NEW-B",
+    "base": "NBC",
+    "fleet": "NEW",
+    "positionCode": "B",
+    "instructorCount": 0,
+    "pilotCount": 1199
+  },
+  {
+    "key": "NBC-PLA-A",
+    "base": "NBC",
+    "fleet": "PLA",
+    "positionCode": "A",
+    "instructorCount": 0,
+    "pilotCount": 21
+  },
+  {
+    "key": "NBC-PLA-B",
+    "base": "NBC",
+    "fleet": "PLA",
+    "positionCode": "B",
+    "instructorCount": 0,
+    "pilotCount": 571
+  },
+  {
+    "key": "NBC-SIC-A",
+    "base": "NBC",
+    "fleet": "SIC",
+    "positionCode": "A",
+    "instructorCount": 0,
+    "pilotCount": 6850
+  },
+  {
+    "key": "NBC-SIC-B",
+    "base": "NBC",
+    "fleet": "SIC",
+    "positionCode": "B",
+    "instructorCount": 0,
+    "pilotCount": 7343
+  },
+  {
+    "key": "NYC-220-A",
+    "base": "NYC",
+    "fleet": "220",
+    "positionCode": "A",
+    "instructorCount": 243,
+    "pilotCount": 3910
+  },
+  {
+    "key": "NYC-220-B",
+    "base": "NYC",
+    "fleet": "220",
+    "positionCode": "B",
+    "instructorCount": 72,
+    "pilotCount": 3792
+  },
+  {
+    "key": "NYC-320-A",
+    "base": "NYC",
+    "fleet": "320",
+    "positionCode": "A",
+    "instructorCount": 30,
+    "pilotCount": 3578
+  },
+  {
+    "key": "NYC-320-B",
+    "base": "NYC",
+    "fleet": "320",
+    "positionCode": "B",
+    "instructorCount": 0,
+    "pilotCount": 3052
+  },
+  {
+    "key": "NYC-330-A",
+    "base": "NYC",
+    "fleet": "330",
+    "positionCode": "A",
+    "instructorCount": 12,
+    "pilotCount": 3038
+  },
+  {
+    "key": "NYC-330-B",
+    "base": "NYC",
+    "fleet": "330",
+    "positionCode": "B",
+    "instructorCount": 46,
+    "pilotCount": 6170
+  },
+  {
+    "key": "NYC-73N-A",
+    "base": "NYC",
+    "fleet": "73N",
+    "positionCode": "A",
+    "instructorCount": 4,
+    "pilotCount": 3090
+  },
+  {
+    "key": "NYC-73N-B",
+    "base": "NYC",
+    "fleet": "73N",
+    "positionCode": "B",
+    "instructorCount": 4,
+    "pilotCount": 2633
+  },
+  {
+    "key": "NYC-765-A",
+    "base": "NYC",
+    "fleet": "765",
+    "positionCode": "A",
+    "instructorCount": 0,
+    "pilotCount": 1585
+  },
+  {
+    "key": "NYC-765-B",
+    "base": "NYC",
+    "fleet": "765",
+    "positionCode": "B",
+    "instructorCount": 2,
+    "pilotCount": 3420
+  },
+  {
+    "key": "NYC-7ER-A",
+    "base": "NYC",
+    "fleet": "7ER",
+    "positionCode": "A",
+    "instructorCount": 32,
+    "pilotCount": 5096
+  },
+  {
+    "key": "NYC-7ER-B",
+    "base": "NYC",
+    "fleet": "7ER",
+    "positionCode": "B",
+    "instructorCount": 31,
+    "pilotCount": 7574
+  },
+  {
+    "key": "SEA-220-A",
+    "base": "SEA",
+    "fleet": "220",
+    "positionCode": "A",
+    "instructorCount": 21,
+    "pilotCount": 2206
+  },
+  {
+    "key": "SEA-220-B",
+    "base": "SEA",
+    "fleet": "220",
+    "positionCode": "B",
+    "instructorCount": 7,
+    "pilotCount": 2260
+  },
+  {
+    "key": "SEA-320-A",
+    "base": "SEA",
+    "fleet": "320",
+    "positionCode": "A",
+    "instructorCount": 9,
+    "pilotCount": 2945
+  },
+  {
+    "key": "SEA-320-B",
+    "base": "SEA",
+    "fleet": "320",
+    "positionCode": "B",
+    "instructorCount": 0,
+    "pilotCount": 2844
+  },
+  {
+    "key": "SEA-330-A",
+    "base": "SEA",
+    "fleet": "330",
+    "positionCode": "A",
+    "instructorCount": 0,
+    "pilotCount": 1767
+  },
+  {
+    "key": "SEA-330-B",
+    "base": "SEA",
+    "fleet": "330",
+    "positionCode": "B",
+    "instructorCount": 2,
+    "pilotCount": 3518
+  },
+  {
+    "key": "SEA-350-A",
+    "base": "SEA",
+    "fleet": "350",
+    "positionCode": "A",
+    "instructorCount": 0,
+    "pilotCount": 472
+  },
+  {
+    "key": "SEA-350-B",
+    "base": "SEA",
+    "fleet": "350",
+    "positionCode": "B",
+    "instructorCount": 1,
+    "pilotCount": 616
+  },
+  {
+    "key": "SEA-73N-A",
+    "base": "SEA",
+    "fleet": "73N",
+    "positionCode": "A",
+    "instructorCount": 2,
+    "pilotCount": 3243
+  },
+  {
+    "key": "SEA-73N-B",
+    "base": "SEA",
+    "fleet": "73N",
+    "positionCode": "B",
+    "instructorCount": 1,
+    "pilotCount": 3318
+  },
+  {
+    "key": "SLC-220-A",
+    "base": "SLC",
+    "fleet": "220",
+    "positionCode": "A",
+    "instructorCount": 36,
+    "pilotCount": 3293
+  },
+  {
+    "key": "SLC-220-B",
+    "base": "SLC",
+    "fleet": "220",
+    "positionCode": "B",
+    "instructorCount": 40,
+    "pilotCount": 3207
+  },
+  {
+    "key": "SLC-320-A",
+    "base": "SLC",
+    "fleet": "320",
+    "positionCode": "A",
+    "instructorCount": 24,
+    "pilotCount": 4774
+  },
+  {
+    "key": "SLC-320-B",
+    "base": "SLC",
+    "fleet": "320",
+    "positionCode": "B",
+    "instructorCount": 0,
+    "pilotCount": 4722
+  },
+  {
+    "key": "SLC-73N-A",
+    "base": "SLC",
+    "fleet": "73N",
+    "positionCode": "A",
+    "instructorCount": 10,
+    "pilotCount": 3889
+  },
+  {
+    "key": "SLC-73N-B",
+    "base": "SLC",
+    "fleet": "73N",
+    "positionCode": "B",
+    "instructorCount": 0,
+    "pilotCount": 3973
+  },
+  {
+    "key": "SUP-220-A",
+    "base": "SUP",
+    "fleet": "220",
+    "positionCode": "A",
+    "instructorCount": 0,
+    "pilotCount": 18
+  },
+  {
+    "key": "SUP-320-A",
+    "base": "SUP",
+    "fleet": "320",
+    "positionCode": "A",
+    "instructorCount": 0,
+    "pilotCount": 146
+  },
+  {
+    "key": "SUP-320-B",
+    "base": "SUP",
+    "fleet": "320",
+    "positionCode": "B",
+    "instructorCount": 0,
+    "pilotCount": 18
+  },
+  {
+    "key": "SUP-330-A",
+    "base": "SUP",
+    "fleet": "330",
+    "positionCode": "A",
+    "instructorCount": 0,
+    "pilotCount": 49
+  },
+  {
+    "key": "SUP-330-B",
+    "base": "SUP",
+    "fleet": "330",
+    "positionCode": "B",
+    "instructorCount": 0,
+    "pilotCount": 5
+  },
+  {
+    "key": "SUP-350-A",
+    "base": "SUP",
+    "fleet": "350",
+    "positionCode": "A",
+    "instructorCount": 0,
+    "pilotCount": 15
+  },
+  {
+    "key": "SUP-717-A",
+    "base": "SUP",
+    "fleet": "717",
+    "positionCode": "A",
+    "instructorCount": 0,
+    "pilotCount": 54
+  },
+  {
+    "key": "SUP-73N-A",
+    "base": "SUP",
+    "fleet": "73N",
+    "positionCode": "A",
+    "instructorCount": 0,
+    "pilotCount": 30
+  },
+  {
+    "key": "SUP-7ER-A",
+    "base": "SUP",
+    "fleet": "7ER",
+    "positionCode": "A",
+    "instructorCount": 0,
+    "pilotCount": 54
+  }
+]

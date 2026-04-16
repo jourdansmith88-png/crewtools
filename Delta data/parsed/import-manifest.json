@@ -1,0 +1,67 @@
+{
+  "generatedAt": "2026-04-16T00:34:02.259Z",
+  "files": {
+    "categoryFiles": [
+      "01APR2026Category_List_B.pdf",
+      "01Apr2025Category_List_B.pdf",
+      "01Aug2025Category_List_B (1).pdf",
+      "01Aug2025Category_List_B.pdf",
+      "01DEC2025Category_List_B.pdf",
+      "01Jan2025Category_List_B.pdf",
+      "01NOV2025Category_List_B.pdf",
+      "01Oct2025Category_List_B.pdf",
+      "02Jul2025Category_List_B.pdf",
+      "02Jun2025Category_List_B.pdf",
+      "02MAR2026Category_List_B.pdf",
+      "02MAY2026Category_List_A.pdf",
+      "02Mar2025Category_List_B.pdf",
+      "02May2025Category_List_B.pdf",
+      "31Aug2025Category_List_B (1).pdf",
+      "31Aug2025Category_List_B.pdf",
+      "31JAN2026Category_List_B.pdf",
+      "31Jan2025Category_List_B.pdf"
+    ],
+    "seniorityFiles": [
+      "April 2025 Seniority List.pdf",
+      "April 2026 Seniority List.pdf",
+      "August 2025 Seniority List.pdf",
+      "December 2025 Seniority List.pdf",
+      "February 2025 Seniority List.pdf",
+      "February 2026 Seniority List.pdf",
+      "January 2025 Seniority List.pdf",
+      "January 2026 Seniority List.pdf",
+      "July 2025 Seniority List.pdf",
+      "June 2025 Seniority List.pdf",
+      "March 2026 Seniority List.pdf",
+      "May 2025 Seniority List (1).pdf",
+      "May 2025 Seniority List.pdf",
+      "November 2025 Seniority List.pdf",
+      "October 2025 Seniority List.pdf",
+      "September 2025 Seniority List.pdf"
+    ],
+    "aeFiles": [
+      "13FEB26 FINAL AE for Posting q2.pdf",
+      "APR25_AE_Award_for_Posting.pdf",
+      "DEC2025_AE_Award_Posting.pdf",
+      "FEB25_AE_Award_For_Posting.pdf",
+      "JAN2026_AE_Award_Posting.pdf",
+      "JAN25_AE_Award_For_Posting.pdf",
+      "JUL2025_AE_Award_Posting.pdf",
+      "JUN2025_AE_Award_Posting.pdf",
+      "MAR2026_AE_Award_Posting1.pdf",
+      "NOV2025_AE_Award_Posting.pdf",
+      "OCT2025_AE_Award_Posting.pdf",
+      "SEP2025_AE_Award_Posting.pdf"
+    ]
+  },
+  "counts": {
+    "categoryRows": 301965,
+    "seniorityRows": 276615,
+    "aeRows": 3517
+  },
+  "latestFiles": {
+    "category": "02MAY2026Category_List_A.pdf",
+    "seniority": "April 2026 Seniority List.pdf",
+    "ae": "MAR2026_AE_Award_Posting1.pdf"
+  }
+}

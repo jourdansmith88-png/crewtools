@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "Senority+",
+    "slug": "senority-plus",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#F4EFE4"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#F4EFE4"
+      }
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}
