@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { deltaCharts as embeddedDeltaCharts } from "./src/data/deltaCharts";
 import { deltaSnapshot } from "./src/data/deltaSnapshot";
+import { payAuditPriorityRules } from "./src/data/payAuditRules";
 import {
   annualTakeHomeRate,
   definedContributionRate,
@@ -29,12 +30,69 @@ import {
   formatCurrency,
   formatPercent,
 } from "./src/utils/calculators";
+import {
+  buildPayAuditContext,
+  buildPayAuditResult,
+} from "./src/utils/payAuditEngine";
+import { parseDeltaTimecard, parseTimeValue } from "./src/utils/deltaTimecardParser";
 
 const embeddedChartData = embeddedDeltaCharts as unknown as DeltaChartsData;
+
+const premiumTypeOptions = [
+  { key: "none", label: "None" },
+  { key: "green-slip", label: "Green Slip" },
+  { key: "silver-slip", label: "Silver Slip" },
+  { key: "quick-slip", label: "Quick Slip" },
+  { key: "inverse-assignment", label: "Inverse Assignment" },
+] as const;
+
+const payToolCards = [
+  {
+    key: "timecard-auditor",
+    title: "Time Card Auditor",
+    subtitle: "Paste a Delta monthly timecard and scan premiums, sick interactions, and payback clues.",
+    cta: "Open Auditor",
+    badge: "Live",
+    glyph: "TC",
+  },
+  {
+    key: "rotation-importer",
+    title: "Rotation Importer",
+    subtitle: "Connect the timecard back to the trip so we can audit what really happened operationally.",
+    cta: "Coming Next",
+    badge: "Roadmap",
+    glyph: "RI",
+  },
+  {
+    key: "statement-translator",
+    title: "Statement Translator",
+    subtitle: "Turn posted pay codes into plain English with Delta contract breadcrumbs.",
+    cta: "Coming Next",
+    badge: "Roadmap",
+    glyph: "ST",
+  },
+  {
+    key: "reroute-calculator",
+    title: "Reroute Calculator",
+    subtitle: "Check reroute and reassignment outcomes against the PWA instead of trusting payroll math.",
+    cta: "Coming Next",
+    badge: "Priority",
+    glyph: "RR",
+  },
+  {
+    key: "flight-pay",
+    title: "Flight Pay Calculator",
+    subtitle: "Roll the whole month together once schedules, leaves, premiums, and statements are all parsed.",
+    cta: "Coming Next",
+    badge: "Roadmap",
+    glyph: "FP",
+  },
+] as const;
 
 type TabKey = "home" | "schedule" | "pay" | "seniority" | "ae";
 type SeatFilter = "All" | "Captain" | "First Officer";
 type ChartStartMode = "hire" | "today";
+type PayToolKey = (typeof payToolCards)[number]["key"];
 type HoldLabel = "Current category" | "Can hold" | "Near the line" | "Cannot hold" | "No pilot";
 type AeReachLabel =
   | "Award went junior to you"
@@ -121,6 +179,10 @@ type AeDetailSelection = {
   awardCategory: string;
   seat: string;
 };
+type CategoryDetailSelection = {
+  categoryKey: string;
+  label: string;
+};
 type AeMovementSummary = {
   aeIn: number;
   aeOut: number;
@@ -196,12 +258,12 @@ type ChartPoint = {
   referenceTwoPercent?: number | null;
 };
 
-const tabs: { key: TabKey; label: string }[] = [
-  { key: "home", label: "Home" },
-  { key: "seniority", label: "Seniority" },
-  { key: "ae", label: "AE" },
-  { key: "schedule", label: "Schedule" },
-  { key: "pay", label: "Pay" },
+const tabs: { key: TabKey; label: string; icon: string }[] = [
+  { key: "home", label: "Home", icon: "⌂" },
+  { key: "seniority", label: "Seniority", icon: "#" },
+  { key: "ae", label: "AE", icon: "⇄" },
+  { key: "schedule", label: "Schedule", icon: "◷" },
+  { key: "pay", label: "Pay", icon: "$" },
 ];
 
 const seatFilters: SeatFilter[] = ["All", "Captain", "First Officer"];
@@ -238,6 +300,7 @@ export default function App() {
   const [selectedWhatIfFleet, setSelectedWhatIfFleet] = useState("");
   const [selectedWhatIfBase, setSelectedWhatIfBase] = useState("");
   const [selectedAeDetailCategory, setSelectedAeDetailCategory] = useState<AeDetailSelection | null>(null);
+  const [selectedCategoryDetail, setSelectedCategoryDetail] = useState<CategoryDetailSelection | null>(null);
   const [categorySearch, setCategorySearch] = useState("");
   const [aeSearch, setAeSearch] = useState("");
   const [categorySeatFilter, setCategorySeatFilter] = useState<SeatFilter>("All");
@@ -249,10 +312,22 @@ export default function App() {
   const [legs, setLegs] = useState("5");
 
   const [hourlyRate, setHourlyRate] = useState("243");
-  const [creditedHours, setCreditedHours] = useState("82");
-  const [premiumHours, setPremiumHours] = useState("7");
-  const [perDiemDays, setPerDiemDays] = useState("12");
-  const [missedBreakPay, setMissedBreakPay] = useState("350");
+  const [creditedHours, setCreditedHours] = useState("0");
+  const [premiumHours, setPremiumHours] = useState("0");
+  const [premiumType, setPremiumType] = useState<(typeof premiumTypeOptions)[number]["key"]>(
+    "green-slip"
+  );
+  const [selectedPayTool, setSelectedPayTool] = useState<PayToolKey>("timecard-auditor");
+  const [perDiemHours, setPerDiemHours] = useState("0");
+  const [missedBreakPay, setMissedBreakPay] = useState("0");
+  const [timecardRawInput, setTimecardRawInput] = useState("");
+  const [timecardAuditRequested, setTimecardAuditRequested] = useState(false);
+  const [actualBasePay, setActualBasePay] = useState("0");
+  const [actualPremiumPay, setActualPremiumPay] = useState("0");
+  const [actualPerDiem, setActualPerDiem] = useState("0");
+  const [actualAdjustments, setActualAdjustments] = useState("0");
+  const [actualPostedTotal, setActualPostedTotal] = useState("0");
+  const [reserveStatus, setReserveStatus] = useState(false);
   const [pilotHistoryCache, setPilotHistoryCache] = useState<Record<string, PilotHistoryRecord>>({});
   const [loadedPilotHistoryShards, setLoadedPilotHistoryShards] = useState<Record<string, true>>(
     {}
@@ -323,10 +398,10 @@ export default function App() {
         Number(hourlyRate) || 0,
         Number(creditedHours) || 0,
         Number(premiumHours) || 0,
-        Number(perDiemDays) || 0,
+        parseAuditHoursInput(perDiemHours),
         Number(missedBreakPay) || 0
       ),
-    [hourlyRate, creditedHours, premiumHours, perDiemDays, missedBreakPay]
+    [hourlyRate, creditedHours, premiumHours, perDiemHours, missedBreakPay]
   );
 
   const filteredCategories = useMemo(
@@ -611,6 +686,67 @@ export default function App() {
     [latestCategoryAssignments, selectedAeDetailCategory]
   );
 
+  const selectedCategoryAssignments = useMemo(
+    () =>
+      selectedCategoryDetail
+        ? latestCategoryAssignments
+            .filter((entry) => entry.categoryKey === selectedCategoryDetail.categoryKey)
+            .sort((left, right) => left.seniorityNumber - right.seniorityNumber)
+        : [],
+    [latestCategoryAssignments, selectedCategoryDetail]
+  );
+
+  const selectedCategoryPreviewRows = useMemo(() => {
+    if (!selectedCategoryDetail) {
+      return [];
+    }
+
+    const existing = [...selectedCategoryAssignments];
+    if (!currentPilot || !userSeniorityNumber) {
+      return existing;
+    }
+
+    const alreadyListed = existing.some(
+      (assignment) => assignment.employeeNumber === currentPilot.employeeNumber
+    );
+    if (alreadyListed) {
+      return existing;
+    }
+
+    const userRow: LatestCategoryAssignment & { synthetic?: boolean } = {
+      employeeNumber: currentPilot.employeeNumber,
+      name: currentPilot.name,
+      seniorityNumber: currentPilot.seniorityNumber,
+      base: "",
+      fleet: "",
+      seat: "",
+      categoryKey: selectedCategoryDetail.categoryKey,
+      awardCategory: selectedCategoryDetail.label,
+      scheduledRetireDate: currentPilot.scheduledRetireDate,
+      synthetic: true,
+    };
+
+    const inserted = [...existing, userRow];
+    inserted.sort((left, right) => left.seniorityNumber - right.seniorityNumber);
+    return inserted;
+  }, [selectedCategoryAssignments, selectedCategoryDetail, currentPilot, userSeniorityNumber]);
+
+  const categoryAssignmentsByKey = useMemo(() => {
+    const grouped = new Map<string, LatestCategoryAssignment[]>();
+
+    latestCategoryAssignments.forEach((assignment) => {
+      const bucket = grouped.get(assignment.categoryKey) ?? [];
+      bucket.push(assignment);
+      grouped.set(assignment.categoryKey, bucket);
+    });
+
+    grouped.forEach((assignments) => {
+      assignments.sort((left, right) => left.seniorityNumber - right.seniorityNumber);
+    });
+
+    return grouped;
+  }, [latestCategoryAssignments]);
+
   const aeMovementByCategory = useMemo(() => {
     const movement = new Map<string, AeMovementSummary>();
 
@@ -718,6 +854,28 @@ export default function App() {
     () => buildHoldSummary(deltaSnapshot.categories, userSeniorityNumber, currentCategoryKey),
     [userSeniorityNumber, currentCategoryKey]
   );
+
+  const otherPilotSummary = useMemo(
+    () => ({
+      instructors: deltaSnapshot.operationalBases.reduce(
+        (sum: number, base: BaseEntry) => sum + base.instructors,
+        0
+      ),
+      carveoutPilots: deltaSnapshot.carveoutBases.reduce(
+        (sum: number, base: BaseEntry) => sum + base.pilots,
+        0
+      ),
+      total:
+        deltaSnapshot.operationalBases.reduce(
+          (sum: number, base: BaseEntry) => sum + base.instructors,
+          0
+        ) +
+        deltaSnapshot.carveoutBases.reduce((sum: number, base: BaseEntry) => sum + base.pilots, 0),
+    }),
+    []
+  );
+
+  const totalInactivePilots = otherPilotSummary.carveoutPilots;
 
   const aeSummary = useMemo(
     () => buildAeSummary(deltaSnapshot.aeOpportunities, userSeniorityNumber),
@@ -1016,6 +1174,141 @@ export default function App() {
     payScenarioOptions[0] ??
     null;
 
+  const parsedTimecard = useMemo(() => parseDeltaTimecard(timecardRawInput), [timecardRawInput]);
+  const parsedPremiumPayEquivalent = useMemo(() => {
+    if (!parsedTimecard) {
+      return 0;
+    }
+    return parsedTimecard.premiumHoursTotal * (Number(hourlyRate) || 0) * 2;
+  }, [parsedTimecard, hourlyRate]);
+  const parsedPremiumType = useMemo<(typeof premiumTypeOptions)[number]["key"]>(() => {
+    if (!parsedTimecard || parsedTimecard.premiumHoursTotal <= 0) {
+      return "none";
+    }
+    if (parseTimeValue(parsedTimecard.reserveAssignGqSlipPay) > 0) {
+      return "inverse-assignment";
+    }
+    if (parseTimeValue(parsedTimecard.quickSlipPay) > 0) {
+      return "quick-slip";
+    }
+    if (parseTimeValue(parsedTimecard.silverSlipPay) > 0) {
+      return "silver-slip";
+    }
+    if (parseTimeValue(parsedTimecard.gsSlipPay) > 0) {
+      return "green-slip";
+    }
+    return "none";
+  }, [parsedTimecard]);
+  const parsedTotalCreditHours = parsedTimecard ? parseTimeValue(parsedTimecard.totalCredit) : 0;
+  const parsedVacationCreditHours = parsedTimecard ? parseTimeValue(parsedTimecard.vacationCreditUsed) : 0;
+  const parsedAdditionalPayOnlyHours = parsedTimecard
+    ? parseTimeValue(parsedTimecard.additionalPayOnlyTotal)
+    : 0;
+  const parsedApplicableBaseCreditHours = parsedTimecard
+    ? parseTimeValue(parsedTimecard.creditApplicableToRegGs)
+    : 0;
+  const parsedDerivedBaseBeforeVacationHours =
+    parsedApplicableBaseCreditHours > 0 && parsedVacationCreditHours > 0
+      ? Math.max(0, parsedApplicableBaseCreditHours - parsedVacationCreditHours)
+      : parsedTotalCreditHours;
+  const parsedBasePayEquivalent = useMemo(() => {
+    const baseCreditHours =
+      parsedApplicableBaseCreditHours ||
+      parsedTotalCreditHours + parsedVacationCreditHours;
+    return baseCreditHours * (Number(hourlyRate) || 0);
+  }, [parsedApplicableBaseCreditHours, parsedTotalCreditHours, parsedVacationCreditHours, hourlyRate]);
+  const hasPostedBaseContext =
+    (Number(actualBasePay) || 0) > 0 ||
+    parsedTotalCreditHours > 0 ||
+    (Number(actualPostedTotal) || 0) > 0;
+  const effectiveActualPremiumPay =
+    (Number(actualPremiumPay) || 0) > 0 ? Number(actualPremiumPay) || 0 : parsedPremiumPayEquivalent;
+  const displayedDueCreditHours =
+    parsedApplicableBaseCreditHours ||
+    parsedTotalCreditHours + parsedVacationCreditHours ||
+    Number(creditedHours) ||
+    0;
+  const displayedPremiumCreditHours = parsedTimecard?.premiumHoursTotal || Number(premiumHours) || 0;
+  const displayedTotalCreditHours =
+    displayedDueCreditHours + displayedPremiumCreditHours + parsedAdditionalPayOnlyHours;
+  const effectiveActualBasePay =
+    (Number(actualBasePay) || 0) > 0 ? Number(actualBasePay) || 0 : parsedBasePayEquivalent;
+  const effectiveActualPostedTotal =
+    (Number(actualPostedTotal) || 0) > 0
+      ? Number(actualPostedTotal) || 0
+      : hasPostedBaseContext
+        ? effectiveActualBasePay +
+          effectiveActualPremiumPay +
+          (Number(actualPerDiem) || 0) +
+          (Number(actualAdjustments) || 0)
+        : 0;
+
+  useEffect(() => {
+    if (!parsedTimecard?.scheduleStatus) {
+      return;
+    }
+    setReserveStatus(parsedTimecard.scheduleStatus === "reserve");
+  }, [parsedTimecard?.scheduleStatus]);
+
+  useEffect(() => {
+    setTimecardAuditRequested(false);
+    setCreditedHours("0");
+    setActualBasePay("0");
+    setActualPremiumPay("0");
+    setActualPerDiem("0");
+    setActualAdjustments("0");
+    setActualPostedTotal("0");
+    setPremiumHours("0");
+    setPremiumType("none");
+  }, [timecardRawInput]);
+
+  const payAuditContext = useMemo(
+    () =>
+      buildPayAuditContext({
+        base: currentPilot?.currentCategoryCode.slice(0, 3) ?? "ATL",
+        fleet: activePayScenario?.code.replace(/[AB]$/, "") ?? "320",
+        seat: activePayScenario?.seat === "Captain" ? "CA" : "FO",
+        longevityYear: currentPilot ? derivePayYear(currentPilot.pilotHireDate) : 1,
+        reserveStatus,
+        month: "2026-04",
+      }),
+    [currentPilot, activePayScenario, reserveStatus]
+  );
+
+  const payAuditResult = useMemo(
+    () =>
+      buildPayAuditResult(payAuditContext, {
+        hourlyRate: Number(hourlyRate) || 0,
+        creditedHours: Number(creditedHours) || 0,
+        premiumHours: Number(premiumHours) || 0,
+        premiumType,
+        tafbHours: parseAuditHoursInput(perDiemHours),
+        missedBreakPay: Number(missedBreakPay) || 0,
+        actualBasePay: effectiveActualBasePay,
+        actualPremiumPay: effectiveActualPremiumPay,
+        actualPerDiem: Number(actualPerDiem) || 0,
+        actualAdjustments: Number(actualAdjustments) || 0,
+        actualPostedTotal: effectiveActualPostedTotal,
+      }),
+    [
+      payAuditContext,
+      hourlyRate,
+      creditedHours,
+      premiumHours,
+      premiumType,
+      perDiemHours,
+      missedBreakPay,
+      actualBasePay,
+      effectiveActualBasePay,
+      actualPremiumPay,
+      effectiveActualPremiumPay,
+      actualPerDiem,
+      actualAdjustments,
+      actualPostedTotal,
+      effectiveActualPostedTotal,
+    ]
+  );
+
   const jumpToAeWhatIfPlanner = () => {
     setActiveTab("ae");
     setTimeout(() => {
@@ -1040,61 +1333,41 @@ export default function App() {
           <Text style={styles.subtitle}>
             Built for fast category reads: identify the pilot, group the tables by base, and color what they can hold.
           </Text>
-          <View style={styles.heroMetrics}>
-            <MetricCard label="Pilot" value={currentPilot ? currentPilot.currentCategoryCode : "Lookup"} tone="green" />
-            <MetricCard label="Likely Holds" value={`${holdSummary.canHold}`} tone="blue" />
-            <MetricCard label="AE Went JR" value={`${aeSummary.wentJunior}`} tone="gold" />
-          </View>
-        </View>
-
-        <View style={styles.tabRow}>
-          {tabs.map((tab) => (
-            <TouchableOpacity
-              key={tab.key}
-              style={[styles.tabButton, activeTab === tab.key && styles.tabButtonActive]}
-              onPress={() => setActiveTab(tab.key)}
-            >
-              <Text style={[styles.tabLabel, activeTab === tab.key && styles.tabLabelActive]}>
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
         </View>
 
         {activeTab === "home" && (
           <View style={styles.sectionStack}>
             <SectionCard
-              title="Pilot Identity"
-              description="Enter an employee number so the app can find the pilot on the latest seniority list and highlight the current category automatically."
-            >
-              <FormRow>
-                <LabeledInput
-                  label="Employee Number"
-                  value={employeeNumberInput}
-                  onChangeText={setEmployeeNumberInput}
-                />
-              </FormRow>
-              {currentPilot ? (
-                <View style={styles.identityCard}>
-                  <Text style={styles.identityName}>{currentPilot.name}</Text>
-                  <Text style={styles.identityMeta}>
-                    Emp {currentPilot.employeeNumber} • Seniority #{currentPilot.seniorityNumber}
-                  </Text>
-                  <Text style={styles.identityMeta}>
-                    Current category {currentPilot.currentCategoryCode} • Hire {currentPilot.pilotHireDate}
-                  </Text>
-                </View>
-              ) : (
-                <Text style={styles.insightText}>
-                  No pilot selected yet. Once an employee number matches the latest list, category tables turn into a personal hold map.
-                </Text>
-              )}
-            </SectionCard>
-
-            <SectionCard
               title="Latest Delta Snapshot"
               description={`Using ${deltaSnapshot.latestFiles.category}, ${deltaSnapshot.latestFiles.seniority}, and ${deltaSnapshot.latestFiles.ae}.`}
             >
+              <View style={styles.identityCard}>
+                {currentPilot ? (
+                  <>
+                    <Text style={styles.identityName}>{currentPilot.name}</Text>
+                    <Text style={styles.identityMeta}>
+                      Emp {currentPilot.employeeNumber} • Seniority #{currentPilot.seniorityNumber}
+                    </Text>
+                    <Text style={styles.identityMeta}>
+                      {currentPilot.currentCategoryCode} • Hire {currentPilot.pilotHireDate}
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.identityName}>Pilot Lookup</Text>
+                    <Text style={styles.identityMeta}>
+                      Enter an employee number to personalize the dashboard and category reads.
+                    </Text>
+                  </>
+                )}
+                <FormRow>
+                  <LabeledInput
+                    label="Employee Number"
+                    value={employeeNumberInput}
+                    onChangeText={setEmployeeNumberInput}
+                  />
+                </FormRow>
+              </View>
               {currentPilot ? (
                 <View style={styles.summaryCardRow}>
                   <SummaryCard
@@ -1146,15 +1419,9 @@ export default function App() {
               ) : null}
 
               <View style={styles.snapshotRow}>
-                <SnapshotPill label="Category Rows" value={`${deltaSnapshot.counts.categoryRows}`} />
-                <SnapshotPill label="AE Awards" value={`${deltaSnapshot.counts.aeRows}`} />
+                <SnapshotPill label="Total Pilots" value={`${systemTotalPilots}`} />
+                <SnapshotPill label="Inactive Pilots" value={`${totalInactivePilots}`} />
                 <SnapshotPill label="Live Bases" value={`${deltaSnapshot.operationalBases.length}`} />
-              </View>
-              <View style={styles.resultPanel}>
-                <ResultLine label="Can hold now" value={`${holdSummary.canHold}`} />
-                <ResultLine label="Near the line" value={`${holdSummary.nearLine}`} />
-                <ResultLine label="Current category" value={holdSummary.currentCategory ? "1" : "0"} />
-                <ResultLine label="AE went junior" value={`${aeSummary.wentJunior}`} />
               </View>
               <TouchableOpacity style={styles.quickLinkButton} onPress={jumpToAeWhatIfPlanner}>
                 <Text style={styles.quickLinkButtonText}>Jump To “When can I hold….”</Text>
@@ -1212,7 +1479,7 @@ export default function App() {
                     </Text>
                     <MiniBarChart
                       title="System Seniority Percent"
-                      subtitle="Past lists in blue, projected future in orange. Lower percent means more senior."
+                      subtitle="Past lists in navy, projected future in red. Lower percent means more senior."
                       points={seniorityPercentSeries}
                     />
                     <View style={styles.forecastControlRow}>
@@ -1246,12 +1513,12 @@ export default function App() {
                     </View>
                     <MiniBarChart
                       title="Projected Seniority Number"
-                      subtitle="Past list position in blue, future estimated seniority number in orange based on retirements to age 65. Growth changes list size, but not your rank number."
+                      subtitle="Past list position in navy, future estimated seniority number in red based on retirements to age 65. Growth changes list size, but not your rank number."
                       points={seniorityNumberSeries}
                     />
                     <MiniBarChart
                       title="Total Pilot Count"
-                      subtitle={`Past list size in blue. Future projected list size in orange using a ${Math.round(
+                      subtitle={`Past list size in navy. Future projected list size in red using a ${Math.round(
                         forecastGrowthRate * 100
                       )}% annual growth assumption.`}
                       points={totalPilotCountSeries}
@@ -1357,22 +1624,21 @@ export default function App() {
                   <View key={base.base} style={styles.resultPanel}>
                     <ResultLine label={`${base.base} categories`} value={`${base.categories}`} />
                     <ResultLine label="Pilots" value={`${base.pilots}`} />
-                    <ResultLine label="Instructors" value={`${base.instructors}`} />
                   </View>
                 ))}
               </View>
-            <View
-              style={styles.sectionStack}
-              onLayout={(event) => setWhatIfSectionY(event.nativeEvent.layout.y)}
-            >
-              <Text style={styles.inputLabel}>Carveouts</Text>
-              {deltaSnapshot.carveoutBases.map((base: BaseEntry) => (
-                <View key={base.base} style={styles.resultPanel}>
-                  <ResultLine label={base.base} value={`${base.pilots} total pilots`} />
-                  <Text style={styles.insightText}>{describeCarveout(base.base)}</Text>
+              <View style={styles.sectionStack}>
+                <Text style={styles.inputLabel}>Other Pilots</Text>
+                <View style={styles.resultPanel}>
+                  <ResultLine label="Total" value={`${otherPilotSummary.total}`} />
+                  <ResultLine label="Instructor pilots" value={`${otherPilotSummary.instructors}`} />
+                  <ResultLine label="Carveout pilots" value={`${otherPilotSummary.carveoutPilots}`} />
+                  <Text style={styles.insightText}>
+                    Includes instructors plus carveout groups like NBC, INS, and SUP that are useful
+                    for visibility but not treated as normal operating bases.
+                  </Text>
                 </View>
-              ))}
-            </View>
+              </View>
             </SectionCard>
           </View>
         )}
@@ -1402,32 +1668,333 @@ export default function App() {
         {activeTab === "pay" && (
           <SectionCard
             title="Pay Audit"
-            description="Estimate expected pay with the same quick audit flow."
+            description="Pilot-first pay tools: open the right calculator, paste the company data, and get a verdict with a contract breadcrumb."
           >
-            <FormRow>
-              <LabeledInput label="Hourly Rate" value={hourlyRate} onChangeText={setHourlyRate} prefix="$" />
-              <LabeledInput label="Credited Hours" value={creditedHours} onChangeText={setCreditedHours} />
-            </FormRow>
-            <FormRow>
-              <LabeledInput label="Premium Hours" value={premiumHours} onChangeText={setPremiumHours} />
-              <LabeledInput label="Per Diem Days" value={perDiemDays} onChangeText={setPerDiemDays} />
-            </FormRow>
-            <FormRow>
-              <LabeledInput label="Missed Break Pay" value={missedBreakPay} onChangeText={setMissedBreakPay} prefix="$" />
-            </FormRow>
-            <View style={styles.resultPanel}>
-              <ResultLine label="Base Pay" value={formatCurrency(payAudit.basePay)} />
-              <ResultLine label="Premium Pay" value={formatCurrency(payAudit.premiumPay)} />
-              <ResultLine label="Per Diem" value={formatCurrency(payAudit.perDiem)} />
-              <ResultLine label="Expected Total" value={formatCurrency(payAudit.totalExpected)} emphasis />
+            <View style={styles.payToolGrid}>
+              {payToolCards.map((tool) => (
+                <TouchableOpacity
+                  key={tool.key}
+                  activeOpacity={0.9}
+                  style={[
+                    styles.payToolCard,
+                    selectedPayTool === tool.key && styles.payToolCardActive,
+                  ]}
+                  onPress={() => setSelectedPayTool(tool.key)}
+                >
+                  <View style={styles.payToolHero}>
+                    <Text style={styles.payToolGlyph}>{tool.glyph}</Text>
+                    <Text style={styles.payToolBadge}>{tool.badge}</Text>
+                  </View>
+                  <View style={styles.payToolBody}>
+                    <Text style={styles.payToolTitle}>{tool.title}</Text>
+                    <Text style={styles.payToolSubtitle}>{tool.subtitle}</Text>
+                  </View>
+                  <Text style={styles.payToolButton}>
+                    {selectedPayTool === tool.key ? "Open Now" : tool.cta}
+                  </Text>
+                </TouchableOpacity>
+              ))}
             </View>
+
+            {selectedPayTool === "timecard-auditor" ? (
+              <>
+            <View style={styles.sectionStack}>
+              <Text style={styles.inputLabel}>1. Paste Delta Monthly Timecard</Text>
+              <TextAreaInput
+                label="Raw timecard text"
+                value={timecardRawInput}
+                onChangeText={setTimecardRawInput}
+                placeholder="Paste the Delta Monthly Time Data text here. The app will parse premium lines, trigger values, payback days, and key audit clues."
+              />
+              <TouchableOpacity
+                style={[
+                  styles.auditButton,
+                  !parsedTimecard && styles.auditButtonDisabled,
+                ]}
+                disabled={!parsedTimecard}
+                onPress={() => {
+                  if (!parsedTimecard) {
+                    return;
+                  }
+                  const parsedAuditBaseHours =
+                    parsedApplicableBaseCreditHours ||
+                    parsedTotalCreditHours + parsedVacationCreditHours;
+                  setCreditedHours(parsedAuditBaseHours.toFixed(2));
+                  setPremiumHours(parsedTimecard.premiumHoursTotal.toFixed(2));
+                  setPremiumType(parsedPremiumType);
+                  setTimecardAuditRequested(true);
+                }}
+              >
+                <Text style={styles.auditButtonText}>Audit Timecard</Text>
+              </TouchableOpacity>
+              {timecardAuditRequested && parsedTimecard ? (
+                <View style={styles.auditSummaryHero}>
+                  <View style={styles.auditSummaryHeader}>
+                    <Text style={styles.auditSummaryTitle}>
+                      {payAuditResult.findings.some((finding) => finding.severity === "high")
+                        ? "Likely incorrect"
+                        : payAuditResult.findings.length > 0
+                          ? "Needs review"
+                          : "Looks correct so far"}
+                    </Text>
+                    <Text style={styles.auditSummaryMeta}>
+                      {payAuditResult.findings.length} potential discrepancy
+                      {payAuditResult.findings.length === 1 ? "" : "ies"}
+                    </Text>
+                  </View>
+                  <View style={styles.auditSummaryMetrics}>
+                    <SnapshotPill label="Total Credit" value={`${displayedTotalCreditHours.toFixed(2)} hrs`} />
+                  </View>
+                  <Text style={styles.auditSummaryFormula}>
+                    {`${formatHoursToClock(displayedDueCreditHours)} base`}
+                    {parsedAdditionalPayOnlyHours > 0
+                      ? ` + ${formatHoursToClock(parsedAdditionalPayOnlyHours)} addtl`
+                      : ""}
+                    {displayedPremiumCreditHours > 0
+                      ? ` + ${formatHoursToClock(displayedPremiumCreditHours)} premium`
+                      : ""}
+                    {` = ${formatHoursToClock(displayedTotalCreditHours)} total`}
+                  </Text>
+                </View>
+              ) : null}
+              {timecardAuditRequested && parsedTimecard ? (
+                <View style={styles.resultPanel}>
+                  <Text style={styles.inputLabel}>2. What The Auditor Saw</Text>
+                  <ResultLine label="Pilot / bid period" value={`${parsedTimecard.pilotName ?? "Unknown"} • ${parsedTimecard.bidPeriod ?? "Unknown period"}`} />
+                  <ResultLine
+                    label="Category / listed ALV"
+                    value={`${parsedTimecard.categoryCode ?? "Unknown"} • ${parsedTimecard.alv ?? "Unknown ALV"}`}
+                  />
+                  {parsedApplicableBaseCreditHours > 0 ? (
+                    <ResultLine
+                      label="Base month credit"
+                      value={parsedTimecard.creditApplicableToRegGs ?? "Unknown"}
+                    />
+                  ) : null}
+                  <ResultLine
+                    label="Total credit on card"
+                    value={parsedTimecard.totalCredit ?? "Unknown"}
+                  />
+                  {parsedVacationCreditHours > 0 ? (
+                    <ResultLine
+                      label="Vacation used in month"
+                      value={parsedTimecard.vacationCreditUsed ?? "0:00"}
+                    />
+                  ) : null}
+                  {parsedAdditionalPayOnlyHours > 0 ? (
+                    <ResultLine
+                      label="Additional pay only from activity rows"
+                      value={parsedTimecard.additionalPayOnlyTotal ?? "0:00"}
+                    />
+                  ) : null}
+                  <ResultLine
+                    label="Detected month type"
+                    value={
+                      parsedTimecard.scheduleStatus === "reserve"
+                        ? "Reserve"
+                        : parsedTimecard.scheduleStatus === "lineholder"
+                          ? "Lineholder"
+                          : "Unknown"
+                    }
+                  />
+                  <ResultLine label="Pasted premium credit" value={`${parsedTimecard.premiumHoursTotal.toFixed(2)} hrs`} />
+                  <ResultLine
+                    label="Derived posted premium"
+                    value={formatCurrency(parsedPremiumPayEquivalent)}
+                  />
+                  <ResultLine
+                    label="Premium lines found"
+                    value={`GS ${parsedTimecard.gsSlipPay ?? "0:00"} • QS ${parsedTimecard.quickSlipPay ?? "0:00"} • SS ${parsedTimecard.silverSlipPay ?? "0:00"} • RES G/Q ${parsedTimecard.reserveAssignGqSlipPay ?? "0:00"}`}
+                  />
+                  <ResultLine
+                    label="Sick / payback clues"
+                    value={`Sick entries ${parsedTimecard.sickEntries} • Sick bank deduction ${parsedTimecard.sickBankDeduction ?? "0:00"} • Payback days ${parsedTimecard.paybackDaysAvailable ?? 0}`}
+                  />
+                  <ResultLine
+                    label="Contract clue"
+                    value={
+                      parsedTimecard.sickEntries > 0
+                        ? "Section 14 E.2 sick bank deduction / Section 23 premium flying / MOU #25-05 quick-slip improvements"
+                        : "Section 23 premium flying / MOU #25-05 quick-slip improvements"
+                    }
+                  />
+                  <Text style={styles.insightText}>
+                    This paste-in flow uses the Delta timecard as posted evidence. If the findings say
+                    `Likely incorrect`, the rule line below is the reference a pilot can start with when
+                    disputing the pay result.
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+            {timecardAuditRequested ? (
+              <>
+                <View style={styles.resultPanel}>
+                  <Text style={styles.inputLabel}>3. What The Auditor Thinks Is Due</Text>
+                  {parsedApplicableBaseCreditHours > 0 && parsedVacationCreditHours > 0 ? (
+                    <ResultLine
+                      label="Base Credit Before Vacation"
+                      value={`${parsedDerivedBaseBeforeVacationHours.toFixed(2)} hrs`}
+                    />
+                  ) : null}
+                  {parsedVacationCreditHours > 0 ? (
+                    <ResultLine
+                      label="Vacation Credit Added"
+                      value={`${parsedVacationCreditHours.toFixed(2)} hrs`}
+                    />
+                  ) : null}
+                  <ResultLine
+                    label="Base Month Credit"
+                    value={`${displayedDueCreditHours.toFixed(2)} hrs`}
+                  />
+                  {parsedAdditionalPayOnlyHours > 0 ? (
+                    <ResultLine
+                      label="Additional Pay Only Credit"
+                      value={`${parsedAdditionalPayOnlyHours.toFixed(2)} hrs`}
+                    />
+                  ) : null}
+                  <ResultLine
+                    label="Premium Credit Due"
+                    value={`${displayedPremiumCreditHours.toFixed(2)} hrs`}
+                  />
+                  <ResultLine
+                    label="Total Credit Due"
+                    value={`${displayedTotalCreditHours.toFixed(2)} hrs`}
+                    emphasis
+                  />
+                </View>
+                <View style={styles.sectionStack}>
+                  <Text style={styles.inputLabel}>4. Discrepancies</Text>
+                  {payAuditResult.findings.length > 0 ? (
+                    payAuditResult.findings.map((finding) => (
+                      <View key={finding.id} style={styles.resultPanel}>
+                        <ResultLine
+                          label={`${finding.severity.toUpperCase()} • ${finding.confidence} confidence`}
+                          value={finding.title}
+                          emphasis
+                        />
+                        <ResultLine
+                          label="Expected vs actual"
+                          value={`${formatCurrency(finding.expectedAmount ?? 0)} / ${formatCurrency(
+                            finding.actualAmount ?? 0
+                          )}`}
+                        />
+                        <ResultLine
+                          label="Variance"
+                          value={`${finding.variance != null && finding.variance >= 0 ? "+" : "-"}${formatCurrency(
+                            Math.abs(finding.variance ?? 0)
+                          )}`}
+                        />
+                        <ResultLine label="Contract / rule" value={finding.ruleRef} />
+                        <Text style={styles.insightText}>{finding.explanation}</Text>
+                      </View>
+                    ))
+                  ) : (
+                    <View style={styles.resultPanel}>
+                      <Text style={styles.insightText}>
+                        No discrepancies are flagged by the current rule set. That does not guarantee the
+                        month is clean yet, but the auditor does not see an obvious mismatch from the
+                        pasted timecard and current assumptions.
+                      </Text>
+                    </View>
+                  )}
+                </View>
+                <View style={styles.sectionStack}>
+                  <Text style={styles.inputLabel}>Refine Audit Inputs</Text>
+                  <FormRow>
+                    <LabeledInput label="Hourly Rate" value={hourlyRate} onChangeText={setHourlyRate} prefix="$" />
+                    <LabeledInput label="Credited Hours" value={creditedHours} onChangeText={setCreditedHours} />
+                  </FormRow>
+                  <FormRow>
+                    <LabeledInput label="Premium Hours" value={premiumHours} onChangeText={setPremiumHours} />
+                  </FormRow>
+                  <Text style={styles.inputLabel}>Premium Event</Text>
+                  <View style={styles.baseSelector}>
+                    {premiumTypeOptions.map((option) => (
+                      <TouchableOpacity
+                        key={option.key}
+                        style={[styles.baseChip, premiumType === option.key && styles.baseChipActive]}
+                        onPress={() => {
+                          setPremiumType(option.key);
+                          if (option.key === "none") {
+                            setPremiumHours("0");
+                          } else if ((Number(premiumHours) || 0) === 0) {
+                            setPremiumHours("5");
+                          }
+                        }}
+                      >
+                        <Text
+                          style={[
+                            styles.baseChipLabel,
+                            premiumType === option.key && styles.baseChipLabelActive,
+                          ]}
+                        >
+                          {option.label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <FormRow>
+                    <LabeledInput label="Missed Break Pay" value={missedBreakPay} onChangeText={setMissedBreakPay} prefix="$" />
+                    <LabeledInput label="Actual Base Pay" value={actualBasePay} onChangeText={setActualBasePay} prefix="$" />
+                  </FormRow>
+                  <FormRow>
+                    <LabeledInput label="Actual Premium Pay" value={actualPremiumPay} onChangeText={setActualPremiumPay} prefix="$" />
+                    <LabeledInput label="Actual Per Diem" value={actualPerDiem} onChangeText={setActualPerDiem} prefix="$" />
+                  </FormRow>
+                  <FormRow>
+                    <LabeledInput label="Actual Adjustments" value={actualAdjustments} onChangeText={setActualAdjustments} prefix="$" />
+                    <LabeledInput label="Posted Total" value={actualPostedTotal} onChangeText={setActualPostedTotal} prefix="$" />
+                  </FormRow>
+                  <Text style={styles.inputLabel}>Status This Month</Text>
+                  <View style={styles.baseSelector}>
+                    <TouchableOpacity
+                      style={[styles.baseChip, !reserveStatus && styles.baseChipActive]}
+                      onPress={() => setReserveStatus(false)}
+                    >
+                      <Text style={[styles.baseChipLabel, !reserveStatus && styles.baseChipLabelActive]}>
+                        Lineholder
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.baseChip, reserveStatus && styles.baseChipActive]}
+                      onPress={() => setReserveStatus(true)}
+                    >
+                      <Text style={[styles.baseChipLabel, reserveStatus && styles.baseChipLabelActive]}>
+                        Reserve
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+                <View style={styles.sectionStack}>
+                  <Text style={styles.inputLabel}>Rules Ledger Assumptions</Text>
+                  {payAuditResult.assumptions.map((assumption) => (
+                    <View key={assumption} style={styles.resultPanel}>
+                      <Text style={styles.insightText}>{assumption}</Text>
+                    </View>
+                  ))}
+                </View>
+              </>
+            ) : null}
+              </>
+            ) : (
+              <View style={styles.payToolPlaceholder}>
+                <Text style={styles.payToolPlaceholderTitle}>
+                  {payToolCards.find((tool) => tool.key === selectedPayTool)?.title ?? "Pay Tool"}
+                </Text>
+                <Text style={styles.payToolPlaceholderText}>
+                  This tool is queued behind the timecard auditor. It will reuse the same Delta-first
+                  parser, rules ledger, and contract-reference explanation model that the auditor is
+                  already using.
+                </Text>
+              </View>
+            )}
           </SectionCard>
         )}
 
         {activeTab === "seniority" && (
           <SectionCard
             title="Seniority"
-            description="Green means the selected pilot can hold it. Red means they cannot. White is the current category. SR, MID, and JR show the holding line bands for each category."
+            description="Navy means the selected pilot can hold it. Red means they cannot. White is the current category. SR, MID, and Junior show the holding line bands for each category."
           >
             <FormRow>
               <LabeledInput
@@ -1479,8 +2046,8 @@ export default function App() {
             </View>
 
             <View style={styles.legendRow}>
-              <LegendSwatch label="Can hold" color="#D8EFD2" />
-              <LegendSwatch label="Cannot hold" color="#F4D2D2" />
+              <LegendSwatch label="Can hold" color="#E4EEF8" />
+              <LegendSwatch label="Cannot hold" color="#F8E1E5" />
               <LegendSwatch label="Current" color="#FFFFFF" border />
             </View>
 
@@ -1509,19 +2076,36 @@ export default function App() {
                     <Text style={styles.tableHeaderCell}>MID</Text>
                     <Text style={styles.tableHeaderCell}>JR</Text>
                     <Text style={styles.tableHeaderCell}>You</Text>
-                    <Text style={styles.tableHeaderCell}>Total</Text>
                   </View>
                   <Text style={styles.seatSectionLabel}>Captain</Text>
                   {captainRows.map((entry) => {
                     const fit = evaluateCategoryHold(entry, userSeniorityNumber, currentCategoryKey);
                     const trend = categoryTrendMap.get(entry.key) ?? null;
+                    const categoryAssignments = categoryAssignmentsByKey.get(entry.key) ?? [];
+                    const userPosition = describeUserCategoryPosition(
+                      entry,
+                      fit,
+                      userSeniorityNumber,
+                      currentPilot,
+                      categoryAssignments
+                    );
                     return (
-                      <View key={entry.key} style={[styles.tableRow, rowStyleForHold(fit.label)]}>
+                      <TouchableOpacity
+                        key={entry.key}
+                        style={[styles.tableRow, rowStyleForHold(fit.label)]}
+                        onPress={() =>
+                          setSelectedCategoryDetail({
+                            categoryKey: entry.key,
+                            label: formatCategoryEntryCode(entry),
+                          })
+                        }
+                        activeOpacity={0.88}
+                      >
                         <View style={styles.tableCategoryCell}>
                           <Text style={styles.tableCategoryText}>
                             {entry.fleet} {entry.seat === "Captain" ? "CA" : "FO"}
                           </Text>
-                          <Text style={styles.tableSubtext}>{fit.label}</Text>
+                          <Text style={styles.tableSubtext}>{fit.label} • Tap for list</Text>
                         </View>
                         <TableValueCell primary={`#${entry.mostSeniorNumber}`} />
                         <TableValueCell
@@ -1533,14 +2117,9 @@ export default function App() {
                           deltaTone={toneForDelta(trend?.lineMovement ?? null)}
                         />
                         <TableValueCell
-                          primary={describeUserCategoryPosition(entry, fit, userSeniorityNumber)}
+                          primary={userPosition.secondary ?? userPosition.primary}
                         />
-                        <TableValueCell
-                          primary={`${entry.pilotCount}`}
-                          delta={formatSignedCount(trend?.pilotCountDelta ?? null)}
-                          deltaTone={toneForDelta(trend?.pilotCountDelta ?? null)}
-                        />
-                      </View>
+                      </TouchableOpacity>
                     );
                   })}
                   {captainRows.length > 0 && firstOfficerRows.length > 0 ? (
@@ -1553,13 +2132,31 @@ export default function App() {
                   {firstOfficerRows.map((entry) => {
                     const fit = evaluateCategoryHold(entry, userSeniorityNumber, currentCategoryKey);
                     const trend = categoryTrendMap.get(entry.key) ?? null;
+                    const categoryAssignments = categoryAssignmentsByKey.get(entry.key) ?? [];
+                    const userPosition = describeUserCategoryPosition(
+                      entry,
+                      fit,
+                      userSeniorityNumber,
+                      currentPilot,
+                      categoryAssignments
+                    );
                     return (
-                      <View key={entry.key} style={[styles.tableRow, rowStyleForHold(fit.label)]}>
+                      <TouchableOpacity
+                        key={entry.key}
+                        style={[styles.tableRow, rowStyleForHold(fit.label)]}
+                        onPress={() =>
+                          setSelectedCategoryDetail({
+                            categoryKey: entry.key,
+                            label: formatCategoryEntryCode(entry),
+                          })
+                        }
+                        activeOpacity={0.88}
+                      >
                         <View style={styles.tableCategoryCell}>
                           <Text style={styles.tableCategoryText}>
                             {entry.fleet} FO
                           </Text>
-                          <Text style={styles.tableSubtext}>{fit.label}</Text>
+                          <Text style={styles.tableSubtext}>{fit.label} • Tap for list</Text>
                         </View>
                         <TableValueCell primary={`#${entry.mostSeniorNumber}`} />
                         <TableValueCell
@@ -1571,14 +2168,9 @@ export default function App() {
                           deltaTone={toneForDelta(trend?.lineMovement ?? null)}
                         />
                         <TableValueCell
-                          primary={describeUserCategoryPosition(entry, fit, userSeniorityNumber)}
+                          primary={userPosition.secondary ?? userPosition.primary}
                         />
-                        <TableValueCell
-                          primary={`${entry.pilotCount}`}
-                          delta={formatSignedCount(trend?.pilotCountDelta ?? null)}
-                          deltaTone={toneForDelta(trend?.pilotCountDelta ?? null)}
-                        />
-                      </View>
+                      </TouchableOpacity>
                     );
                   })}
                 </View>
@@ -1592,9 +2184,9 @@ export default function App() {
                 High is the most senior award, Mid is the middle award, and Low is the junior-most award reached in the latest AE posting.
               </Text>
               <View style={styles.legendRow}>
-                <LegendSwatch label="Award went junior to you" color="#D8EFD2" />
-                <LegendSwatch label="Award stayed senior" color="#F4D2D2" />
-                <LegendSwatch label="Close / no clear line" color="#EEE5D6" />
+                <LegendSwatch label="Award went junior to you" color="#E4EEF8" />
+                <LegendSwatch label="Award stayed senior" color="#F8E1E5" />
+                <LegendSwatch label="Close / no clear line" color="#EEF3F8" />
               </View>
               {groupedSeniorityAeTables.map((group) => {
                 const captainRows = group.rows.filter((entry) => entry.seat === "Captain");
@@ -1677,7 +2269,10 @@ export default function App() {
                 <View key={`${entry.key}-trend`} style={styles.resultPanel}>
                   <ResultLine label={`${entry.base} ${entry.fleet} ${entry.seat}`} value={formatDelta(entry.lineMovement, "line")} />
                   <ResultLine label="Pilot count delta" value={formatSignedCount(entry.pilotCountDelta)} />
-                  <ResultLine label="Current JR line" value={`#${entry.latestJuniorNumber}`} />
+                  <ResultLine
+                    label={`Current Junior ${entry.seat === "Captain" ? "CA" : "FO"}`}
+                    value={`#${entry.latestJuniorNumber}`}
+                  />
                 </View>
               ))}
             </View>
@@ -1806,7 +2401,7 @@ export default function App() {
             <View style={styles.resultPanel}>
               <Text style={styles.insightText}>
                 AE shows the latest award movement, not whether you can hold the category overall.
-                Green means the latest AE award reached junior to your number, red means the
+                Navy means the latest AE award reached junior to your number, red means the
                 award stayed senior to you, and neutral means the line was close or unclear.
                 Tap any category row to see who came in, who left, and where those pilots moved
                 from or to.
@@ -1829,12 +2424,19 @@ export default function App() {
                       <Text style={styles.tableHeaderCell}>High</Text>
                       <Text style={styles.tableHeaderCell}>Mid</Text>
                       <Text style={styles.tableHeaderCell}>Low</Text>
-                      <Text style={styles.tableHeaderCell}>Awards</Text>
-                      <Text style={styles.tableHeaderCell}>Bypass</Text>
+                      <Text style={styles.tableHeaderCell}>You</Text>
                     </View>
                     <Text style={styles.seatSectionLabel}>Captain</Text>
                     {captainRows.map((entry) => {
                       const fit = evaluateAeReach(entry, userSeniorityNumber);
+                      const categoryAssignments =
+                        categoryAssignmentsByKey.get(buildCategoryKeyFromAeCategory(entry.awardCategory)) ?? [];
+                      const userPosition = describeAeCategoryPosition(
+                        entry,
+                        userSeniorityNumber,
+                        currentPilot,
+                        categoryAssignments
+                      );
                       return (
                         <TouchableOpacity
                           key={entry.awardCategory}
@@ -1856,8 +2458,7 @@ export default function App() {
                           <TableValueCell primary={formatSeniorityValue(entry.mostSeniorAwardNumber)} />
                           <TableValueCell primary={formatSeniorityValue(entry.middleAwardNumber)} />
                           <TableValueCell primary={formatSeniorityValue(entry.mostJuniorAwardNumber)} />
-                          <TableValueCell primary={`${entry.awards}`} />
-                          <TableValueCell primary={`${entry.bypassAwards}`} />
+                          <TableValueCell primary={userPosition.secondary ?? userPosition.primary} />
                         </TouchableOpacity>
                       );
                     })}
@@ -1870,6 +2471,14 @@ export default function App() {
                     ) : null}
                     {firstOfficerRows.map((entry) => {
                       const fit = evaluateAeReach(entry, userSeniorityNumber);
+                      const categoryAssignments =
+                        categoryAssignmentsByKey.get(buildCategoryKeyFromAeCategory(entry.awardCategory)) ?? [];
+                      const userPosition = describeAeCategoryPosition(
+                        entry,
+                        userSeniorityNumber,
+                        currentPilot,
+                        categoryAssignments
+                      );
                       return (
                         <TouchableOpacity
                           key={entry.awardCategory}
@@ -1889,8 +2498,7 @@ export default function App() {
                           <TableValueCell primary={formatSeniorityValue(entry.mostSeniorAwardNumber)} />
                           <TableValueCell primary={formatSeniorityValue(entry.middleAwardNumber)} />
                           <TableValueCell primary={formatSeniorityValue(entry.mostJuniorAwardNumber)} />
-                          <TableValueCell primary={`${entry.awards}`} />
-                          <TableValueCell primary={`${entry.bypassAwards}`} />
+                          <TableValueCell primary={userPosition.secondary ?? userPosition.primary} />
                         </TouchableOpacity>
                       );
                     })}
@@ -1922,7 +2530,10 @@ export default function App() {
               })}
             </View>
 
-            <View style={styles.sectionStack}>
+            <View
+              style={styles.sectionStack}
+              onLayout={(event) => setWhatIfSectionY(event.nativeEvent.layout.y)}
+            >
               <Text style={styles.inputLabel}>When can I hold....</Text>
               <Text style={styles.inputLabel}>1. Seat</Text>
               <View style={styles.baseSelector}>
@@ -1994,7 +2605,10 @@ export default function App() {
                 <>
                   <View style={styles.resultPanel}>
                     <ResultLine label="Target" value={formatCategoryEntryCode(activeWhatIfCategory)} />
-                    <ResultLine label="Current JR line" value={`#${activeWhatIfCategory.mostJuniorNumber}`} />
+                    <ResultLine
+                      label={`Current Junior ${activeWhatIfCategory.seat === "Captain" ? "CA" : "FO"}`}
+                      value={`#${activeWhatIfCategory.mostJuniorNumber}`}
+                    />
                     <ResultLine label="Your number today" value={`#${currentPilot.seniorityNumber}`} />
                     <ResultLine
                       label="Gap today"
@@ -2036,7 +2650,7 @@ export default function App() {
                           }
                         />
                         <ResultLine
-                          label="Projected JR line"
+                          label={`Projected Junior ${activeWhatIfCategory.seat === "Captain" ? "CA" : "FO"}`}
                           value={
                             estimate.firstHoldPoint
                               ? `#${estimate.firstHoldPoint.projectedJuniorLine}`
@@ -2065,6 +2679,132 @@ export default function App() {
           </SectionCard>
         )}
       </ScrollView>
+      <View style={styles.bottomTabBar}>
+        {tabs.map((tab) => (
+          <TouchableOpacity
+            key={tab.key}
+            style={[styles.tabButton, activeTab === tab.key && styles.tabButtonActive]}
+            onPress={() => setActiveTab(tab.key)}
+          >
+            <View style={[styles.tabIconCircle, activeTab === tab.key && styles.tabIconCircleActive]}>
+              <Text
+                style={[
+                  styles.tabIconText,
+                  tab.icon.length > 1 && styles.tabIconTextWide,
+                  activeTab === tab.key && styles.tabIconTextActive,
+                ]}
+              >
+                {tab.icon}
+              </Text>
+            </View>
+            <Text style={[styles.tabLabel, activeTab === tab.key && styles.tabLabelActive]}>
+              {tab.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      <Modal
+        visible={selectedCategoryDetail != null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedCategoryDetail(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <ScrollView
+              style={styles.modalScroll}
+              contentContainerStyle={styles.modalScrollContent}
+              nestedScrollEnabled
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.modalHeader}>
+                <View style={styles.modalHeaderCopy}>
+                  <Text style={styles.modalTitle}>
+                    {selectedCategoryDetail?.label ?? "Category List"}
+                  </Text>
+                  <Text style={styles.modalSubtitle}>
+                    Current category list in seniority order. Colored to show who is senior to you,
+                    junior to you, retiring soon, and where you would slot into the category.
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.modalCloseButton}
+                  onPress={() => setSelectedCategoryDetail(null)}
+                >
+                  <Text style={styles.modalCloseText}>Close</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.resultPanel}>
+                <ResultLine
+                  label="Current pilots"
+                  value={`${selectedCategoryAssignments.length}`}
+                />
+                <ResultLine
+                  label="Most senior"
+                  value={formatSeniorityValue(selectedCategoryAssignments[0]?.seniorityNumber ?? null)}
+                />
+                <ResultLine
+                  label="Most junior"
+                  value={formatSeniorityValue(selectedCategoryAssignments.at(-1)?.seniorityNumber ?? null)}
+                />
+                {currentPilot ? (
+                  <ResultLine
+                    label="You"
+                    value={
+                      (() => {
+                        const rank = selectedCategoryPreviewRows.findIndex(
+                          (row) => row.employeeNumber === currentPilot.employeeNumber
+                        );
+                        if (rank < 0) {
+                          return `#${currentPilot.seniorityNumber}`;
+                        }
+                        const total = selectedCategoryPreviewRows.length;
+                        const percent = Math.round(((rank + 1) / Math.max(total, 1)) * 100);
+                        return `${percent}%`;
+                      })()
+                    }
+                  />
+                ) : null}
+              </View>
+              <View style={styles.legendRow}>
+                <LegendSwatch label="Senior to you" color="#CFEAFF" />
+                <LegendSwatch label="You / near your number" color="#E8F3D1" />
+                <LegendSwatch label="Retiring soon" color="#F6D6D6" />
+                <LegendSwatch label="Junior to you" color="#F6F1E8" />
+              </View>
+              <View style={styles.modalTableHeader}>
+                <Text style={[styles.tableHeaderCell, styles.modalNameCell]}>Pilot</Text>
+                <Text style={styles.tableHeaderCell}>#</Text>
+              </View>
+              <View style={styles.listCompareWrap}>
+                {selectedCategoryPreviewRows.map((pilot) => {
+                  const rowState = getAeCompareRowState(pilot, currentPilot);
+                  const synthetic = "synthetic" in pilot && Boolean(pilot.synthetic);
+                  return (
+                    <View
+                      key={`category-preview-${pilot.employeeNumber}-${pilot.seniorityNumber}`}
+                      style={[styles.listCompareRow, rowState.style]}
+                    >
+                      <View style={styles.listCompareNameWrap}>
+                        <Text style={styles.listCompareName}>
+                          {synthetic ? currentPilot?.name ?? "You" : pilot.name}
+                        </Text>
+                        <Text style={styles.listCompareStatus}>
+                          {synthetic ? "You would slot here" : rowState.label}
+                        </Text>
+                        <Text style={styles.listCompareContext}>
+                          {synthetic ? "Projected position in this category" : "Current holder"}
+                        </Text>
+                      </View>
+                      <Text style={styles.listCompareNumber}>#{pilot.seniorityNumber}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
       <Modal
         visible={selectedAeDetailCategory != null}
         transparent
@@ -2073,66 +2813,79 @@ export default function App() {
       >
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <View style={styles.modalHeaderCopy}>
-                <Text style={styles.modalTitle}>
-                  {selectedAeDetailCategory?.awardCategory ?? "AE Awards"}
-                </Text>
-                <Text style={styles.modalSubtitle}>
-                  Latest posting awards in seniority order. Every pilot shown below was awarded this exact category.
-                </Text>
+            <ScrollView
+              style={styles.modalScroll}
+              contentContainerStyle={styles.modalScrollContent}
+              nestedScrollEnabled
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.modalHeader}>
+                <View style={styles.modalHeaderCopy}>
+                  <Text style={styles.modalTitle}>
+                    {selectedAeDetailCategory?.awardCategory ?? "AE Awards"}
+                  </Text>
+                  <Text style={styles.modalSubtitle}>
+                    Latest posting awards in seniority order. Every pilot shown below was awarded this exact category.
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.modalCloseButton}
+                  onPress={() => setSelectedAeDetailCategory(null)}
+                >
+                  <Text style={styles.modalCloseText}>Close</Text>
+                </TouchableOpacity>
               </View>
-              <TouchableOpacity
-                style={styles.modalCloseButton}
-                onPress={() => setSelectedAeDetailCategory(null)}
-              >
-                <Text style={styles.modalCloseText}>Close</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.modalTableHeader}>
-              <Text style={[styles.tableHeaderCell, styles.modalNameCell]}>Pilot</Text>
-              <Text style={styles.tableHeaderCell}>#</Text>
-            </View>
-            {selectedAeDetailCategory ? (
-              <View style={styles.resultPanel}>
-                {(() => {
-                  const totalMovement = buildTotalMovement(activeAeMovement, activeAeResidual);
-                  return (
-                    <>
-                      <ResultLine
-                        label="Awarded to"
-                        value={selectedAeDetailCategory.awardCategory}
-                      />
-                      <ResultLine
-                        label="Summary"
-                        value={`${activeAeAwardRows.length} awards • High ${formatSeniorityValue(
-                          activeAeAwardRows[0]?.seniorityNumber ?? null
-                        )} • Low ${formatSeniorityValue(
-                          activeAeAwardRows.at(-1)?.seniorityNumber ?? null
-                        )}`}
-                      />
-                      <ResultLine
-                        label="Total movement"
-                        value={`In ${totalMovement.totalIn} • Out ${totalMovement.totalOut} • Net ${formatSignedCount(
-                          totalMovement.net
-                        )}`}
-                      />
-                      <ResultLine
-                        label="AE only"
-                        value={`In ${activeAeMovement?.aeIn ?? 0} • Out ${activeAeMovement?.aeOut ?? 0} • Net ${formatSignedCount(
-                          activeAeMovement?.net ?? 0
-                        )}`}
-                      />
-                      <ResultLine
-                        label="Other movement (retirements, leave, training, etc.)"
-                        value={formatSignedCount(activeAeResidual?.residual ?? 0)}
-                      />
-                    </>
-                  );
-                })()}
+              <View style={styles.modalTableHeader}>
+                <Text style={[styles.tableHeaderCell, styles.modalNameCell]}>Pilot</Text>
+                <Text style={styles.tableHeaderCell}>#</Text>
               </View>
-            ) : null}
-            <ScrollView style={styles.modalScroll} nestedScrollEnabled>
+              {selectedAeDetailCategory ? (
+                <View style={styles.resultPanel}>
+                  {(() => {
+                    const totalMovement = buildTotalMovement(activeAeMovement, activeAeResidual);
+                    return (
+                      <>
+                        <ResultLine
+                          label="Awarded to"
+                          value={selectedAeDetailCategory.awardCategory}
+                        />
+                        <ResultLine
+                          label="Summary"
+                          value={`${activeAeAwardRows.length} awards • High ${formatSeniorityValue(
+                            activeAeAwardRows[0]?.seniorityNumber ?? null
+                          )} • Low ${formatSeniorityValue(
+                            activeAeAwardRows.at(-1)?.seniorityNumber ?? null
+                          )}`}
+                        />
+                        <ResultLine
+                          label="Awards"
+                          value={`${activeAeAwardRows.length}`}
+                        />
+                        <ResultLine
+                          label="Bypass awards"
+                          value={`${activeAeAwardRows.filter((row) => row.bypassAward).length}`}
+                        />
+                        <ResultLine
+                          label="Total movement"
+                          value={`In ${totalMovement.totalIn} • Out ${totalMovement.totalOut} • Net ${formatSignedCount(
+                            totalMovement.net
+                          )}`}
+                        />
+                        <ResultLine
+                          label="AE only"
+                          value={`In ${activeAeMovement?.aeIn ?? 0} • Out ${activeAeMovement?.aeOut ?? 0} • Net ${formatSignedCount(
+                            activeAeMovement?.net ?? 0
+                          )}`}
+                        />
+                        <ResultLine
+                          label="Other movement (retirements, leave, training, etc.)"
+                          value={formatSignedCount(activeAeResidual?.residual ?? 0)}
+                        />
+                      </>
+                    );
+                  })()}
+                </View>
+              ) : null}
               {selectedAeDetailCategory ? (
                 <View style={styles.listCompareWrap}>
                   <View style={styles.legendRow}>
@@ -2466,6 +3219,21 @@ function buildProjectedPilotCountSeries(
     yearOffset += 1;
   }
   return points;
+}
+
+function parseAuditHoursInput(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return 0;
+  }
+  return trimmed.includes(":") ? parseTimeValue(trimmed) : Number(trimmed) || 0;
+}
+
+function formatHoursToClock(value: number) {
+  const totalMinutes = Math.round(value * 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `${hours}:${minutes.toString().padStart(2, "0")}`;
 }
 
 function buildPayEstimate(
@@ -3018,19 +3786,104 @@ function toneForDelta(value: number | null) {
 function describeUserCategoryPosition(
   entry: CategoryEntry,
   fit: { label: HoldLabel; note: string },
-  userSeniorityNumber: number
+  userSeniorityNumber: number,
+  currentPilot: PilotRecord | null,
+  categoryAssignments: readonly LatestCategoryAssignment[]
 ) {
   if (!userSeniorityNumber) {
-    return "-";
+    return { primary: "-", secondary: null as string | null };
   }
   if (fit.label === "Current category") {
-    return `#${userSeniorityNumber}`;
+    if (currentPilot?.currentCategoryRank && currentPilot.currentCategoryTotal) {
+      const percent = Math.round(
+        (currentPilot.currentCategoryRank / currentPilot.currentCategoryTotal) * 100
+      );
+      return {
+        primary: `${currentPilot.currentCategoryRank}/${currentPilot.currentCategoryTotal}`,
+        secondary: `${percent}%`,
+      };
+    }
+    return { primary: `#${userSeniorityNumber}`, secondary: null };
   }
   const gap = userSeniorityNumber - entry.mostJuniorNumber;
   if (gap <= 0) {
-    return "hold";
+    if (categoryAssignments.length > 0) {
+      const existingRank = currentPilot
+        ? categoryAssignments.findIndex(
+            (assignment) => assignment.employeeNumber === currentPilot.employeeNumber
+          )
+        : -1;
+
+      const rank =
+        existingRank >= 0
+          ? existingRank + 1
+          : categoryAssignments.filter(
+              (assignment) => assignment.seniorityNumber < userSeniorityNumber
+            ).length + 1;
+      const total = existingRank >= 0 ? categoryAssignments.length : categoryAssignments.length + 1;
+      const percent = total > 0 ? Math.round((rank / total) * 100) : null;
+
+      return {
+        primary: `${rank}/${total}`,
+        secondary: percent != null ? `${percent}%` : null,
+      };
+    }
+
+    const categorySpan = Math.max(1, entry.mostJuniorNumber - entry.mostSeniorNumber);
+    const relativePosition = Math.max(
+      0,
+      Math.min(1, (userSeniorityNumber - entry.mostSeniorNumber) / categorySpan)
+    );
+    const estimatedRank = Math.max(
+      1,
+      Math.min(entry.pilotCount, Math.round(relativePosition * (entry.pilotCount - 1)) + 1)
+    );
+    const percent = entry.pilotCount > 0 ? Math.round((estimatedRank / entry.pilotCount) * 100) : null;
+    return {
+      primary: `${estimatedRank}/${entry.pilotCount}`,
+      secondary: percent != null ? `${percent}%` : null,
+    };
   }
-  return `+${gap}`;
+  return { primary: `+${gap}`, secondary: null };
+}
+
+function describeAeCategoryPosition(
+  entry: AeEntry,
+  userSeniorityNumber: number,
+  currentPilot: PilotRecord | null,
+  categoryAssignments: readonly LatestCategoryAssignment[]
+) {
+  if (!userSeniorityNumber || entry.mostJuniorAwardNumber == null) {
+    return { primary: "-", secondary: null as string | null };
+  }
+
+  const gap = userSeniorityNumber - entry.mostJuniorAwardNumber;
+  if (gap > 0) {
+    return { primary: `+${gap}`, secondary: null as string | null };
+  }
+
+  if (categoryAssignments.length > 0) {
+    const existingRank = currentPilot
+      ? categoryAssignments.findIndex(
+          (assignment) => assignment.employeeNumber === currentPilot.employeeNumber
+        )
+      : -1;
+    const rank =
+      existingRank >= 0
+        ? existingRank + 1
+        : categoryAssignments.filter(
+            (assignment) => assignment.seniorityNumber < userSeniorityNumber
+          ).length + 1;
+    const total = existingRank >= 0 ? categoryAssignments.length : categoryAssignments.length + 1;
+    const percent = total > 0 ? Math.round((rank / total) * 100) : null;
+
+    return {
+      primary: `${rank}/${total}`,
+      secondary: percent != null ? `${percent}%` : null,
+    };
+  }
+
+  return { primary: "hold", secondary: null as string | null };
 }
 
 function formatDelta(value: number | null, noun: string) {
@@ -3180,6 +4033,36 @@ function LabeledInput({
   );
 }
 
+function TextAreaInput({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChangeText: (value: string) => void;
+  placeholder?: string;
+}) {
+  return (
+    <View style={styles.inputGroup}>
+      <Text style={styles.inputLabel}>{label}</Text>
+      <View style={styles.textAreaShell}>
+        <TextInput
+          multiline
+          value={value}
+          onChangeText={onChangeText}
+          style={styles.textAreaInput}
+          placeholder={placeholder}
+          placeholderTextColor="#7B7367"
+          textAlignVertical="top"
+          autoCapitalize="characters"
+        />
+      </View>
+    </View>
+  );
+}
+
 function ResultLine({
   label,
   value,
@@ -3305,15 +4188,15 @@ function MiniBarChart({
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#F4EFE4",
+    backgroundColor: "#EEF3F8",
   },
   container: {
     padding: 20,
-    paddingBottom: 40,
+    paddingBottom: 120,
     gap: 18,
   },
   hero: {
-    backgroundColor: "#123C4A",
+    backgroundColor: "#0C2340",
     borderRadius: 28,
     padding: 22,
     gap: 12,
@@ -3322,17 +4205,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textTransform: "uppercase",
     letterSpacing: 2,
-    color: "#B9D8E2",
+    color: "#C7D3E3",
   },
   title: {
     fontSize: 36,
     fontWeight: "800",
-    color: "#FFF7E9",
+    color: "#F8FBFF",
   },
   subtitle: {
     fontSize: 15,
     lineHeight: 22,
-    color: "#E7F0F4",
+    color: "#D6E0EC",
   },
   heroMetrics: {
     flexDirection: "row",
@@ -3342,19 +4225,19 @@ const styles = StyleSheet.create({
   metricCard: {
     minWidth: 98,
     flex: 1,
-    backgroundColor: "#1E566B",
+    backgroundColor: "#16395D",
     borderRadius: 18,
     padding: 14,
     gap: 6,
   },
   metricGold: {
-    backgroundColor: "#9F6B1F",
+    backgroundColor: "#A6192E",
   },
   metricGreen: {
-    backgroundColor: "#436F48",
+    backgroundColor: "#234B73",
   },
   metricLabel: {
-    color: "#F9E7BF",
+    color: "#D7E2EE",
     fontSize: 12,
   },
   metricValue: {
@@ -3367,42 +4250,81 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 8,
   },
-  tabButton: {
+  bottomTabBar: {
+    flexDirection: "row",
+    gap: 8,
     paddingHorizontal: 14,
+    paddingTop: 14,
+    paddingBottom: 20,
+    backgroundColor: "#F7FAFD",
+    borderTopWidth: 1,
+    borderTopColor: "#CFD9E5",
+  },
+  tabButton: {
+    flex: 1,
+    paddingHorizontal: 10,
     paddingVertical: 10,
-    borderRadius: 999,
-    backgroundColor: "#E7DFD0",
+    borderRadius: 20,
+    backgroundColor: "#E7EEF6",
+    alignItems: "center",
+    gap: 8,
   },
   tabButtonActive: {
-    backgroundColor: "#123C4A",
+    backgroundColor: "#EAF0F7",
+  },
+  tabIconCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: "#D3DEE9",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  tabIconCircleActive: {
+    backgroundColor: "#A6192E",
+  },
+  tabIconText: {
+    color: "#30465F",
+    fontWeight: "900",
+    fontSize: 22,
+    lineHeight: 24,
+  },
+  tabIconTextWide: {
+    fontSize: 16,
+    lineHeight: 18,
+    letterSpacing: 0.4,
+  },
+  tabIconTextActive: {
+    color: "#F8FBFF",
   },
   tabLabel: {
-    color: "#5A5248",
-    fontWeight: "600",
+    color: "#30465F",
+    fontWeight: "700",
+    fontSize: 12,
   },
   tabLabelActive: {
-    color: "#FFF7E9",
+    color: "#A6192E",
   },
   sectionStack: {
     gap: 14,
   },
   card: {
-    backgroundColor: "#FFF9EF",
+    backgroundColor: "#FBFDFF",
     borderRadius: 24,
     padding: 20,
     gap: 10,
     borderWidth: 1,
-    borderColor: "#E7DFD0",
+    borderColor: "#CFD9E5",
   },
   cardTitle: {
     fontSize: 22,
     fontWeight: "800",
-    color: "#2B2925",
+    color: "#102A43",
   },
   cardDescription: {
     fontSize: 14,
     lineHeight: 21,
-    color: "#655D53",
+    color: "#55677D",
   },
   cardBody: {
     gap: 14,
@@ -3420,47 +4342,47 @@ const styles = StyleSheet.create({
   summaryCard: {
     flex: 1,
     minWidth: 220,
-    backgroundColor: "#F8F4EC",
+    backgroundColor: "#FFFFFF",
     borderRadius: 18,
     padding: 18,
     gap: 10,
     borderWidth: 1,
-    borderColor: "#DDD2C1",
+    borderColor: "#D4DEE9",
   },
   summaryTitle: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#2C2A26",
+    color: "#102A43",
   },
   summaryMain: {
     fontSize: 42,
     fontWeight: "800",
-    color: "#163743",
+    color: "#0C2340",
     lineHeight: 44,
   },
   summaryDetail: {
     fontSize: 14,
-    color: "#6A6258",
+    color: "#6B7C93",
     fontWeight: "600",
   },
   summarySub: {
     fontSize: 13,
     lineHeight: 19,
-    color: "#5D564D",
+    color: "#52606D",
   },
   summaryTrack: {
     height: 18,
     borderRadius: 999,
-    backgroundColor: "#E5E7EA",
+    backgroundColor: "#E3EAF2",
     overflow: "hidden",
   },
   summaryFill: {
     height: "100%",
     borderRadius: 999,
-    backgroundColor: "#63A64E",
+    backgroundColor: "#A6192E",
   },
   snapshotPill: {
-    backgroundColor: "#123C4A",
+    backgroundColor: "#0C2340",
     borderRadius: 18,
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -3468,14 +4390,14 @@ const styles = StyleSheet.create({
   },
   snapshotLabel: {
     fontSize: 11,
-    color: "#BED7DF",
+    color: "#C9D7E6",
     textTransform: "uppercase",
     letterSpacing: 1,
   },
   snapshotValue: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#FFF7E9",
+    color: "#F8FBFF",
   },
   formRow: {
     flexDirection: "row",
@@ -3489,39 +4411,54 @@ const styles = StyleSheet.create({
   },
   inputLabel: {
     fontSize: 13,
-    color: "#5D554A",
+    color: "#52606D",
     fontWeight: "600",
   },
   inputShell: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F4EFE4",
+    backgroundColor: "#F7FAFC",
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#DED3C0",
+    borderColor: "#CFD9E5",
     paddingHorizontal: 14,
     minHeight: 52,
   },
   inputAffix: {
-    color: "#6F675C",
+    color: "#6B7C93",
     fontSize: 16,
     fontWeight: "700",
   },
   input: {
     flex: 1,
     fontSize: 18,
-    color: "#1F1C18",
+    color: "#102A43",
     paddingVertical: 12,
   },
+  textAreaShell: {
+    backgroundColor: "#F7FAFC",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#CFD9E5",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    minHeight: 220,
+  },
+  textAreaInput: {
+    minHeight: 192,
+    fontSize: 15,
+    lineHeight: 21,
+    color: "#102A43",
+  },
   resultPanel: {
-    backgroundColor: "#F2E7D3",
+    backgroundColor: "#F5F8FC",
     borderRadius: 18,
     padding: 16,
     gap: 12,
   },
   quickLinkButton: {
     alignSelf: "flex-start",
-    backgroundColor: "#123C4A",
+    backgroundColor: "#A6192E",
     borderRadius: 999,
     paddingHorizontal: 16,
     paddingVertical: 10,
@@ -3529,19 +4466,157 @@ const styles = StyleSheet.create({
   quickLinkButtonText: {
     fontSize: 13,
     fontWeight: "800",
-    color: "#FFF7E9",
+    color: "#F8FBFF",
   },
   whatIfScenarioPanel: {
     flex: 1,
     minWidth: 260,
   },
   paySummaryCard: {
-    backgroundColor: "#F8F4EC",
+    backgroundColor: "#FFFFFF",
     borderRadius: 18,
     padding: 16,
     gap: 12,
     borderWidth: 1,
-    borderColor: "#DDD2C1",
+    borderColor: "#D4DEE9",
+  },
+  payToolGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 16,
+    marginBottom: 8,
+  },
+  payToolCard: {
+    flex: 1,
+    minWidth: 240,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 22,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#D4DEE9",
+  },
+  payToolCardActive: {
+    borderColor: "#A6192E",
+    shadowColor: "#000",
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 3,
+  },
+  payToolHero: {
+    minHeight: 104,
+    backgroundColor: "#E8EFF7",
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    justifyContent: "space-between",
+  },
+  payToolGlyph: {
+    fontSize: 28,
+    fontWeight: "900",
+    color: "#A6192E",
+  },
+  payToolBadge: {
+    alignSelf: "flex-start",
+    backgroundColor: "#FFFFFF",
+    color: "#0C2340",
+    fontSize: 11,
+    fontWeight: "800",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    overflow: "hidden",
+  },
+  payToolBody: {
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 14,
+    gap: 8,
+  },
+  payToolTitle: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#0C2340",
+  },
+  payToolSubtitle: {
+    fontSize: 14,
+    lineHeight: 21,
+    color: "#52606D",
+  },
+  payToolButton: {
+    marginHorizontal: 18,
+    marginBottom: 18,
+    backgroundColor: "#A6192E",
+    color: "#F8FBFF",
+    textAlign: "center",
+    fontSize: 14,
+    fontWeight: "800",
+    borderRadius: 12,
+    overflow: "hidden",
+    paddingVertical: 12,
+  },
+  payToolPlaceholder: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    padding: 18,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: "#D4DEE9",
+  },
+  payToolPlaceholderTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#0C2340",
+  },
+  payToolPlaceholderText: {
+    fontSize: 14,
+    lineHeight: 22,
+    color: "#52606D",
+  },
+  auditButton: {
+    alignSelf: "flex-start",
+    backgroundColor: "#A6192E",
+    borderRadius: 14,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+  },
+  auditButtonDisabled: {
+    backgroundColor: "#9FB2C8",
+  },
+  auditButtonText: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#F8FBFF",
+  },
+  auditSummaryHero: {
+    backgroundColor: "#EAF1F8",
+    borderRadius: 20,
+    padding: 18,
+    gap: 14,
+    borderWidth: 1,
+    borderColor: "#CFD9E5",
+  },
+  auditSummaryHeader: {
+    gap: 4,
+  },
+  auditSummaryTitle: {
+    fontSize: 28,
+    fontWeight: "900",
+    color: "#0C2340",
+  },
+  auditSummaryMeta: {
+    fontSize: 13,
+    color: "#52606D",
+    fontWeight: "700",
+  },
+  auditSummaryMetrics: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+  },
+  auditSummaryFormula: {
+    fontSize: 13,
+    color: "#52606D",
+    fontWeight: "700",
   },
   payControlsRow: {
     flexDirection: "row",
@@ -3556,15 +4631,15 @@ const styles = StyleSheet.create({
   },
   resultLabel: {
     fontSize: 14,
-    color: "#534D44",
+    color: "#52606D",
   },
   resultValue: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#123C4A",
+    color: "#0C2340",
   },
   resultValueEmphasis: {
-    color: "#8B5C14",
+    color: "#A6192E",
   },
   baseSelector: {
     flexDirection: "row",
@@ -3575,17 +4650,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 999,
-    backgroundColor: "#EDE2CF",
+    backgroundColor: "#E7EEF6",
   },
   baseChipActive: {
-    backgroundColor: "#8B5C14",
+    backgroundColor: "#A6192E",
   },
   baseChipLabel: {
-    color: "#544C43",
+    color: "#334E68",
     fontWeight: "700",
   },
   baseChipLabelActive: {
-    color: "#FFF8E6",
+    color: "#F8FBFF",
   },
   legendRow: {
     flexDirection: "row",
@@ -3604,46 +4679,46 @@ const styles = StyleSheet.create({
   },
   legendBorder: {
     borderWidth: 1,
-    borderColor: "#C9C0B2",
+    borderColor: "#B8C7D9",
   },
   legendText: {
     fontSize: 13,
-    color: "#564F46",
+    color: "#52606D",
     fontWeight: "600",
   },
   identityCard: {
-    backgroundColor: "#F6F1E8",
+    backgroundColor: "#F7FAFC",
     borderRadius: 18,
     padding: 16,
     borderWidth: 1,
-    borderColor: "#DDD2C1",
+    borderColor: "#D4DEE9",
     gap: 6,
   },
   identityName: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#1E3B46",
+    color: "#0C2340",
   },
   identityMeta: {
     fontSize: 14,
-    color: "#5E564D",
+    color: "#52606D",
   },
   tableCard: {
-    backgroundColor: "#FBF6ED",
+    backgroundColor: "#FDFEFF",
     borderRadius: 18,
     padding: 12,
     gap: 6,
     borderWidth: 2,
-    borderColor: "#CCBEAA",
+    borderColor: "#C5D2E1",
   },
   tableTitle: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#1D3A45",
+    color: "#0C2340",
   },
   tableMeta: {
     fontSize: 12,
-    color: "#645B50",
+    color: "#6B7C93",
     fontWeight: "600",
   },
   tableHeader: {
@@ -3651,14 +4726,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingBottom: 4,
     borderBottomWidth: 1,
-    borderBottomColor: "#D9CEBC",
+    borderBottomColor: "#D7E0EA",
   },
   tableHeaderCell: {
     flex: 1,
     textAlign: "center",
     fontSize: 11,
     fontWeight: "800",
-    color: "#5F574D",
+    color: "#52606D",
   },
   tableRow: {
     flexDirection: "row",
@@ -3669,27 +4744,27 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   tableRowHold: {
-    backgroundColor: "#D8EFD2",
-    borderColor: "#B5D5A9",
+    backgroundColor: "#E4EEF8",
+    borderColor: "#B8CBE0",
   },
   tableRowNoHold: {
-    backgroundColor: "#F4D2D2",
-    borderColor: "#D7ADAD",
+    backgroundColor: "#F8E1E5",
+    borderColor: "#E5B7C0",
   },
   tableRowCurrent: {
     backgroundColor: "#FFFFFF",
-    borderColor: "#CEC4B5",
+    borderColor: "#C7D2E0",
   },
   tableRowNeutral: {
-    backgroundColor: "#EEE5D6",
-    borderColor: "#D9CEBC",
+    backgroundColor: "#EEF3F8",
+    borderColor: "#D7E0EA",
   },
   seatSectionLabel: {
     fontSize: 11,
     fontWeight: "800",
     textTransform: "uppercase",
     letterSpacing: 1,
-    color: "#6A6054",
+    color: "#6B7C93",
     marginTop: 4,
   },
   modalBackdrop: {
@@ -3699,13 +4774,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   modalCard: {
-    maxHeight: "80%",
+    maxHeight: "88%",
     backgroundColor: "#FCF8EF",
     borderRadius: 24,
     borderWidth: 1,
     borderColor: "#D9C9A5",
     padding: 18,
-    gap: 14,
   },
   modalHeader: {
     flexDirection: "row",
@@ -3747,7 +4821,11 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   modalScroll: {
-    maxHeight: 420,
+    flexGrow: 0,
+  },
+  modalScrollContent: {
+    gap: 14,
+    paddingBottom: 12,
   },
   modalTableRow: {
     flexDirection: "row",
@@ -3885,50 +4963,50 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontSize: 12,
     fontWeight: "700",
-    color: "#1E312F",
+    color: "#102A43",
   },
   tableDelta: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#6B6358",
+    color: "#6B7C93",
   },
   tableDeltaPositive: {
-    color: "#4A9A42",
+    color: "#355C7D",
   },
   tableDeltaNegative: {
-    color: "#C35044",
+    color: "#A6192E",
   },
   tableCategoryText: {
     fontSize: 13,
     fontWeight: "800",
-    color: "#1D3A45",
+    color: "#0C2340",
   },
   tableSubtext: {
     fontSize: 11,
-    color: "#5C5348",
+    color: "#52606D",
   },
   insightText: {
     fontSize: 14,
     lineHeight: 21,
-    color: "#4D473F",
+    color: "#52606D",
   },
   projectionCard: {
-    backgroundColor: "#F6F1E8",
+    backgroundColor: "#F7FAFC",
     borderRadius: 18,
     padding: 16,
     gap: 12,
     borderWidth: 1,
-    borderColor: "#DDD2C1",
+    borderColor: "#D4DEE9",
   },
   projectionTitle: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#1D3A45",
+    color: "#0C2340",
   },
   projectionMeta: {
     fontSize: 13,
     lineHeight: 20,
-    color: "#655D53",
+    color: "#52606D",
   },
   forecastControlRow: {
     flexDirection: "row",
@@ -3951,23 +5029,23 @@ const styles = StyleSheet.create({
   projectionLabel: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#5A5248",
+    color: "#52606D",
   },
   projectionValue: {
     fontSize: 14,
     fontWeight: "800",
-    color: "#123C4A",
+    color: "#0C2340",
   },
   projectionTrack: {
     height: 10,
     borderRadius: 999,
-    backgroundColor: "#E5D8C7",
+    backgroundColor: "#DCE4EE",
     overflow: "hidden",
   },
   projectionFill: {
     height: "100%",
     borderRadius: 999,
-    backgroundColor: "#436F48",
+    backgroundColor: "#A6192E",
   },
   projectionStats: {
     flexDirection: "row",
@@ -3976,7 +5054,7 @@ const styles = StyleSheet.create({
   },
   projectionStat: {
     fontSize: 12,
-    color: "#665E54",
+    color: "#6B7C93",
   },
   chartCard: {
     gap: 10,
@@ -4003,47 +5081,47 @@ const styles = StyleSheet.create({
   dropdownButton: {
     minHeight: 46,
     borderRadius: 14,
-    backgroundColor: "#F4EFE4",
+    backgroundColor: "#F7FAFC",
     borderWidth: 1,
-    borderColor: "#DED3C0",
+    borderColor: "#CFD9E5",
     justifyContent: "center",
     paddingHorizontal: 14,
   },
   dropdownButtonText: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#1F1C18",
+    color: "#102A43",
   },
   dropdownMenu: {
-    backgroundColor: "#FFF9EF",
+    backgroundColor: "#FFFFFF",
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#DED3C0",
+    borderColor: "#CFD9E5",
     overflow: "hidden",
   },
   dropdownMenuTall: {
     maxHeight: 240,
-    backgroundColor: "#FFF9EF",
+    backgroundColor: "#FFFFFF",
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#DED3C0",
+    borderColor: "#CFD9E5",
   },
   dropdownItem: {
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#EFE5D6",
+    borderBottomColor: "#E3EAF2",
   },
   dropdownItemText: {
     fontSize: 15,
-    color: "#433D35",
+    color: "#334E68",
     fontWeight: "600",
   },
   sliderCard: {
-    backgroundColor: "#F4EFE4",
+    backgroundColor: "#F7FAFC",
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#DED3C0",
+    borderColor: "#CFD9E5",
     paddingHorizontal: 12,
     paddingVertical: 8,
     gap: 2,
@@ -4066,22 +5144,22 @@ const styles = StyleSheet.create({
   sliderValue: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#123C4A",
+    color: "#0C2340",
   },
   sliderMeta: {
     fontSize: 10,
-    color: "#6B6358",
+    color: "#6B7C93",
     fontWeight: "600",
   },
   chartTitle: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#1D3A45",
+    color: "#0C2340",
   },
   chartSubtitle: {
     fontSize: 12,
     lineHeight: 18,
-    color: "#675F55",
+    color: "#52606D",
   },
   chartRow: {
     flexDirection: "row",
@@ -4097,19 +5175,19 @@ const styles = StyleSheet.create({
   },
   chartValue: {
     fontSize: 10,
-    color: "#5B68D8",
+    color: "#16395D",
     fontWeight: "700",
     textAlign: "center",
   },
   chartValueFuture: {
-    color: "#C77A20",
+    color: "#A6192E",
   },
   chartBarWrap: {
     width: 24,
     height: 130,
     justifyContent: "flex-end",
     alignItems: "center",
-    backgroundColor: "#EEE5D8",
+    backgroundColor: "#E3EAF2",
     borderRadius: 8,
     paddingBottom: 2,
     position: "relative",
@@ -4117,11 +5195,11 @@ const styles = StyleSheet.create({
   },
   chartBar: {
     width: 16,
-    backgroundColor: "#6E79F6",
+    backgroundColor: "#0C2340",
     borderRadius: 6,
   },
   chartBarFuture: {
-    backgroundColor: "#F3A536",
+    backgroundColor: "#C8102E",
   },
   chartReferenceMark: {
     position: "absolute",
@@ -4131,14 +5209,14 @@ const styles = StyleSheet.create({
     opacity: 0.95,
   },
   chartReferenceOne: {
-    backgroundColor: "#B44A3B",
+    backgroundColor: "#A6192E",
   },
   chartReferenceTwo: {
-    backgroundColor: "#5D9C3F",
+    backgroundColor: "#5B7FA3",
   },
   chartLabel: {
     fontSize: 10,
-    color: "#685F54",
+    color: "#6B7C93",
     textAlign: "center",
   },
   seniorityCard: {

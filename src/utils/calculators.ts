@@ -8,12 +8,12 @@ export function computePayAudit(
   hourlyRate: number,
   creditedHours: number,
   premiumHours: number,
-  perDiemDays: number,
+  tafbHours: number,
   missedBreakPay: number
 ) {
   const basePay = hourlyRate * creditedHours;
-  const premiumPay = hourlyRate * 1.5 * premiumHours;
-  const perDiem = perDiemDays * 140;
+  const premiumPay = hourlyRate * 2 * premiumHours;
+  const perDiem = tafbHours * 2.85;
   const totalExpected = basePay + premiumPay + perDiem + missedBreakPay;
 
   return {
