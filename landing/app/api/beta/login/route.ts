@@ -21,7 +21,7 @@ export async function POST(request: Request) {
 
   const body = (await request.json().catch(() => null)) as LoginPayload | null;
   const submittedEmail = String(body?.email ?? "").trim().toLowerCase();
-  const submittedPassword = String(body?.password ?? "");
+  const submittedPassword = String(body?.password ?? "").trim();
 
   if (submittedEmail !== email.toLowerCase() || submittedPassword !== password) {
     return NextResponse.json(

@@ -3,9 +3,9 @@ import { cookies } from "next/headers";
 export const betaCookieName = "crewtools_beta";
 
 export function getBetaAuthConfig() {
-  const email = process.env.BETA_TESTER_EMAIL ?? "";
-  const password = process.env.BETA_TESTER_PASSWORD ?? "";
-  const token = process.env.BETA_ACCESS_TOKEN ?? "";
+  const email = (process.env.BETA_TESTER_EMAIL ?? "").trim();
+  const password = (process.env.BETA_TESTER_PASSWORD ?? "").trim();
+  const token = (process.env.BETA_ACCESS_TOKEN ?? "").trim();
 
   return {
     email,
