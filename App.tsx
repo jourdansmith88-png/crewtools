@@ -1,5 +1,5 @@
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Component, useEffect, useMemo, useRef, useState } from "react";
 import Slider from "@react-native-community/slider";
 import {
   Modal,
@@ -10,6 +10,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { deltaCharts as embeddedDeltaCharts } from "./src/data/deltaCharts";
@@ -93,13 +94,37 @@ type TabKey = "home" | "schedule" | "pay" | "seniority" | "ae";
 type SeatFilter = "All" | "Captain" | "First Officer";
 type ChartStartMode = "hire" | "today";
 type PayToolKey = (typeof payToolCards)[number]["key"];
-type HoldLabel = "Current category" | "Can hold" | "Near the line" | "Cannot hold" | "No pilot";
+type HoldLabel = "Current category" | "Can Hold" | "Close" | "Senior to You" | "No pilot";
 type AeReachLabel =
-  | "Award went junior to you"
-  | "Close / no clear line"
-  | "Award stayed senior"
+  | "Junior to You"
+  | "Close"
+  | "Senior to You"
   | "No line yet"
   | "No pilot";
+type PilotPriorityKey =
+  | "upgrade-in-base"
+  | "widebody-fo"
+  | "better-captain-seat"
+  | "commute-quality"
+  | "systemwide-opportunities";
+type MobileCategoryFilterKey =
+  | "all"
+  | "can-hold"
+  | "close"
+  | "senior-to-you"
+  | "captain"
+  | "fo"
+  | "my-bases"
+  | "goals";
+type PilotPreferences = {
+  currentCategory: string;
+  homeBase: string;
+  commute: boolean;
+  commuteOrigin: string;
+  commuterBases: string[];
+  priority: PilotPriorityKey;
+  goalCategories: string[];
+};
 
 type CategoryEntry = {
   key: string;
@@ -266,6 +291,25 @@ const tabs: { key: TabKey; label: string; icon: string }[] = [
   { key: "pay", label: "Pay", icon: "$" },
 ];
 
+const preferenceStorageKey = "crewtools.mobilePreferences";
+const pilotPriorities: { key: PilotPriorityKey; label: string; shortLabel: string }[] = [
+  { key: "upgrade-in-base", label: "Upgrade in base", shortLabel: "Upgrade" },
+  { key: "widebody-fo", label: "Widebody FO", shortLabel: "Widebody FO" },
+  { key: "better-captain-seat", label: "Better captain seat", shortLabel: "Better CA" },
+  { key: "commute-quality", label: "Commute quality", shortLabel: "Commute" },
+  { key: "systemwide-opportunities", label: "Systemwide opportunities", shortLabel: "Systemwide" },
+];
+const mobileCategoryFilters: { key: MobileCategoryFilterKey; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "can-hold", label: "Can Hold" },
+  { key: "close", label: "Close" },
+  { key: "senior-to-you", label: "Senior to You" },
+  { key: "captain", label: "Captain" },
+  { key: "fo", label: "FO" },
+  { key: "my-bases", label: "My Bases" },
+  { key: "goals", label: "Goals" },
+];
+
 const seatFilters: SeatFilter[] = ["All", "Captain", "First Officer"];
 const growthRates = Array.from({ length: 6 }, (_, index) => ({
   label: `${index}%`,
@@ -282,7 +326,54 @@ const chartStartModes: { label: string; value: ChartStartMode }[] = [
 const bases = deltaSnapshot.operationalBases.map((entry) => entry.base);
 const aeBaseFilters = ["All", ...bases];
 
+class AppErrorBoundary extends Component<
+  { children: React.ReactNode },
+  { error: Error | null }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  componentDidCatch(error: Error) {
+    if (Platform.OS === "web") {
+      console.error("CrewTools runtime error", error);
+    }
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <SafeAreaView style={styles.safeArea}>
+          <View style={[styles.container, { justifyContent: "center", flexGrow: 1 }]}>
+            <View style={styles.sectionCard}>
+              <Text style={styles.sectionTitle}>CrewTools hit a runtime error</Text>
+              <Text style={styles.sectionDescription}>
+                The page loaded, but one screen crashed during render.
+              </Text>
+              <View style={styles.identityCard}>
+                <Text style={styles.identityName}>Error details</Text>
+                <Text style={styles.identityMeta}>
+                  {this.state.error.message || "Unknown runtime error"}
+                </Text>
+              </View>
+            </View>
+          </View>
+        </SafeAreaView>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 export default function App() {
+  const { width } = useWindowDimensions();
+  const isCompactMobile = width < 520;
   const [activeTab, setActiveTab] = useState<TabKey>("home");
   const [employeeNumberInput, setEmployeeNumberInput] = useState("");
   const [growthRate, setGrowthRate] = useState(0.01);
@@ -305,6 +396,21 @@ export default function App() {
   const [aeSearch, setAeSearch] = useState("");
   const [categorySeatFilter, setCategorySeatFilter] = useState<SeatFilter>("All");
   const [aeSeatFilter, setAeSeatFilter] = useState<SeatFilter>("All");
+  const [mobilePreferences, setMobilePreferences] = useState<PilotPreferences>({
+    currentCategory: "",
+    homeBase: "",
+    commute: false,
+    commuteOrigin: "",
+    commuterBases: [],
+    priority: "upgrade-in-base",
+    goalCategories: [],
+  });
+  const [mobilePreferencesLoaded, setMobilePreferencesLoaded] = useState(false);
+  const [mobilePreferencesEditing, setMobilePreferencesEditing] = useState(true);
+  const [mobilePreferencesEditorInitialized, setMobilePreferencesEditorInitialized] = useState(false);
+  const [mobileGoalInput, setMobileGoalInput] = useState("");
+  const [mobileCategoryFilter, setMobileCategoryFilter] =
+    useState<MobileCategoryFilterKey>("all");
 
   const [blockHours, setBlockHours] = useState("18");
   const [dutyHours, setDutyHours] = useState("31");
@@ -334,11 +440,85 @@ export default function App() {
   );
   const scrollRef = useRef<ScrollView | null>(null);
   const [whatIfSectionY, setWhatIfSectionY] = useState(0);
-
   const currentPilot = useMemo(
     () => findPilotByEmployeeNumber(deltaSnapshot.pilotDirectory, employeeNumberInput),
     [employeeNumberInput]
   );
+
+  useEffect(() => {
+    if (Platform.OS !== "web") {
+      setMobilePreferencesLoaded(true);
+      return;
+    }
+
+    try {
+      const raw = window.localStorage.getItem(preferenceStorageKey);
+      if (raw) {
+        const parsed = JSON.parse(raw) as Partial<PilotPreferences>;
+        setMobilePreferences((current) => ({
+          ...current,
+          ...parsed,
+          commuterBases: Array.isArray(parsed.commuterBases) ? parsed.commuterBases : current.commuterBases,
+          goalCategories: Array.isArray(parsed.goalCategories) ? parsed.goalCategories : current.goalCategories,
+          priority:
+            parsed.priority && pilotPriorities.some((option) => option.key === parsed.priority)
+              ? parsed.priority
+              : current.priority,
+        }));
+      }
+    } catch {
+      // Keep defaults if storage is unavailable or malformed.
+    } finally {
+      setMobilePreferencesLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!mobilePreferencesLoaded || Platform.OS !== "web") {
+      return;
+    }
+
+    window.localStorage.setItem(preferenceStorageKey, JSON.stringify(mobilePreferences));
+  }, [mobilePreferences, mobilePreferencesLoaded]);
+
+  useEffect(() => {
+    if (!mobilePreferencesLoaded || mobilePreferencesEditorInitialized) {
+      return;
+    }
+
+    const seededHomeBase =
+      mobilePreferences.homeBase || currentPilot?.currentCategoryCode?.slice(0, 3) || "";
+    const preferencesAreComplete = Boolean(
+      currentPilot &&
+        seededHomeBase &&
+        (!mobilePreferences.commute ||
+          mobilePreferences.commuterBases.length > 0 ||
+          mobilePreferences.commuteOrigin.trim())
+    );
+
+    setMobilePreferencesEditing(!preferencesAreComplete);
+    setMobilePreferencesEditorInitialized(true);
+  }, [
+    mobilePreferencesLoaded,
+    mobilePreferencesEditorInitialized,
+    mobilePreferences.homeBase,
+    mobilePreferences.commute,
+    mobilePreferences.commuterBases,
+    mobilePreferences.commuteOrigin,
+    currentPilot,
+  ]);
+
+  useEffect(() => {
+    if (!currentPilot) {
+      return;
+    }
+
+    setMobilePreferences((current) => ({
+      ...current,
+      currentCategory: current.currentCategory || currentPilot.currentCategoryCode,
+      homeBase: current.homeBase || currentPilot.currentCategoryCode?.slice(0, 3) || "",
+    }));
+  }, [currentPilot]);
 
   useEffect(() => {
     if (
@@ -976,29 +1156,31 @@ export default function App() {
             })),
           ];
 
-    return allPoints.map((point) => ({
-      ...point,
-      referenceOnePercent:
-        currentPilot && point.timeMs != null
-          ? buildReferencePercentAtTime(
-              currentPilot,
-              deltaSnapshot.pilotDirectory as unknown as readonly PilotRecord[],
-              0.01,
-              chartStartMode,
-              point.timeMs
-            )
-          : null,
-      referenceTwoPercent:
-        currentPilot && point.timeMs != null
-          ? buildReferencePercentAtTime(
-              currentPilot,
-              deltaSnapshot.pilotDirectory as unknown as readonly PilotRecord[],
-              0.02,
-              chartStartMode,
-              point.timeMs
-            )
-          : null,
-    }));
+    return dedupeChartPointsByLabel(
+      allPoints.map((point) => ({
+        ...point,
+        referenceOnePercent:
+          currentPilot && point.timeMs != null
+            ? buildReferencePercentAtTime(
+                currentPilot,
+                deltaSnapshot.pilotDirectory as unknown as readonly PilotRecord[],
+                0.01,
+                chartStartMode,
+                point.timeMs
+              )
+            : null,
+        referenceTwoPercent:
+          currentPilot && point.timeMs != null
+            ? buildReferencePercentAtTime(
+                currentPilot,
+                deltaSnapshot.pilotDirectory as unknown as readonly PilotRecord[],
+                0.02,
+                chartStartMode,
+                point.timeMs
+              )
+            : null,
+      }))
+    );
   }, [pilotHistory, careerProjection, currentPilot, chartStartMode]);
 
   const totalPilotCountSeries = useMemo(() => {
@@ -1032,7 +1214,7 @@ export default function App() {
       chartStartMode
     );
 
-    return [...past, ...future];
+    return dedupeChartPointsByLabel([...past, ...future]);
   }, [currentPilot, forecastGrowthRate, chartStartMode, pilotHistory]);
 
   const seniorityNumberSeries = useMemo(() => {
@@ -1093,7 +1275,7 @@ export default function App() {
       timeMs: point.timeMs,
     }));
 
-    return [...past, ...future];
+    return dedupeChartPointsByLabel([...past, ...future]);
   }, [pilotHistory, careerProjection, currentPilot, chartStartMode]);
 
   const visibleCategoryTrends = useMemo(
@@ -1154,6 +1336,10 @@ export default function App() {
           )
         )
       : null;
+  const projectedCategoryPercent =
+    projectedCategoryRank && projectedCategoryTotal
+      ? Math.round((projectedCategoryRank / projectedCategoryTotal) * 100)
+      : null;
   const payEstimate = currentPilot
     ? buildPayEstimate(
         currentPilot,
@@ -1173,6 +1359,191 @@ export default function App() {
     (currentPilot ? resolvePayScenario(derivePilotPayScenarioCode(currentPilot) ?? "") : null) ??
     payScenarioOptions[0] ??
     null;
+  const preferredCurrentCategoryCode =
+    currentPilot?.currentCategoryCode || mobilePreferences.currentCategory || "";
+  const preferredCurrentCategoryKey =
+    buildCategoryKeyFromCategoryCode(preferredCurrentCategoryCode) ||
+    currentPilot?.currentCategoryKey ||
+    null;
+  const preferredHomeBase =
+    mobilePreferences.homeBase || currentPilot?.currentCategoryCode?.slice(0, 3) || "";
+  const relevantBases = useMemo(() => {
+    const basesToUse = [
+      preferredHomeBase,
+      ...(mobilePreferences.commute ? mobilePreferences.commuterBases : []),
+    ].filter(Boolean);
+    return Array.from(new Set(basesToUse));
+  }, [preferredHomeBase, mobilePreferences.commute, mobilePreferences.commuterBases]);
+  const goalCategoryKeys = useMemo(
+    () =>
+      mobilePreferences.goalCategories
+        .map((goal) => normalizeCategoryPreference(goal))
+        .filter(Boolean) as string[],
+    [mobilePreferences.goalCategories]
+  );
+  const preferredCurrentCategoryEntry =
+    deltaSnapshot.categories.find((entry) => entry.key === preferredCurrentCategoryKey) ?? null;
+  const preferredCurrentAeEntry =
+    deltaSnapshot.aeOpportunities.find(
+      (entry) => entry.awardCategory === buildAwardCategoryFromCategoryCode(preferredCurrentCategoryCode)
+    ) ?? null;
+  const preferredCurrentAeTrend =
+    (deltaSnapshot.aeTrends as readonly AeTrendEntry[]).find(
+      (entry) => entry.awardCategory === buildAwardCategoryFromCategoryCode(preferredCurrentCategoryCode)
+    ) ?? null;
+  const preferredCurrentAeReach = preferredCurrentAeEntry
+    ? evaluateAeReach(preferredCurrentAeEntry, userSeniorityNumber)
+    : null;
+  const preferredCurrentAeMovement =
+    preferredCurrentAeEntry ? aeMovementByCategory.get(preferredCurrentAeEntry.awardCategory) ?? null : null;
+  const mobileRelevantHoldEntries = useMemo(
+    () => {
+      try {
+        return buildRelevantHoldEntries({
+          entries: deltaSnapshot.categories,
+          currentPilot,
+          userSeniorityNumber,
+          currentCategoryKey,
+          relevantBases,
+          priority: mobilePreferences.priority,
+          goalCategoryKeys,
+          categoryAssignmentsByKey,
+        });
+      } catch {
+        return [];
+      }
+    },
+    [
+      currentPilot,
+      userSeniorityNumber,
+      currentCategoryKey,
+      relevantBases,
+      mobilePreferences.priority,
+      goalCategoryKeys,
+      categoryAssignmentsByKey,
+    ]
+  );
+  const mobileMovementFeed = useMemo(
+    () => {
+      try {
+        return buildMobileMovementFeed({
+          aeEntries: deltaSnapshot.aeOpportunities,
+          aeTrends: deltaSnapshot.aeTrends as readonly AeTrendEntry[],
+          categoryTrends: deltaSnapshot.categoryTrends,
+          userSeniorityNumber,
+          relevantBases,
+          priority: mobilePreferences.priority,
+          goalCategoryKeys,
+        });
+      } catch {
+        return [];
+      }
+    },
+    [
+      userSeniorityNumber,
+      relevantBases,
+      mobilePreferences.priority,
+      goalCategoryKeys,
+    ]
+  );
+  const mobileCareerMilestones = useMemo(
+    () => {
+      try {
+        return buildCareerMilestones({
+          currentPilot,
+          categories: deltaSnapshot.categories,
+          pilots: deltaSnapshot.pilotDirectory as readonly PilotRecord[],
+          relevantBases,
+          priority: mobilePreferences.priority,
+          goalCategoryKeys,
+        });
+      } catch {
+        return [];
+      }
+    },
+    [currentPilot, relevantBases, mobilePreferences.priority, goalCategoryKeys]
+  );
+  const mobileFilteredCategoryEntries = useMemo(
+    () => {
+      try {
+        return buildMobileCategoryCards({
+          entries: deltaSnapshot.categories,
+          currentPilot,
+          userSeniorityNumber,
+          currentCategoryKey,
+          relevantBases,
+          goalCategoryKeys,
+          filter: mobileCategoryFilter,
+          categoryAssignmentsByKey,
+        });
+      } catch {
+        return [];
+      }
+    },
+    [
+      currentPilot,
+      userSeniorityNumber,
+      currentCategoryKey,
+      relevantBases,
+      goalCategoryKeys,
+      mobileCategoryFilter,
+      categoryAssignmentsByKey,
+    ]
+  );
+  const trackedCategoryEntries = useMemo(
+    () => {
+      try {
+        return goalCategoryKeys
+          .map((goalKey) => deltaSnapshot.categories.find((entry) => entry.key === goalKey) ?? null)
+          .filter(Boolean)
+          .map((entry) =>
+            buildMobileCategoryCardDatum(
+              entry as CategoryEntry,
+              currentPilot,
+              userSeniorityNumber,
+              currentCategoryKey,
+              goalCategoryKeys,
+              categoryAssignmentsByKey
+            )
+          );
+      } catch {
+        return [];
+      }
+    },
+    [
+      goalCategoryKeys,
+      currentPilot,
+      userSeniorityNumber,
+      currentCategoryKey,
+      categoryAssignmentsByKey,
+    ]
+  );
+  const mobilePreferencesComplete = Boolean(currentPilot);
+  const selectedCategoryEntry =
+    selectedCategoryDetail
+      ? deltaSnapshot.categories.find((entry) => entry.key === selectedCategoryDetail.categoryKey) ?? null
+      : null;
+  const selectedCategoryFit =
+    selectedCategoryEntry ? evaluateCategoryHold(selectedCategoryEntry, userSeniorityNumber, currentCategoryKey) : null;
+  const selectedCategoryTrend =
+    selectedCategoryEntry ? categoryTrendMap.get(selectedCategoryEntry.key) ?? null : null;
+  const selectedAeEntry =
+    selectedAeDetailCategory
+      ? deltaSnapshot.aeOpportunities.find(
+          (entry) =>
+            entry.awardCategory === selectedAeDetailCategory.awardCategory &&
+            entry.seat === selectedAeDetailCategory.seat
+        ) ?? null
+      : null;
+  const selectedAeFit = selectedAeEntry ? evaluateAeReach(selectedAeEntry, userSeniorityNumber) : null;
+  const selectedAeTrend =
+    selectedAeDetailCategory
+      ? (deltaSnapshot.aeTrends as readonly AeTrendEntry[]).find(
+          (entry) =>
+            entry.awardCategory === selectedAeDetailCategory.awardCategory &&
+            entry.seat === selectedAeDetailCategory.seat
+        ) ?? null
+      : null;
 
   const parsedTimecard = useMemo(() => parseDeltaTimecard(timecardRawInput), [timecardRawInput]);
   const parsedPremiumPayEquivalent = useMemo(() => {
@@ -1265,7 +1636,7 @@ export default function App() {
   const payAuditContext = useMemo(
     () =>
       buildPayAuditContext({
-        base: currentPilot?.currentCategoryCode.slice(0, 3) ?? "ATL",
+        base: currentPilot?.currentCategoryCode?.slice(0, 3) ?? "ATL",
         fleet: activePayScenario?.code.replace(/[AB]$/, "") ?? "320",
         seat: activePayScenario?.seat === "Captain" ? "CA" : "FO",
         longevityYear: currentPilot ? derivePayYear(currentPilot.pilotHireDate) : 1,
@@ -1320,7 +1691,8 @@ export default function App() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <AppErrorBoundary>
+      <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark" />
       <ScrollView
         ref={scrollRef}
@@ -1331,319 +1703,73 @@ export default function App() {
           <Text style={styles.eyebrow}>Delta Pilot Toolkit</Text>
           <Text style={styles.title}>CrewTools</Text>
           <Text style={styles.subtitle}>
-            Built for fast category reads: identify the pilot, group the tables by base, and color what they can hold.
+            Know what you can hold... dream of what you can't.
           </Text>
         </View>
 
         {activeTab === "home" && (
-          <View style={styles.sectionStack}>
-            <SectionCard
-              title="Latest Delta Snapshot"
-              description={`Using ${deltaSnapshot.latestFiles.category}, ${deltaSnapshot.latestFiles.seniority}, and ${deltaSnapshot.latestFiles.ae}.`}
-            >
-              <View style={styles.identityCard}>
-                {currentPilot ? (
-                  <>
-                    <Text style={styles.identityName}>{currentPilot.name}</Text>
-                    <Text style={styles.identityMeta}>
-                      Emp {currentPilot.employeeNumber} • Seniority #{currentPilot.seniorityNumber}
-                    </Text>
-                    <Text style={styles.identityMeta}>
-                      {currentPilot.currentCategoryCode} • Hire {currentPilot.pilotHireDate}
-                    </Text>
-                  </>
-                ) : (
-                  <>
-                    <Text style={styles.identityName}>Pilot Lookup</Text>
-                    <Text style={styles.identityMeta}>
-                      Enter an employee number to personalize the dashboard and category reads.
-                    </Text>
-                  </>
-                )}
-                <FormRow>
-                  <LabeledInput
-                    label="Employee Number"
-                    value={employeeNumberInput}
-                    onChangeText={setEmployeeNumberInput}
-                  />
-                </FormRow>
-              </View>
-              {currentPilot ? (
-                <View style={styles.summaryCardRow}>
-                  <SummaryCard
-                    title="System Seniority"
-                    mainValue={systemPercent != null ? `${systemPercent}%` : "-"}
-                    detailValue={`${currentPilot.seniorityNumber} of ${systemTotalPilots}`}
-                    subValue={
-                      systemPercent != null
-                        ? "You're currently at this system percentile."
-                        : "No pilot selected"
-                    }
-                    progress={systemPercent ?? 0}
-                  />
-                  <SummaryCard
-                    title={currentPilot.currentCategoryCode}
-                    mainValue={
-                      currentCategoryPercent != null ? `${currentCategoryPercent}%` : "Unavailable"
-                    }
-                    detailValue={
-                      currentPilot.currentCategoryRank && currentPilot.currentCategoryTotal
-                        ? `${currentPilot.currentCategoryRank} of ${currentPilot.currentCategoryTotal}`
-                        : "Current category rank unavailable"
-                    }
-                    subValue={
-                      currentCategoryPercent != null
-                        ? "You're currently at this category percentile."
-                        : "Current category rank unavailable"
-                    }
-                    progress={currentCategoryPercent ?? 0}
-                  />
-                  <SummaryCard
-                    title={`Projected ${currentPilot.currentCategoryCode}`}
-                    mainValue={
-                      currentCategoryPercent != null ? `${currentCategoryPercent}%` : "Unavailable"
-                    }
-                    detailValue={
-                      projectedCategoryRank && projectedCategoryTotal
-                        ? `${projectedCategoryRank} of ${projectedCategoryTotal}`
-                        : "Projected category position unavailable"
-                    }
-                    subValue={
-                      currentCategoryPercent != null
-                        ? "Projected at this category percentile."
-                        : "Projected category position unavailable"
-                    }
-                    progress={currentCategoryPercent ?? 0}
-                  />
-                </View>
-              ) : null}
-
-              <View style={styles.snapshotRow}>
-                <SnapshotPill label="Total Pilots" value={`${systemTotalPilots}`} />
-                <SnapshotPill label="Inactive Pilots" value={`${totalInactivePilots}`} />
-                <SnapshotPill label="Live Bases" value={`${deltaSnapshot.operationalBases.length}`} />
-              </View>
-              <TouchableOpacity style={styles.quickLinkButton} onPress={jumpToAeWhatIfPlanner}>
-                <Text style={styles.quickLinkButtonText}>Jump To “When can I hold….”</Text>
-              </TouchableOpacity>
-              <View style={styles.sectionStack}>
-                <Text style={styles.inputLabel}>Career Progression Assumption</Text>
-                <View style={styles.formRow}>
-                  <View style={styles.dropdownWrap}>
-                    <Text style={styles.inputLabel}>Annual Growth</Text>
-                    <TouchableOpacity
-                      style={styles.dropdownButton}
-                      onPress={() => setGrowthMenuOpen((open) => !open)}
-                    >
-                      <Text style={styles.dropdownButtonText}>{Math.round(growthRate * 100)}%</Text>
-                    </TouchableOpacity>
-                    {growthMenuOpen ? (
-                      <View style={styles.dropdownMenu}>
-                        {growthRates.map((option) => (
-                          <TouchableOpacity
-                            key={option.label}
-                            style={styles.dropdownItem}
-                            onPress={() => {
-                              setGrowthRate(option.value);
-                              setGrowthMenuOpen(false);
-                            }}
-                          >
-                            <Text style={styles.dropdownItemText}>{option.label}</Text>
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-                    ) : null}
-                  </View>
-                  <View style={styles.dropdownWrap}>
-                    <Text style={styles.inputLabel}>Chart Start</Text>
-                    <View style={styles.baseSelector}>
-                      {chartStartModes.map((option) => (
-                        <TouchableOpacity
-                          key={option.value}
-                          style={[styles.baseChip, chartStartMode === option.value && styles.baseChipActive]}
-                          onPress={() => setChartStartMode(option.value)}
-                        >
-                          <Text style={[styles.baseChipLabel, chartStartMode === option.value && styles.baseChipLabelActive]}>
-                            {option.label}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  </View>
-                </View>
-                {currentPilot ? (
-                  <View style={styles.projectionCard}>
-                    <Text style={styles.projectionTitle}>System Seniority Over Career</Text>
-                    <Text style={styles.projectionMeta}>
-                      Through retirement on {currentPilot.scheduledRetireDate} with {Math.round(growthRate * 100)}% annual growth starting from {chartStartLabel(chartStartMode).toLowerCase()}.
-                    </Text>
-                    <MiniBarChart
-                      title="System Seniority Percent"
-                      subtitle="Past lists in navy, projected future in red. Lower percent means more senior."
-                      points={seniorityPercentSeries}
-                    />
-                    <View style={styles.forecastControlRow}>
-                      <View style={[styles.dropdownWrap, styles.forecastGrowthWrap]}>
-                        <Text style={styles.inputLabel}>Forecast Growth For Lower Graphs</Text>
-                        <TouchableOpacity
-                          style={styles.dropdownButton}
-                          onPress={() => setForecastGrowthMenuOpen((open) => !open)}
-                        >
-                          <Text style={styles.dropdownButtonText}>
-                            {Math.round(forecastGrowthRate * 100)}%
-                          </Text>
-                        </TouchableOpacity>
-                        {forecastGrowthMenuOpen ? (
-                          <View style={styles.dropdownMenu}>
-                            {forecastGrowthRates.map((option) => (
-                              <TouchableOpacity
-                                key={option.label}
-                                style={styles.dropdownItem}
-                                onPress={() => {
-                                  setForecastGrowthRate(option.value);
-                                  setForecastGrowthMenuOpen(false);
-                                }}
-                              >
-                                <Text style={styles.dropdownItemText}>{option.label}</Text>
-                              </TouchableOpacity>
-                            ))}
-                          </View>
-                        ) : null}
-                      </View>
-                    </View>
-                    <MiniBarChart
-                      title="Projected Seniority Number"
-                      subtitle="Past list position in navy, future estimated seniority number in red based on retirements to age 65. Growth changes list size, but not your rank number."
-                      points={seniorityNumberSeries}
-                    />
-                    <MiniBarChart
-                      title="Total Pilot Count"
-                      subtitle={`Past list size in navy. Future projected list size in red using a ${Math.round(
-                        forecastGrowthRate * 100
-                      )}% annual growth assumption.`}
-                      points={totalPilotCountSeries}
-                    />
-                  </View>
-                ) : (
-                  <Text style={styles.insightText}>
-                    Enter an employee number to see a career progression graph based on retirements to age 65 and your selected growth assumption.
-                  </Text>
-                )}
-              </View>
-              <View style={styles.sectionStack}>
-                <Text style={styles.inputLabel}>Estimated Pay</Text>
-                <View style={styles.paySummaryCard}>
-                  <View style={styles.payControlsRow}>
-                    <View style={[styles.dropdownWrap, styles.payScenarioWrap]}>
-                      <Text style={styles.inputLabel}>What If Category</Text>
-                      <TouchableOpacity
-                        style={styles.dropdownButton}
-                        onPress={() => setPayScenarioMenuOpen((open) => !open)}
-                      >
-                        <Text style={styles.dropdownButtonText}>
-                          {activePayScenario?.shortLabel ?? "Select category"}
-                        </Text>
-                      </TouchableOpacity>
-                      {payScenarioMenuOpen ? (
-                        <ScrollView style={styles.dropdownMenuTall} nestedScrollEnabled>
-                          {payScenarioOptions.map((option) => (
-                            <TouchableOpacity
-                              key={option.code}
-                              style={styles.dropdownItem}
-                              onPress={() => {
-                                setSelectedPayScenarioCode(option.code);
-                                setPayScenarioMenuOpen(false);
-                              }}
-                            >
-                              <Text style={styles.dropdownItemText}>{option.label}</Text>
-                            </TouchableOpacity>
-                          ))}
-                        </ScrollView>
-                      ) : null}
-                    </View>
-                    <View style={[styles.dropdownWrap, styles.sliderWrap]}>
-                      <Text style={styles.inputLabel}>Monthly Credit Hours</Text>
-                      <View style={styles.sliderCard}>
-                        <View style={styles.sliderHeader}>
-                          <Text style={styles.sliderValue}>{Math.round(monthlyCreditHours)} hrs</Text>
-                          <View style={styles.sliderMetaGroup}>
-                            <Text style={styles.sliderMeta}>0-200 range</Text>
-                            <Text style={styles.sliderMeta}>
-                              {Math.round(monthlyCreditHours * 12)} annual
-                            </Text>
-                          </View>
-                        </View>
-                        <View style={styles.sliderTrackShell}>
-                          <Slider
-                            minimumValue={0}
-                            maximumValue={200}
-                            step={1}
-                            value={monthlyCreditHours}
-                            onValueChange={setMonthlyCreditHours}
-                            minimumTrackTintColor="#8B5C14"
-                            maximumTrackTintColor="#D8CCB8"
-                            thumbTintColor="#123C4A"
-                          />
-                        </View>
-                      </View>
-                    </View>
-                  </View>
-                  {payEstimate ? (
-                    <>
-                      <ResultLine label="Effective date" value="1/1/2026" />
-                      <ResultLine
-                        label="Selected rate"
-                        value={`${payEstimate.scenarioLabel} • Year ${payEstimate.payYear}`}
-                      />
-                      <ResultLine label="Pay rate" value={formatCurrency(payEstimate.payRate)} />
-                      <ResultLine label="Monthly credit hours" value={`${Math.round(monthlyCreditHours)}`} />
-                      <ResultLine label="Base pay" value={formatCurrency(payEstimate.basePay)} />
-                      <ResultLine label="DC contribution" value={formatCurrency(payEstimate.dcContribution)} />
-                      <ResultLine label="Profit sharing" value={formatCurrency(payEstimate.profitSharing)} />
-                      <ResultLine label="Gross compensation" value={formatCurrency(payEstimate.grossCompensation)} />
-                      <ResultLine label="Monthly take home" value={formatCurrency(payEstimate.monthlyTakeHome)} emphasis />
-                      <ResultLine label="Profit sharing take home" value={formatCurrency(payEstimate.profitSharingTakeHome)} />
-                      <ResultLine label="Annual take home" value={formatCurrency(payEstimate.annualTakeHome)} emphasis />
-                      <Text style={styles.insightText}>
-                        What-if pay uses {payEstimate.scenarioLabel} at {Math.round(monthlyCreditHours)} credit hours per month. DC is fixed at 17% of base pay.
-                      </Text>
-                    </>
-                  ) : (
-                    <>
-                      <ResultLine label="Current quick monthly estimate" value={formatCurrency(payAudit.totalExpected)} />
-                      <Text style={styles.insightText}>
-                        Pick a pay category to compare possible bids. Entering an employee number personalizes the pay year automatically.
-                      </Text>
-                    </>
-                  )}
-                </View>
-              </View>
-              <View style={styles.sectionStack}>
-                <Text style={styles.inputLabel}>Operational Bases</Text>
-                {deltaSnapshot.operationalBases.slice(0, 6).map((base: BaseEntry) => (
-                  <View key={base.base} style={styles.resultPanel}>
-                    <ResultLine label={`${base.base} categories`} value={`${base.categories}`} />
-                    <ResultLine label="Pilots" value={`${base.pilots}`} />
-                  </View>
-                ))}
-              </View>
-              <View style={styles.sectionStack}>
-                <Text style={styles.inputLabel}>Other Pilots</Text>
-                <View style={styles.resultPanel}>
-                  <ResultLine label="Total" value={`${otherPilotSummary.total}`} />
-                  <ResultLine label="Instructor pilots" value={`${otherPilotSummary.instructors}`} />
-                  <ResultLine label="Carveout pilots" value={`${otherPilotSummary.carveoutPilots}`} />
-                  <Text style={styles.insightText}>
-                    Includes instructors plus carveout groups like NBC, INS, and SUP that are useful
-                    for visibility but not treated as normal operating bases.
-                  </Text>
-                </View>
-              </View>
-            </SectionCard>
-          </View>
+          <MobileHomeDashboard
+            currentPilot={currentPilot}
+            employeeNumberInput={employeeNumberInput}
+            onEmployeeNumberChange={setEmployeeNumberInput}
+            preferences={mobilePreferences}
+            onPreferencesChange={setMobilePreferences}
+            preferencesEditing={mobilePreferencesEditing}
+            onPreferencesEditingChange={setMobilePreferencesEditing}
+            preferencesComplete={mobilePreferencesComplete}
+            goalInput={mobileGoalInput}
+            onGoalInputChange={setMobileGoalInput}
+            currentCategoryEntry={preferredCurrentCategoryEntry}
+            currentCategoryMovement={preferredCurrentAeMovement}
+            currentCategoryReach={preferredCurrentAeReach}
+            currentCategoryTrend={preferredCurrentAeTrend}
+              systemPercent={systemPercent}
+              systemTotalPilots={systemTotalPilots}
+              currentCategoryPercent={currentCategoryPercent}
+            currentCategorySummary={currentCategorySummary}
+            projectedCategoryPercent={projectedCategoryPercent}
+            projectedCategoryRank={projectedCategoryRank}
+            projectedCategoryTotal={projectedCategoryTotal}
+            relevantHolds={mobileRelevantHoldEntries}
+            trackedCategories={trackedCategoryEntries}
+            onOpenTrackedCategory={(entry) =>
+              setSelectedCategoryDetail({
+                categoryKey: entry.key,
+                label: formatCategoryEntryCode(entry),
+              })
+            }
+            growthRate={growthRate}
+            onGrowthRateChange={(value) => {
+              setGrowthRate(value);
+              setForecastGrowthRate(value);
+              setGrowthMenuOpen(false);
+            }}
+            growthMenuOpen={growthMenuOpen}
+            onGrowthMenuToggle={() => setGrowthMenuOpen((current) => !current)}
+            seniorityPercentSeries={seniorityPercentSeries}
+            seniorityNumberSeries={seniorityNumberSeries}
+            totalPilotCountSeries={totalPilotCountSeries}
+          />
         )}
 
         {activeTab === "schedule" && (
+          isCompactMobile ? (
+            <MobileCareerPlanningView
+              currentPilot={currentPilot}
+              preferences={mobilePreferences}
+              milestones={mobileCareerMilestones}
+              activeWhatIfCategory={activeWhatIfCategory}
+              whatIfSeat={whatIfSeat}
+              setWhatIfSeat={setWhatIfSeat}
+              whatIfFleetOptions={whatIfFleetOptions}
+              selectedWhatIfFleet={selectedWhatIfFleet}
+              setSelectedWhatIfFleet={setSelectedWhatIfFleet}
+              whatIfBaseOptions={whatIfBaseOptions}
+              selectedWhatIfBase={selectedWhatIfBase}
+              setSelectedWhatIfBase={setSelectedWhatIfBase}
+              whatIfEstimates={whatIfEstimates}
+            />
+          ) : (
           <SectionCard
             title="Schedule Analyzer"
             description="Keep the schedule tools nearby for trip quality, fatigue risk, and reroute awareness."
@@ -1663,6 +1789,7 @@ export default function App() {
             </View>
             <Text style={styles.insightText}>{tripHealth.recommendation}</Text>
           </SectionCard>
+          )
         )}
 
         {activeTab === "pay" && (
@@ -1992,9 +2119,24 @@ export default function App() {
         )}
 
         {activeTab === "seniority" && (
+          isCompactMobile ? (
+            <MobileCategoriesView
+              currentPilot={currentPilot}
+              entries={mobileFilteredCategoryEntries}
+              filter={mobileCategoryFilter}
+              onFilterChange={setMobileCategoryFilter}
+              relevantBases={relevantBases}
+              onOpenCategory={(entry) =>
+                setSelectedCategoryDetail({
+                  categoryKey: entry.key,
+                  label: formatCategoryEntryCode(entry),
+                })
+              }
+            />
+          ) : (
           <SectionCard
             title="Seniority"
-            description="Navy means the selected pilot can hold it. Red means they cannot. White is the current category. SR, MID, and Junior show the holding line bands for each category."
+            description="Green means you can hold it. Beige means it is close. Red means the category is still senior to you. White is the current category."
           >
             <FormRow>
               <LabeledInput
@@ -2046,8 +2188,8 @@ export default function App() {
             </View>
 
             <View style={styles.legendRow}>
-              <LegendSwatch label="Can hold" color="#E4EEF8" />
-              <LegendSwatch label="Cannot hold" color="#F8E1E5" />
+              <LegendSwatch label="Can Hold" color="#D8EFD2" />
+              <LegendSwatch label="Senior to You" color="#F8E1E5" />
               <LegendSwatch label="Current" color="#FFFFFF" border />
             </View>
 
@@ -2070,13 +2212,15 @@ export default function App() {
                   <Text style={styles.tableMeta}>
                     Current pilots {group.summary.currentPilots} • Projected pilots {group.summary.projectedPilots} ({formatSignedCount(group.summary.projectedDelta)})
                   </Text>
-                  <View style={styles.tableHeader}>
-                    <Text style={[styles.tableHeaderCell, styles.tableCategoryCell]}>Category</Text>
-                    <Text style={styles.tableHeaderCell}>SR</Text>
-                    <Text style={styles.tableHeaderCell}>MID</Text>
-                    <Text style={styles.tableHeaderCell}>JR</Text>
-                    <Text style={styles.tableHeaderCell}>You</Text>
-                  </View>
+                  {!isCompactMobile ? (
+                    <View style={styles.tableHeader}>
+                      <Text style={[styles.tableHeaderCell, styles.tableCategoryCell]}>Category</Text>
+                      <Text style={styles.tableHeaderCell}>SR</Text>
+                      <Text style={styles.tableHeaderCell}>MID</Text>
+                      <Text style={styles.tableHeaderCell}>JR</Text>
+                      <Text style={styles.tableHeaderCell}>You</Text>
+                    </View>
+                  ) : null}
                   <Text style={styles.seatSectionLabel}>Captain</Text>
                   {captainRows.map((entry) => {
                     const fit = evaluateCategoryHold(entry, userSeniorityNumber, currentCategoryKey);
@@ -2092,7 +2236,10 @@ export default function App() {
                     return (
                       <TouchableOpacity
                         key={entry.key}
-                        style={[styles.tableRow, rowStyleForHold(fit.label)]}
+                        style={[
+                          isCompactMobile ? styles.mobileCategoryCard : styles.tableRow,
+                          rowStyleForHold(fit.label),
+                        ]}
                         onPress={() =>
                           setSelectedCategoryDetail({
                             categoryKey: entry.key,
@@ -2101,24 +2248,63 @@ export default function App() {
                         }
                         activeOpacity={0.88}
                       >
-                        <View style={styles.tableCategoryCell}>
-                          <Text style={styles.tableCategoryText}>
-                            {entry.fleet} {entry.seat === "Captain" ? "CA" : "FO"}
-                          </Text>
-                          <Text style={styles.tableSubtext}>{fit.label} • Tap for list</Text>
-                        </View>
-                        <TableValueCell primary={`#${entry.mostSeniorNumber}`} />
-                        <TableValueCell
-                          primary={entry.middleSeniorityNumber != null ? `#${entry.middleSeniorityNumber}` : "-"}
-                        />
-                        <TableValueCell
-                          primary={`#${entry.mostJuniorNumber}`}
-                          delta={formatSignedChange(trend?.lineMovement ?? null, "#")}
-                          deltaTone={toneForDelta(trend?.lineMovement ?? null)}
-                        />
-                        <TableValueCell
-                          primary={userPosition.secondary ?? userPosition.primary}
-                        />
+                        {isCompactMobile ? (
+                          <>
+                            <View style={styles.mobileCategoryHeader}>
+                              <View style={styles.mobileCategoryTitleWrap}>
+                                <Text style={styles.tableCategoryText}>
+                                  {entry.fleet} {entry.seat === "Captain" ? "CA" : "FO"}
+                                </Text>
+                                <Text style={styles.tableSubtext}>{fit.label} • Tap for list</Text>
+                              </View>
+                              <View style={styles.mobileCategoryBadge}>
+                                <Text style={styles.mobileCategoryBadgeText}>
+                                  {userPosition.secondary ?? userPosition.primary}
+                                </Text>
+                              </View>
+                            </View>
+                            <View style={styles.mobileMetricGrid}>
+                              <MobileMetric label="SR" value={`#${entry.mostSeniorNumber}`} />
+                              <MobileMetric
+                                label="MID"
+                                value={
+                                  entry.middleSeniorityNumber != null
+                                    ? `#${entry.middleSeniorityNumber}`
+                                    : "-"
+                                }
+                              />
+                              <MobileMetric
+                                label="Junior"
+                                value={`#${entry.mostJuniorNumber}`}
+                                detail={formatSignedChange(trend?.lineMovement ?? null, "#")}
+                                detailTone={toneForDelta(trend?.lineMovement ?? null)}
+                              />
+                              <MobileMetric
+                                label="You"
+                                value={userPosition.secondary ?? userPosition.primary}
+                              />
+                            </View>
+                          </>
+                        ) : (
+                          <>
+                            <View style={styles.tableCategoryCell}>
+                              <Text style={styles.tableCategoryText}>
+                                {entry.fleet} {entry.seat === "Captain" ? "CA" : "FO"}
+                              </Text>
+                              <Text style={styles.tableSubtext}>{fit.label} • Tap for list</Text>
+                            </View>
+                            <TableValueCell primary={`#${entry.mostSeniorNumber}`} />
+                            <TableValueCell
+                              primary={entry.middleSeniorityNumber != null ? `#${entry.middleSeniorityNumber}` : "-"}
+                            />
+                            <TableValueCell
+                              primary={`#${entry.mostJuniorNumber}`}
+                              delta={formatSignedChange(trend?.lineMovement ?? null, "#")}
+                              deltaTone={toneForDelta(trend?.lineMovement ?? null)}
+                            />
+                            <TableValueCell primary={userPosition.secondary ?? userPosition.primary} />
+                          </>
+                        )}
                       </TouchableOpacity>
                     );
                   })}
@@ -2143,7 +2329,10 @@ export default function App() {
                     return (
                       <TouchableOpacity
                         key={entry.key}
-                        style={[styles.tableRow, rowStyleForHold(fit.label)]}
+                        style={[
+                          isCompactMobile ? styles.mobileCategoryCard : styles.tableRow,
+                          rowStyleForHold(fit.label),
+                        ]}
                         onPress={() =>
                           setSelectedCategoryDetail({
                             categoryKey: entry.key,
@@ -2152,24 +2341,59 @@ export default function App() {
                         }
                         activeOpacity={0.88}
                       >
-                        <View style={styles.tableCategoryCell}>
-                          <Text style={styles.tableCategoryText}>
-                            {entry.fleet} FO
-                          </Text>
-                          <Text style={styles.tableSubtext}>{fit.label} • Tap for list</Text>
-                        </View>
-                        <TableValueCell primary={`#${entry.mostSeniorNumber}`} />
-                        <TableValueCell
-                          primary={entry.middleSeniorityNumber != null ? `#${entry.middleSeniorityNumber}` : "-"}
-                        />
-                        <TableValueCell
-                          primary={`#${entry.mostJuniorNumber}`}
-                          delta={formatSignedChange(trend?.lineMovement ?? null, "#")}
-                          deltaTone={toneForDelta(trend?.lineMovement ?? null)}
-                        />
-                        <TableValueCell
-                          primary={userPosition.secondary ?? userPosition.primary}
-                        />
+                        {isCompactMobile ? (
+                          <>
+                            <View style={styles.mobileCategoryHeader}>
+                              <View style={styles.mobileCategoryTitleWrap}>
+                                <Text style={styles.tableCategoryText}>{entry.fleet} FO</Text>
+                                <Text style={styles.tableSubtext}>{fit.label} • Tap for list</Text>
+                              </View>
+                              <View style={styles.mobileCategoryBadge}>
+                                <Text style={styles.mobileCategoryBadgeText}>
+                                  {userPosition.secondary ?? userPosition.primary}
+                                </Text>
+                              </View>
+                            </View>
+                            <View style={styles.mobileMetricGrid}>
+                              <MobileMetric label="SR" value={`#${entry.mostSeniorNumber}`} />
+                              <MobileMetric
+                                label="MID"
+                                value={
+                                  entry.middleSeniorityNumber != null
+                                    ? `#${entry.middleSeniorityNumber}`
+                                    : "-"
+                                }
+                              />
+                              <MobileMetric
+                                label="Junior"
+                                value={`#${entry.mostJuniorNumber}`}
+                                detail={formatSignedChange(trend?.lineMovement ?? null, "#")}
+                                detailTone={toneForDelta(trend?.lineMovement ?? null)}
+                              />
+                              <MobileMetric
+                                label="You"
+                                value={userPosition.secondary ?? userPosition.primary}
+                              />
+                            </View>
+                          </>
+                        ) : (
+                          <>
+                            <View style={styles.tableCategoryCell}>
+                              <Text style={styles.tableCategoryText}>{entry.fleet} FO</Text>
+                              <Text style={styles.tableSubtext}>{fit.label} • Tap for list</Text>
+                            </View>
+                            <TableValueCell primary={`#${entry.mostSeniorNumber}`} />
+                            <TableValueCell
+                              primary={entry.middleSeniorityNumber != null ? `#${entry.middleSeniorityNumber}` : "-"}
+                            />
+                            <TableValueCell
+                              primary={`#${entry.mostJuniorNumber}`}
+                              delta={formatSignedChange(trend?.lineMovement ?? null, "#")}
+                              deltaTone={toneForDelta(trend?.lineMovement ?? null)}
+                            />
+                            <TableValueCell primary={userPosition.secondary ?? userPosition.primary} />
+                          </>
+                        )}
                       </TouchableOpacity>
                     );
                   })}
@@ -2181,12 +2405,12 @@ export default function App() {
             <View style={styles.sectionStack}>
               <Text style={styles.inputLabel}>Latest AE Award Ranges</Text>
               <Text style={styles.insightText}>
-                High is the most senior award, Mid is the middle award, and Low is the junior-most award reached in the latest AE posting.
+                High is the most senior award, Mid is the middle award, and Junior is the latest award line reached in the newest posting.
               </Text>
               <View style={styles.legendRow}>
-                <LegendSwatch label="Award went junior to you" color="#E4EEF8" />
-                <LegendSwatch label="Award stayed senior" color="#F8E1E5" />
-                <LegendSwatch label="Close / no clear line" color="#EEF3F8" />
+                <LegendSwatch label="Junior to You" color="#D8EFD2" />
+                <LegendSwatch label="Senior to You" color="#F8E1E5" />
+                <LegendSwatch label="Close" color="#F4E9D2" />
               </View>
               {groupedSeniorityAeTables.map((group) => {
                 const captainRows = group.rows.filter((entry) => entry.seat === "Captain");
@@ -2278,9 +2502,26 @@ export default function App() {
             </View>
 
           </SectionCard>
+          )
         )}
 
         {activeTab === "ae" && (
+          isCompactMobile ? (
+            <MobileMovementView
+              currentPilot={currentPilot}
+              currentCategoryCode={preferredCurrentCategoryCode}
+              currentCategoryMovement={preferredCurrentAeMovement}
+              currentCategoryReach={preferredCurrentAeReach}
+              currentCategoryTrend={preferredCurrentAeTrend}
+              feedItems={mobileMovementFeed}
+              onOpenAe={(item) =>
+                setSelectedAeDetailCategory({
+                  awardCategory: item.entry.awardCategory,
+                  seat: item.entry.seat,
+                })
+              }
+            />
+          ) : (
           <SectionCard
             title="AE"
             description="Spoiler: you probably didn't get 350A. Let's see what actually moved."
@@ -2388,14 +2629,14 @@ export default function App() {
 
             <View style={styles.resultPanel}>
               <ResultLine label="Pilot" value={currentPilot?.name ?? "Not found"} />
-              <ResultLine label="AE went junior" value={`${aeSummary.wentJunior}`} />
-              <ResultLine label="AE near the line" value={`${aeSummary.close}`} />
+              <ResultLine label="Junior to You" value={`${aeSummary.wentJunior}`} />
+              <ResultLine label="Close" value={`${aeSummary.close}`} />
             </View>
 
             <View style={styles.legendRow}>
-              <LegendSwatch label="Award went junior to you" color="#D8EFD2" />
-              <LegendSwatch label="Award stayed senior" color="#F4D2D2" />
-              <LegendSwatch label="Close / no clear line" color="#EEE5D6" />
+              <LegendSwatch label="Junior to You" color="#D8EFD2" />
+              <LegendSwatch label="Senior to You" color="#F4D2D2" />
+              <LegendSwatch label="Close" color="#EEE5D6" />
             </View>
 
             <View style={styles.resultPanel}>
@@ -2419,13 +2660,15 @@ export default function App() {
                 return (
                   <View key={`${group.base}-ae`} style={styles.tableCard}>
                     <Text style={styles.tableTitle}>{group.base}</Text>
-                    <View style={styles.tableHeader}>
-                      <Text style={[styles.tableHeaderCell, styles.tableCategoryCell]}>Category</Text>
-                      <Text style={styles.tableHeaderCell}>High</Text>
-                      <Text style={styles.tableHeaderCell}>Mid</Text>
-                      <Text style={styles.tableHeaderCell}>Low</Text>
-                      <Text style={styles.tableHeaderCell}>You</Text>
-                    </View>
+                    {!isCompactMobile ? (
+                      <View style={styles.tableHeader}>
+                        <Text style={[styles.tableHeaderCell, styles.tableCategoryCell]}>Category</Text>
+                        <Text style={styles.tableHeaderCell}>High</Text>
+                        <Text style={styles.tableHeaderCell}>Mid</Text>
+                        <Text style={styles.tableHeaderCell}>Low</Text>
+                        <Text style={styles.tableHeaderCell}>You</Text>
+                      </View>
+                    ) : null}
                     <Text style={styles.seatSectionLabel}>Captain</Text>
                     {captainRows.map((entry) => {
                       const fit = evaluateAeReach(entry, userSeniorityNumber);
@@ -2440,7 +2683,10 @@ export default function App() {
                       return (
                         <TouchableOpacity
                           key={entry.awardCategory}
-                          style={[styles.tableRow, rowStyleForAeReach(fit.label)]}
+                          style={[
+                            isCompactMobile ? styles.mobileCategoryCard : styles.tableRow,
+                            rowStyleForAeReach(fit.label),
+                          ]}
                           onPress={() =>
                             setSelectedAeDetailCategory({
                               awardCategory: entry.awardCategory,
@@ -2449,16 +2695,54 @@ export default function App() {
                           }
                           activeOpacity={0.88}
                         >
-                          <View style={styles.tableCategoryCell}>
-                            <Text style={styles.tableCategoryText}>
-                              {entry.fleet} {entry.seat === "Captain" ? "CA" : "FO"}
-                            </Text>
-                            <Text style={styles.tableSubtext}>{fit.label} • Tap for awards</Text>
-                          </View>
-                          <TableValueCell primary={formatSeniorityValue(entry.mostSeniorAwardNumber)} />
-                          <TableValueCell primary={formatSeniorityValue(entry.middleAwardNumber)} />
-                          <TableValueCell primary={formatSeniorityValue(entry.mostJuniorAwardNumber)} />
-                          <TableValueCell primary={userPosition.secondary ?? userPosition.primary} />
+                          {isCompactMobile ? (
+                            <>
+                              <View style={styles.mobileCategoryHeader}>
+                                <View style={styles.mobileCategoryTitleWrap}>
+                                  <Text style={styles.tableCategoryText}>
+                                    {entry.fleet} {entry.seat === "Captain" ? "CA" : "FO"}
+                                  </Text>
+                                  <Text style={styles.tableSubtext}>{fit.label} • Tap for awards</Text>
+                                </View>
+                                <View style={styles.mobileCategoryBadge}>
+                                  <Text style={styles.mobileCategoryBadgeText}>
+                                    {userPosition.secondary ?? userPosition.primary}
+                                  </Text>
+                                </View>
+                              </View>
+                              <View style={styles.mobileMetricGrid}>
+                                <MobileMetric
+                                  label="High"
+                                  value={formatSeniorityValue(entry.mostSeniorAwardNumber)}
+                                />
+                                <MobileMetric
+                                  label="Mid"
+                                  value={formatSeniorityValue(entry.middleAwardNumber)}
+                                />
+                                <MobileMetric
+                                  label={`Junior ${entry.seat === "Captain" ? "CA" : "FO"}`}
+                                  value={formatSeniorityValue(entry.mostJuniorAwardNumber)}
+                                />
+                                <MobileMetric
+                                  label="You"
+                                  value={userPosition.secondary ?? userPosition.primary}
+                                />
+                              </View>
+                            </>
+                          ) : (
+                            <>
+                              <View style={styles.tableCategoryCell}>
+                                <Text style={styles.tableCategoryText}>
+                                  {entry.fleet} {entry.seat === "Captain" ? "CA" : "FO"}
+                                </Text>
+                                <Text style={styles.tableSubtext}>{fit.label} • Tap for awards</Text>
+                              </View>
+                              <TableValueCell primary={formatSeniorityValue(entry.mostSeniorAwardNumber)} />
+                              <TableValueCell primary={formatSeniorityValue(entry.middleAwardNumber)} />
+                              <TableValueCell primary={formatSeniorityValue(entry.mostJuniorAwardNumber)} />
+                              <TableValueCell primary={userPosition.secondary ?? userPosition.primary} />
+                            </>
+                          )}
                         </TouchableOpacity>
                       );
                     })}
@@ -2482,7 +2766,10 @@ export default function App() {
                       return (
                         <TouchableOpacity
                           key={entry.awardCategory}
-                          style={[styles.tableRow, rowStyleForAeReach(fit.label)]}
+                          style={[
+                            isCompactMobile ? styles.mobileCategoryCard : styles.tableRow,
+                            rowStyleForAeReach(fit.label),
+                          ]}
                           onPress={() =>
                             setSelectedAeDetailCategory({
                               awardCategory: entry.awardCategory,
@@ -2491,14 +2778,50 @@ export default function App() {
                           }
                           activeOpacity={0.88}
                         >
-                          <View style={styles.tableCategoryCell}>
-                            <Text style={styles.tableCategoryText}>{entry.fleet} FO</Text>
-                            <Text style={styles.tableSubtext}>{fit.label} • Tap for awards</Text>
-                          </View>
-                          <TableValueCell primary={formatSeniorityValue(entry.mostSeniorAwardNumber)} />
-                          <TableValueCell primary={formatSeniorityValue(entry.middleAwardNumber)} />
-                          <TableValueCell primary={formatSeniorityValue(entry.mostJuniorAwardNumber)} />
-                          <TableValueCell primary={userPosition.secondary ?? userPosition.primary} />
+                          {isCompactMobile ? (
+                            <>
+                              <View style={styles.mobileCategoryHeader}>
+                                <View style={styles.mobileCategoryTitleWrap}>
+                                  <Text style={styles.tableCategoryText}>{entry.fleet} FO</Text>
+                                  <Text style={styles.tableSubtext}>{fit.label} • Tap for awards</Text>
+                                </View>
+                                <View style={styles.mobileCategoryBadge}>
+                                  <Text style={styles.mobileCategoryBadgeText}>
+                                    {userPosition.secondary ?? userPosition.primary}
+                                  </Text>
+                                </View>
+                              </View>
+                              <View style={styles.mobileMetricGrid}>
+                                <MobileMetric
+                                  label="High"
+                                  value={formatSeniorityValue(entry.mostSeniorAwardNumber)}
+                                />
+                                <MobileMetric
+                                  label="Mid"
+                                  value={formatSeniorityValue(entry.middleAwardNumber)}
+                                />
+                                <MobileMetric
+                                  label="Junior FO"
+                                  value={formatSeniorityValue(entry.mostJuniorAwardNumber)}
+                                />
+                                <MobileMetric
+                                  label="You"
+                                  value={userPosition.secondary ?? userPosition.primary}
+                                />
+                              </View>
+                            </>
+                          ) : (
+                            <>
+                              <View style={styles.tableCategoryCell}>
+                                <Text style={styles.tableCategoryText}>{entry.fleet} FO</Text>
+                                <Text style={styles.tableSubtext}>{fit.label} • Tap for awards</Text>
+                              </View>
+                              <TableValueCell primary={formatSeniorityValue(entry.mostSeniorAwardNumber)} />
+                              <TableValueCell primary={formatSeniorityValue(entry.middleAwardNumber)} />
+                              <TableValueCell primary={formatSeniorityValue(entry.mostJuniorAwardNumber)} />
+                              <TableValueCell primary={userPosition.secondary ?? userPosition.primary} />
+                            </>
+                          )}
                         </TouchableOpacity>
                       );
                     })}
@@ -2677,6 +3000,7 @@ export default function App() {
               )}
             </View>
           </SectionCard>
+          )
         )}
       </ScrollView>
       <View style={styles.bottomTabBar}>
@@ -2698,7 +3022,7 @@ export default function App() {
               </Text>
             </View>
             <Text style={[styles.tabLabel, activeTab === tab.key && styles.tabLabelActive]}>
-              {tab.label}
+              {isCompactMobile ? mobileTabLabel(tab.key) : tab.label}
             </Text>
           </TouchableOpacity>
         ))}
@@ -2709,8 +3033,8 @@ export default function App() {
         animationType="fade"
         onRequestClose={() => setSelectedCategoryDetail(null)}
       >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
+        <View style={[styles.modalBackdrop, isCompactMobile && styles.modalBackdropCompact]}>
+          <View style={[styles.modalCard, isCompactMobile && styles.modalCardCompact]}>
             <TouchableOpacity
               style={styles.modalFloatingCloseButton}
               onPress={() => setSelectedCategoryDetail(null)}
@@ -2719,7 +3043,10 @@ export default function App() {
             </TouchableOpacity>
             <ScrollView
               style={styles.modalScroll}
-              contentContainerStyle={styles.modalScrollContent}
+              contentContainerStyle={[
+                styles.modalScrollContent,
+                isCompactMobile && styles.modalScrollContentCompact,
+              ]}
               nestedScrollEnabled
               showsVerticalScrollIndicator={false}
             >
@@ -2734,7 +3061,10 @@ export default function App() {
                   </Text>
                 </View>
               </View>
-              <View style={styles.resultPanel}>
+              <View style={[styles.resultPanel, isCompactMobile && styles.modalSummaryPanelCompact]}>
+                {selectedCategoryFit ? (
+                  <ResultLine label="Quick status" value={selectedCategoryFit.label === "Current category" ? "Can Hold" : selectedCategoryFit.label} />
+                ) : null}
                 <ResultLine
                   label="Current pilots"
                   value={`${selectedCategoryAssignments.length}`}
@@ -2747,6 +3077,18 @@ export default function App() {
                   label="Most junior"
                   value={formatSeniorityValue(selectedCategoryAssignments.at(-1)?.seniorityNumber ?? null)}
                 />
+                {selectedCategoryTrend ? (
+                  <ResultLine
+                    label="Trend direction"
+                    value={`${describeMovementDirection(selectedCategoryTrend.lineMovement)} • ${formatSignedChange(selectedCategoryTrend.lineMovement, "#") ?? "Flat"}`}
+                  />
+                ) : null}
+                {selectedCategoryEntry ? (
+                  <ResultLine
+                    label="Career relevance"
+                    value={goalCategoryKeys.includes(selectedCategoryEntry.key) ? "Goal category" : `${selectedCategoryEntry.base} ${selectedCategoryEntry.seat === "Captain" ? "Captain" : "FO"} bid option`}
+                  />
+                ) : null}
                 {currentPilot ? (
                   <ResultLine
                     label="You"
@@ -2783,7 +3125,11 @@ export default function App() {
                   return (
                     <View
                       key={`category-preview-${pilot.employeeNumber}-${pilot.seniorityNumber}`}
-                      style={[styles.listCompareRow, rowState.style]}
+                      style={[
+                        styles.listCompareRow,
+                        isCompactMobile && styles.listCompareRowCompact,
+                        rowState.style,
+                      ]}
                     >
                       <View style={styles.listCompareNameWrap}>
                         <Text style={styles.listCompareName}>
@@ -2796,7 +3142,14 @@ export default function App() {
                           {synthetic ? "Projected position in this category" : "Current holder"}
                         </Text>
                       </View>
-                      <Text style={styles.listCompareNumber}>#{pilot.seniorityNumber}</Text>
+                      <Text
+                        style={[
+                          styles.listCompareNumber,
+                          isCompactMobile && styles.listCompareNumberCompact,
+                        ]}
+                      >
+                        #{pilot.seniorityNumber}
+                      </Text>
                     </View>
                   );
                 })}
@@ -2811,8 +3164,8 @@ export default function App() {
         animationType="fade"
         onRequestClose={() => setSelectedAeDetailCategory(null)}
       >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
+        <View style={[styles.modalBackdrop, isCompactMobile && styles.modalBackdropCompact]}>
+          <View style={[styles.modalCard, isCompactMobile && styles.modalCardCompact]}>
             <TouchableOpacity
               style={styles.modalFloatingCloseButton}
               onPress={() => setSelectedAeDetailCategory(null)}
@@ -2821,7 +3174,10 @@ export default function App() {
             </TouchableOpacity>
             <ScrollView
               style={styles.modalScroll}
-              contentContainerStyle={styles.modalScrollContent}
+              contentContainerStyle={[
+                styles.modalScrollContent,
+                isCompactMobile && styles.modalScrollContentCompact,
+              ]}
               nestedScrollEnabled
               showsVerticalScrollIndicator={false}
             >
@@ -2840,11 +3196,14 @@ export default function App() {
                 <Text style={styles.tableHeaderCell}>#</Text>
               </View>
               {selectedAeDetailCategory ? (
-                <View style={styles.resultPanel}>
+                <View style={[styles.resultPanel, isCompactMobile && styles.modalSummaryPanelCompact]}>
                   {(() => {
                     const totalMovement = buildTotalMovement(activeAeMovement, activeAeResidual);
                     return (
                       <>
+                        {selectedAeFit ? (
+                          <ResultLine label="Quick status" value={selectedAeFit.label} />
+                        ) : null}
                         <ResultLine
                           label="Awarded to"
                           value={selectedAeDetailCategory.awardCategory}
@@ -2881,6 +3240,18 @@ export default function App() {
                           label="Other movement (retirements, leave, training, etc.)"
                           value={formatSignedCount(activeAeResidual?.residual ?? 0)}
                         />
+                        {selectedAeTrend ? (
+                          <ResultLine
+                            label="Trend direction"
+                            value={`${describeMovementDirection(selectedAeTrend.lineMovement)} • ${formatSignedChange(selectedAeTrend.lineMovement, "#") ?? "Flat"}`}
+                          />
+                        ) : null}
+                        {selectedAeEntry ? (
+                          <ResultLine
+                            label="Career relevance"
+                            value={goalCategoryKeys.includes(buildCategoryKeyFromAeCategory(selectedAeEntry.awardCategory)) ? "Goal category" : `${selectedAeEntry.base} ${selectedAeEntry.seat === "Captain" ? "Captain" : "FO"} opportunity`}
+                          />
+                        ) : null}
                       </>
                     );
                   })()}
@@ -2895,7 +3266,7 @@ export default function App() {
                     <LegendSwatch label="Junior to you" color="#D8EFD2" />
                   </View>
                   <View style={styles.listCompareColumns}>
-                    <View style={styles.listCompareCard}>
+                    <View style={[styles.listCompareCard, isCompactMobile && styles.listCompareCardCompact]}>
                       <Text style={styles.listCompareTitle}>Coming To {selectedAeDetailCategory.awardCategory}</Text>
                       <Text style={styles.listCompareMeta}>
                         {activeAeAwardRows.length} pilots • JR{" "}
@@ -2906,7 +3277,11 @@ export default function App() {
                         return (
                           <View
                             key={`incoming-${pilot.employeeNumber}`}
-                            style={[styles.listCompareRow, rowState.style]}
+                            style={[
+                              styles.listCompareRow,
+                              isCompactMobile && styles.listCompareRowCompact,
+                              rowState.style,
+                            ]}
                           >
                             <View style={styles.listCompareNameWrap}>
                               <Text style={styles.listCompareName}>{pilot.name}</Text>
@@ -2915,12 +3290,19 @@ export default function App() {
                                 From {pilot.previousCategory || "Unknown"}
                               </Text>
                             </View>
-                            <Text style={styles.listCompareNumber}>#{pilot.seniorityNumber}</Text>
+                            <Text
+                              style={[
+                                styles.listCompareNumber,
+                                isCompactMobile && styles.listCompareNumberCompact,
+                              ]}
+                            >
+                              #{pilot.seniorityNumber}
+                            </Text>
                           </View>
                         );
                       })}
                     </View>
-                    <View style={styles.listCompareCard}>
+                    <View style={[styles.listCompareCard, isCompactMobile && styles.listCompareCardCompact]}>
                       <Text style={styles.listCompareTitle}>Leaving The {selectedAeDetailCategory.awardCategory}</Text>
                       <Text style={styles.listCompareMeta}>
                         {activeAeLeavingRows.length} pilots • JR{" "}
@@ -2931,7 +3313,11 @@ export default function App() {
                         return (
                           <View
                             key={`leaving-${pilot.employeeNumber}`}
-                            style={[styles.listCompareRow, rowState.style]}
+                            style={[
+                              styles.listCompareRow,
+                              isCompactMobile && styles.listCompareRowCompact,
+                              rowState.style,
+                            ]}
                           >
                             <View style={styles.listCompareNameWrap}>
                               <Text style={styles.listCompareName}>{pilot.name}</Text>
@@ -2940,7 +3326,14 @@ export default function App() {
                                 To {pilot.awardCategory || "Unknown"}
                               </Text>
                             </View>
-                            <Text style={styles.listCompareNumber}>#{pilot.seniorityNumber}</Text>
+                            <Text
+                              style={[
+                                styles.listCompareNumber,
+                                isCompactMobile && styles.listCompareNumberCompact,
+                              ]}
+                            >
+                              #{pilot.seniorityNumber}
+                            </Text>
                           </View>
                         );
                       })}
@@ -2955,7 +3348,8 @@ export default function App() {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+      </SafeAreaView>
+    </AppErrorBoundary>
   );
 }
 
@@ -3212,6 +3606,14 @@ function buildProjectedPilotCountSeries(
     yearOffset += 1;
   }
   return points;
+}
+
+function dedupeChartPointsByLabel(points: ChartPoint[]) {
+  const deduped = new Map<string, ChartPoint>();
+  points.forEach((point) => {
+    deduped.set(point.label.replace(/\s+/g, "").toUpperCase(), point);
+  });
+  return Array.from(deduped.values());
 }
 
 function parseAuditHoursInput(value: string) {
@@ -3535,6 +3937,11 @@ function chartStartLabel(mode: ChartStartMode) {
 }
 
 function shortenMonthLabel(monthKey: string) {
+  const parsedDate = dateFromMonthKey(monthKey);
+  if (parsedDate) {
+    return `${parsedDate.toLocaleString("en-US", { month: "short" })}${parsedDate.getFullYear()}`;
+  }
+
   const compact = monthKey
     .replace(" Seniority List", "")
     .replace("Category_List_", "")
@@ -3575,20 +3982,20 @@ function evaluateCategoryHold(
   const gap = userSeniorityNumber - entry.mostJuniorNumber;
   if (gap <= 0) {
     return {
-      label: "Can hold" as HoldLabel,
+      label: "Can Hold" as HoldLabel,
       note: `Pilot is senior enough to hold this category now.`,
     };
   }
 
   if (gap <= 300) {
     return {
-      label: "Near the line" as HoldLabel,
+      label: "Close" as HoldLabel,
       note: `Pilot is ${gap} numbers junior to the current line.`,
     };
   }
 
   return {
-    label: "Cannot hold" as HoldLabel,
+    label: "Senior to You" as HoldLabel,
     note: `Pilot is ${gap} numbers junior to the current line.`,
   };
 }
@@ -3611,20 +4018,20 @@ function evaluateAeReach(entry: AeEntry, userSeniorityNumber: number) {
   const gap = userSeniorityNumber - entry.mostJuniorAwardNumber;
   if (gap <= 0) {
     return {
-      label: "Award went junior to you" as AeReachLabel,
+      label: "Junior to You" as AeReachLabel,
       note: "The latest AE award reached at least to this pilot's number.",
     };
   }
 
   if (gap <= 250) {
     return {
-      label: "Close / no clear line" as AeReachLabel,
+      label: "Close" as AeReachLabel,
       note: `Pilot is ${gap} numbers junior to the latest AE award line.`,
     };
   }
 
   return {
-    label: "Award stayed senior" as AeReachLabel,
+    label: "Senior to You" as AeReachLabel,
     note: `Pilot is ${gap} numbers junior to the latest AE award line.`,
   };
 }
@@ -3637,10 +4044,10 @@ function buildHoldSummary(
   return entries.reduce(
     (acc, entry) => {
       const result = evaluateCategoryHold(entry, userSeniorityNumber, currentCategoryKey);
-      if (result.label === "Can hold") {
+      if (result.label === "Can Hold") {
         acc.canHold += 1;
       }
-      if (result.label === "Near the line") {
+      if (result.label === "Close") {
         acc.nearLine += 1;
       }
       if (result.label === "Current category") {
@@ -3656,10 +4063,10 @@ function buildAeSummary(entries: readonly AeEntry[], userSeniorityNumber: number
   return entries.reduce(
     (acc, entry) => {
       const result = evaluateAeReach(entry, userSeniorityNumber);
-      if (result.label === "Award went junior to you") {
+      if (result.label === "Junior to You") {
         acc.wentJunior += 1;
       }
-      if (result.label === "Close / no clear line") {
+      if (result.label === "Close") {
         acc.close += 1;
       }
       return acc;
@@ -3722,20 +4129,20 @@ function rowStyleForHold(label: HoldLabel) {
   if (label === "Current category") {
     return styles.tableRowCurrent;
   }
-  if (label === "Can hold") {
+  if (label === "Can Hold") {
     return styles.tableRowHold;
   }
-  if (label === "Cannot hold") {
+  if (label === "Senior to You") {
     return styles.tableRowNoHold;
   }
   return styles.tableRowNeutral;
 }
 
 function rowStyleForAeReach(label: string) {
-  if (label === "Award went junior to you") {
+  if (label === "Junior to You") {
     return styles.tableRowHold;
   }
-  if (label === "Award stayed senior") {
+  if (label === "Senior to You") {
     return styles.tableRowNoHold;
   }
   return styles.tableRowNeutral;
@@ -4100,39 +4507,87 @@ function TableValueCell({
   );
 }
 
+function MobileMetric({
+  label,
+  value,
+  detail,
+  detailTone = "neutral",
+}: {
+  label: string;
+  value: string;
+  detail?: string | null;
+  detailTone?: "positive" | "negative" | "neutral";
+}) {
+  return (
+    <View style={styles.mobileMetricCard}>
+      <Text style={styles.mobileMetricLabel}>{label}</Text>
+      <Text style={styles.mobileMetricValue}>{value}</Text>
+      {detail ? (
+        <Text
+          style={[
+            styles.mobileMetricDetail,
+            detailTone === "positive" && styles.tableDeltaPositive,
+            detailTone === "negative" && styles.tableDeltaNegative,
+          ]}
+        >
+          {detail}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
 function MiniBarChart({
   title,
   subtitle,
   points,
+  showTrack = true,
 }: {
   title: string;
   subtitle: string;
   points: ChartPoint[];
+  showTrack?: boolean;
 }) {
+  const { width } = useWindowDimensions();
+  const isCompact = width < 520;
   const maxValue = Math.max(...points.map((point) => point.value), 1);
   const hasReferenceLines = points.some(
     (point) => point.referenceOnePercent != null || point.referenceTwoPercent != null
   );
 
   return (
-    <View style={styles.chartCard}>
+    <View style={[styles.chartCard, isCompact && styles.chartCardCompact]}>
       <Text style={styles.chartTitle}>{title}</Text>
       <Text style={styles.chartSubtitle}>{subtitle}</Text>
       {hasReferenceLines ? (
-        <View style={styles.chartLegendRow}>
+        <View style={[styles.chartLegendRow, isCompact && styles.chartLegendRowCompact]}>
           <LegendSwatch label="Actual / current" color="#6E79F6" />
           <LegendSwatch label="1% plan" color="#B44A3B" />
           <LegendSwatch label="2% plan" color="#5D9C3F" />
         </View>
       ) : null}
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <View style={styles.chartRow}>
+        <View style={[styles.chartRow, isCompact && styles.chartRowCompact]}>
           {points.map((point) => (
-            <View key={`${title}-${point.label}-${point.valueLabel}`} style={styles.chartColumn}>
-              <Text style={[styles.chartValue, point.tone === "future" && styles.chartValueFuture]}>
+            <View
+              key={`${title}-${point.label}-${point.valueLabel}`}
+              style={[styles.chartColumn, isCompact && styles.chartColumnCompact]}
+            >
+              <Text
+                style={[
+                  styles.chartValue,
+                  isCompact && styles.chartValueCompact,
+                  point.tone === "future" && styles.chartValueFuture,
+                ]}
+              >
                 {point.valueLabel}
               </Text>
-              <View style={styles.chartBarWrap}>
+              <View
+                style={[
+                  styles.chartBarWrap,
+                  isCompact && styles.chartBarWrapCompact,
+                ]}
+              >
                 {point.referenceOnePercent != null ? (
                   <View
                     style={[
@@ -4164,18 +4619,1221 @@ function MiniBarChart({
                 <View
                   style={[
                     styles.chartBar,
+                    isCompact && styles.chartBarCompact,
                     point.tone === "future" && styles.chartBarFuture,
                     { height: `${Math.max(8, Math.round((point.value / maxValue) * 100))}%` },
                   ]}
                 />
               </View>
-              <Text style={styles.chartLabel}>{point.label}</Text>
+              <Text style={[styles.chartLabel, isCompact && styles.chartLabelCompact]}>
+                {point.label}
+              </Text>
             </View>
           ))}
         </View>
       </ScrollView>
     </View>
   );
+}
+
+function MobileHomeDashboard({
+  currentPilot,
+  employeeNumberInput,
+  onEmployeeNumberChange,
+  preferences,
+  onPreferencesChange,
+  preferencesEditing,
+  onPreferencesEditingChange,
+  preferencesComplete,
+  goalInput,
+  onGoalInputChange,
+  currentCategoryEntry,
+  currentCategoryMovement,
+  currentCategoryReach,
+  currentCategoryTrend,
+  systemPercent,
+  systemTotalPilots,
+  currentCategoryPercent,
+  currentCategorySummary,
+  projectedCategoryPercent,
+  projectedCategoryRank,
+  projectedCategoryTotal,
+  trackedCategories,
+  onOpenTrackedCategory,
+  growthRate,
+  onGrowthRateChange,
+  growthMenuOpen,
+  onGrowthMenuToggle,
+  seniorityPercentSeries,
+  seniorityNumberSeries,
+  totalPilotCountSeries,
+}: {
+  currentPilot: PilotRecord | null;
+  employeeNumberInput: string;
+  onEmployeeNumberChange: (value: string) => void;
+  preferences: PilotPreferences;
+  onPreferencesChange: React.Dispatch<React.SetStateAction<PilotPreferences>>;
+  preferencesEditing: boolean;
+  onPreferencesEditingChange: (value: boolean) => void;
+  preferencesComplete: boolean;
+  goalInput: string;
+  onGoalInputChange: (value: string) => void;
+  currentCategoryEntry: CategoryEntry | null;
+  currentCategoryMovement: AeMovementSummary | null;
+  currentCategoryReach: ReturnType<typeof evaluateAeReach> | null;
+  currentCategoryTrend: AeTrendEntry | null;
+  systemPercent: number | null;
+  systemTotalPilots: number;
+  currentCategoryPercent: number | null;
+  currentCategorySummary: CategoryEntry | null;
+  projectedCategoryPercent: number | null;
+  projectedCategoryRank: number | null;
+  projectedCategoryTotal: number | null;
+  trackedCategories: ReturnType<typeof buildMobileCategoryCardDatum>[];
+  onOpenTrackedCategory: (entry: CategoryEntry) => void;
+  growthRate: number;
+  onGrowthRateChange: (value: number) => void;
+  growthMenuOpen: boolean;
+  onGrowthMenuToggle: () => void;
+  seniorityPercentSeries: ChartPoint[];
+  seniorityNumberSeries: ChartPoint[];
+  totalPilotCountSeries: ChartPoint[];
+}) {
+  const addGoal = () => {
+    const normalized = normalizeCategoryPreference(goalInput);
+    if (!normalized) {
+      return;
+    }
+    onPreferencesChange((current) => ({
+      ...current,
+      goalCategories: Array.from(new Set([...current.goalCategories, normalized])),
+    }));
+    onGoalInputChange("");
+  };
+  const welcomeRole =
+    currentCategorySummary?.seat === "Captain" ||
+    currentPilot?.currentCategoryCode?.toUpperCase().endsWith("CA")
+      ? "Captain"
+      : currentCategorySummary?.seat === "First Officer" ||
+          currentPilot?.currentCategoryCode?.toUpperCase().endsWith("FO")
+        ? "FO"
+        : "Pilot";
+
+  return (
+    <SectionCard
+      title="Pilot Dashboard"
+      description="Where you stand, what moved, and why your vacation is in February."
+    >
+      <View style={styles.identityCard}>
+        <Text style={styles.identityName}>
+          {currentPilot?.name ? `Welcome back ${welcomeRole} ${currentPilot.name}` : "Welcome back"}
+        </Text>
+        <Text style={styles.identityMeta}>
+          {currentPilot
+            ? `${currentPilot.currentCategoryCode} • Seniority #${currentPilot.seniorityNumber}`
+            : "Add your employee number so CrewTools can personalize the mobile dashboard."}
+        </Text>
+        <FormRow>
+          <LabeledInput
+            label="Employee Number"
+            value={employeeNumberInput}
+            onChangeText={onEmployeeNumberChange}
+          />
+        </FormRow>
+      </View>
+
+      <View style={styles.mobileSummaryMetricRow}>
+        <MobileKeyMetricCard
+          label="System Seniority"
+          value={systemPercent != null ? `${systemPercent}%` : "--"}
+          detail={currentPilot ? "System list position" : "Enter employee number"}
+          subdetail={
+            currentPilot ? `#${currentPilot.seniorityNumber} of ${systemTotalPilots}` : ""
+          }
+        />
+        <MobileKeyMetricCard
+          label="Current Category"
+          value={currentCategoryPercent != null ? `${currentCategoryPercent}%` : "--"}
+          detail={currentPilot?.currentCategoryCode ?? "Category position loads after lookup"}
+          subdetail={
+            currentCategorySummary && currentPilot?.currentCategoryRank && currentPilot?.currentCategoryTotal
+              ? `${currentPilot.currentCategoryRank}/${currentPilot.currentCategoryTotal} in ${currentCategorySummary.base}`
+              : ""
+          }
+        />
+        <MobileKeyMetricCard
+          label="Projected Seniority"
+          value={projectedCategoryPercent != null ? `${projectedCategoryPercent}%` : "--"}
+          detail="Once all AE conversions are processed"
+          subdetail={
+            currentCategorySummary && projectedCategoryRank && projectedCategoryTotal
+              ? `${projectedCategoryRank}/${projectedCategoryTotal} in ${currentCategorySummary.base}`
+              : ""
+          }
+        />
+      </View>
+
+      <MobilePreferencesPanel
+        currentPilot={currentPilot}
+        preferencesEditing={preferencesEditing}
+        preferencesComplete={preferencesComplete}
+        onPreferencesEditingChange={onPreferencesEditingChange}
+        goalInput={goalInput}
+        onGoalInputChange={onGoalInputChange}
+        onAddGoal={addGoal}
+        onPreferencesChange={onPreferencesChange}
+        watchedCategories={trackedCategories.map((item) => item.entry.key)}
+      />
+
+      <View style={styles.mobileDashboardStack}>
+        <MobileDashboardCard eyebrow="The Dream List" title="The dream list">
+          <Text style={styles.mobileDashboardBodyText}>
+            Add the categories you want on Home, tap a row for the current seniority list, and delete it when you no longer need it.
+          </Text>
+          {trackedCategories.length > 0 ? (
+            <View style={styles.mobileListStack}>
+              {trackedCategories.map((item) => (
+                <View key={`tracked-${item.entry.key}`} style={styles.mobileListRow}>
+                  <TouchableOpacity
+                    style={styles.mobileListMainAction}
+                    activeOpacity={0.88}
+                    onPress={() => onOpenTrackedCategory(item.entry)}
+                  >
+                    <View style={styles.mobileListCopy}>
+                      <Text style={styles.mobileListTitle}>{formatCategoryEntryCode(item.entry)}</Text>
+                      <Text style={styles.mobileListText}>{item.supportingText}</Text>
+                    </View>
+                  </TouchableOpacity>
+                  <View style={styles.mobileListActions}>
+                    <MobileStatusBadge label={item.statusLabel} tone={item.tone} compact />
+                    <TouchableOpacity
+                      style={styles.mobileDeleteMiniButton}
+                      onPress={() =>
+                        onPreferencesChange((current) => ({
+                          ...current,
+                          goalCategories: current.goalCategories.filter((entry) => entry !== item.entry.key),
+                        }))
+                      }
+                    >
+                      <Text style={styles.mobileDeleteMiniButtonText}>Delete</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <Text style={styles.mobileDecisionFooter}>
+              No watched categories yet. Use Edit to add the seats you want pinned on Home.
+            </Text>
+          )}
+        </MobileDashboardCard>
+      </View>
+
+      <MobileDashboardCard eyebrow="Seniority Progression" title="How your seniority grows over time">
+        <Text style={styles.mobileDashboardBodyText}>
+          Keep one shared annual growth assumption for your percent, number, and total-list charts.
+        </Text>
+        <View style={styles.dropdownWrap}>
+          <Text style={styles.inputLabel}>Annual growth</Text>
+          <TouchableOpacity style={styles.dropdownButton} onPress={onGrowthMenuToggle}>
+            <Text style={styles.dropdownButtonText}>{Math.round(growthRate * 100)}% annual growth</Text>
+          </TouchableOpacity>
+          {growthMenuOpen ? (
+            <View style={styles.dropdownMenu}>
+              {forecastGrowthRates.map((option) => (
+                <TouchableOpacity
+                  key={`home-growth-${option.value}`}
+                  style={styles.dropdownItem}
+                  onPress={() => onGrowthRateChange(option.value)}
+                >
+                  <Text style={styles.dropdownItemText}>{option.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : null}
+        </View>
+        <View style={styles.mobileChartStack}>
+          <MiniBarChart
+            title="System Seniority Percent"
+            subtitle={`Projected system seniority percent with ${Math.round(growthRate * 100)}% annual growth.`}
+            points={seniorityPercentSeries.map((point) => ({
+              ...point,
+              referenceOnePercent: null,
+              referenceTwoPercent: null,
+            }))}
+          />
+          <MiniBarChart
+            title="Pilot Seniority Number"
+            subtitle="Projected seniority number over time at the same growth rate."
+            points={seniorityNumberSeries}
+          />
+          <MiniBarChart
+            title="Total Pilot List"
+            subtitle="Past list size in navy, projected list size in red."
+            points={totalPilotCountSeries}
+          />
+        </View>
+      </MobileDashboardCard>
+    </SectionCard>
+  );
+}
+
+function MobilePreferencesEditor({
+  currentPilot,
+  onPreferencesChange,
+  onDone,
+  goalInput,
+  onGoalInputChange,
+  onAddGoal,
+  watchedCategories,
+}: {
+  currentPilot: PilotRecord | null;
+  onPreferencesChange: React.Dispatch<React.SetStateAction<PilotPreferences>>;
+  onDone: () => void;
+  goalInput: string;
+  onGoalInputChange: (value: string) => void;
+  onAddGoal: () => void;
+  watchedCategories: string[];
+}) {
+  return (
+    <View style={styles.mobilePreferencesEditor}>
+      <ResultLine
+        label="Current category"
+        value={
+          currentPilot?.currentCategoryCode ??
+          "Enter employee number first"
+        }
+      />
+      <View style={styles.mobileFormGroup}>
+        <Text style={styles.inputLabel}>Categories I'm Watching</Text>
+        <Text style={styles.mobileSectionText}>
+          Add target categories here. Tap a saved chip to remove it.
+        </Text>
+        <View style={styles.mobileGoalRow}>
+          <View style={[styles.textChipShell, styles.mobileGoalInputWrap]}>
+            <TextInput
+              value={goalInput}
+              onChangeText={onGoalInputChange}
+              placeholder="ATL-320-CA or SLC220A"
+              placeholderTextColor="#7B7367"
+              autoCapitalize="characters"
+              style={styles.textChipInput}
+            />
+          </View>
+          <TouchableOpacity style={styles.mobileAddGoalButton} onPress={onAddGoal}>
+            <Text style={styles.mobileAddGoalButtonText}>Add</Text>
+          </TouchableOpacity>
+        </View>
+        {watchedCategories.length > 0 ? (
+          <View style={styles.baseSelector}>
+            {watchedCategories.map((goal) => (
+              <TouchableOpacity
+                key={`goal-${goal}`}
+                style={[styles.baseChip, styles.goalChip]}
+                onPress={() =>
+                  onPreferencesChange((current) => ({
+                    ...current,
+                    goalCategories: current.goalCategories.filter((entry) => entry !== goal),
+                  }))
+                }
+              >
+                <Text style={[styles.baseChipLabel, styles.goalChipLabel]}>
+                  {displayCategoryPreference(goal)}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        ) : (
+          <Text style={styles.mobileDecisionFooter}>
+            No watch categories yet. Add the seats you want this dashboard to track.
+          </Text>
+        )}
+      </View>
+      <TouchableOpacity style={styles.mobileSavePrefsButton} onPress={onDone}>
+        <Text style={styles.mobileSavePrefsButtonText}>Save</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+function MobilePreferencesPanel({
+  currentPilot,
+  preferencesEditing,
+  preferencesComplete,
+  onPreferencesEditingChange,
+  goalInput,
+  onGoalInputChange,
+  onAddGoal,
+  onPreferencesChange,
+  watchedCategories,
+}: {
+  currentPilot: PilotRecord | null;
+  preferencesEditing: boolean;
+  preferencesComplete: boolean;
+  onPreferencesEditingChange: (value: boolean) => void;
+  goalInput: string;
+  onGoalInputChange: (value: string) => void;
+  onAddGoal: () => void;
+  onPreferencesChange: React.Dispatch<React.SetStateAction<PilotPreferences>>;
+  watchedCategories: string[];
+}) {
+  return (
+    <View style={styles.mobilePreferencesCard}>
+      <View style={styles.mobilePrefsSummaryHeader}>
+        <View style={styles.mobileListCopy}>
+          <Text style={styles.mobileSectionTitle}>Categories I'm Watching</Text>
+          <Text style={styles.mobileSectionText}>
+            {preferencesComplete
+              ? "Add the seats you want pinned on Home, and remove them when you no longer need them."
+              : "Load your pilot first, then add the categories you want pinned on Home."}
+          </Text>
+        </View>
+        <TouchableOpacity
+          style={styles.mobileEditPrefsButton}
+          onPress={() => onPreferencesEditingChange(!preferencesEditing)}
+        >
+          <Text style={styles.mobileEditPrefsButtonText}>
+            {preferencesEditing ? "Close" : "Edit"}
+          </Text>
+        </TouchableOpacity>
+      </View>
+      <View style={styles.mobileFormGroup}>
+        <Text style={styles.inputLabel}>Categories I'm Watching</Text>
+        {watchedCategories.length > 0 ? (
+          <View style={styles.baseSelector}>
+            {watchedCategories.map((goal) => (
+              <TouchableOpacity
+                key={`summary-goal-${goal}`}
+                style={[styles.baseChip, styles.goalChip, styles.goalChipRemovable]}
+                onPress={() =>
+                  onPreferencesChange((current) => ({
+                    ...current,
+                    goalCategories: current.goalCategories.filter((entry) => entry !== goal),
+                  }))
+                }
+              >
+                <Text style={[styles.baseChipLabel, styles.goalChipLabel]}>
+                  {displayCategoryPreference(goal)} ×
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        ) : (
+          <Text style={styles.mobileDecisionFooter}>
+            No tracked categories yet. Tap Edit to add the seats you want to follow.
+          </Text>
+        )}
+      </View>
+      {preferencesEditing ? (
+        <MobilePreferencesEditor
+          currentPilot={currentPilot}
+          onPreferencesChange={onPreferencesChange}
+          onDone={() => onPreferencesEditingChange(false)}
+          goalInput={goalInput}
+          onGoalInputChange={onGoalInputChange}
+          onAddGoal={onAddGoal}
+          watchedCategories={watchedCategories}
+        />
+      ) : null}
+    </View>
+  );
+}
+
+function MobileKeyMetricCard({
+  label,
+  value,
+  detail,
+  subdetail,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+  subdetail?: string;
+}) {
+  return (
+    <View style={styles.mobileKeyMetricCard}>
+      <Text style={styles.mobileKeyMetricLabel}>{label}</Text>
+      <Text style={styles.mobileKeyMetricValue}>{value}</Text>
+      <Text style={styles.mobileKeyMetricDetail}>{detail}</Text>
+      {subdetail ? <Text style={styles.mobileKeyMetricSubdetail}>{subdetail}</Text> : null}
+    </View>
+  );
+}
+
+function MobileCategoriesView({
+  currentPilot,
+  entries,
+  filter,
+  onFilterChange,
+  relevantBases,
+  onOpenCategory,
+}: {
+  currentPilot: PilotRecord | null;
+  entries: ReturnType<typeof buildMobileCategoryCards>;
+  filter: MobileCategoryFilterKey;
+  onFilterChange: (value: MobileCategoryFilterKey) => void;
+  relevantBases: string[];
+  onOpenCategory: (entry: CategoryEntry) => void;
+}) {
+  return (
+    <SectionCard
+      title="Categories"
+      description="Tap a category to see the full list. Mobile stays focused on quick bid decisions instead of table scanning."
+    >
+      <View style={styles.identityCard}>
+        <Text style={styles.identityName}>{currentPilot?.name ?? "Pilot categories"}</Text>
+        <Text style={styles.identityMeta}>
+          {relevantBases.length > 0
+            ? `My bases: ${relevantBases.join(", ")}`
+            : "Set your base preferences on Home to prioritize the right categories."}
+        </Text>
+      </View>
+      <View style={styles.baseSelector}>
+        {mobileCategoryFilters.map((chip) => (
+          <TouchableOpacity
+            key={chip.key}
+            style={[styles.baseChip, filter === chip.key && styles.baseChipActive]}
+            onPress={() => onFilterChange(chip.key)}
+          >
+            <Text style={[styles.baseChipLabel, filter === chip.key && styles.baseChipLabelActive]}>
+              {chip.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      <View style={styles.mobileCardStack}>
+        {entries.map((item) => (
+          <TouchableOpacity
+            key={`mobile-category-${item.entry.key}`}
+            style={[styles.mobileDecisionCard, statusBackgroundStyle(item.tone)]}
+            activeOpacity={0.9}
+            onPress={() => onOpenCategory(item.entry)}
+          >
+            <View style={styles.mobileDecisionHeader}>
+              <View style={styles.mobileDecisionTitleWrap}>
+                <Text style={styles.mobileDecisionTitle}>{formatCategoryEntryCode(item.entry)}</Text>
+                <Text style={styles.mobileDecisionSubtitle}>{item.supportingText}</Text>
+              </View>
+              <MobileStatusBadge label={item.statusLabel} tone={item.tone} />
+            </View>
+            <View style={styles.mobileInfoRow}>
+              <InfoChip label="Junior line" value={`#${item.entry.mostJuniorNumber}`} />
+              <InfoChip
+                label="You there"
+                value={item.holdDisplay}
+              />
+              <InfoChip
+                label="Trend"
+                value={item.trendText}
+              />
+            </View>
+            <Text style={styles.mobileDecisionFooter}>{item.relevanceText}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </SectionCard>
+  );
+}
+
+function MobileMovementView({
+  currentPilot,
+  currentCategoryCode,
+  currentCategoryMovement,
+  currentCategoryReach,
+  currentCategoryTrend,
+  feedItems,
+  onOpenAe,
+}: {
+  currentPilot: PilotRecord | null;
+  currentCategoryCode: string;
+  currentCategoryMovement: AeMovementSummary | null;
+  currentCategoryReach: ReturnType<typeof evaluateAeReach> | null;
+  currentCategoryTrend: AeTrendEntry | null;
+  feedItems: ReturnType<typeof buildMobileMovementFeed>;
+  onOpenAe: (item: ReturnType<typeof buildMobileMovementFeed>[number]) => void;
+}) {
+  return (
+    <SectionCard
+      title="Movement"
+      description="See what changed in the categories that matter to you this month, not a giant dump of every seat in the system."
+    >
+      <MobileDashboardCard eyebrow="Current Category Movement" title={currentCategoryCode || currentPilot?.currentCategoryCode || "Set your current category"}>
+        <View style={styles.mobileDashboardHeaderRow}>
+          <MobileStatusBadge
+            label={currentCategoryReach?.label ?? "No line yet"}
+            tone={toneForPilotStatus(currentCategoryReach?.label ?? "No line yet")}
+          />
+          <Text style={styles.mobileDashboardMeta}>
+            {describeMovementDirection(currentCategoryTrend?.lineMovement ?? null)}
+          </Text>
+        </View>
+        <Text style={styles.mobileDashboardBodyText}>
+          {currentCategoryMovement
+            ? `AE only: In ${currentCategoryMovement.aeIn} • Out ${currentCategoryMovement.aeOut} • Net ${formatSignedCount(currentCategoryMovement.net)}`
+            : "No parsed AE movement for this category in the latest posting."}
+        </Text>
+      </MobileDashboardCard>
+      <View style={styles.mobileCardStack}>
+        {feedItems.map((item) => (
+          <TouchableOpacity
+            key={`movement-${item.entry.awardCategory}`}
+            style={[styles.mobileDecisionCard, statusBackgroundStyle(item.tone)]}
+            activeOpacity={0.9}
+            onPress={() => onOpenAe(item)}
+          >
+            <View style={styles.mobileDecisionHeader}>
+              <View style={styles.mobileDecisionTitleWrap}>
+                <Text style={styles.mobileDecisionTitle}>{item.entry.awardCategory}</Text>
+                <Text style={styles.mobileDecisionSubtitle}>{item.summaryText}</Text>
+              </View>
+              <MobileStatusBadge label={item.statusLabel} tone={item.tone} />
+            </View>
+            <View style={styles.mobileInfoRow}>
+              <InfoChip label="Junior line" value={formatSeniorityValue(item.entry.mostJuniorAwardNumber)} />
+              <InfoChip label="Trend" value={item.trendText} />
+              <InfoChip label="Awards" value={`${item.entry.awards}`} />
+            </View>
+            <Text style={styles.mobileDecisionFooter}>{item.relevanceText}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </SectionCard>
+  );
+}
+
+function MobileCareerPlanningView({
+  currentPilot,
+  preferences,
+  milestones,
+  activeWhatIfCategory,
+  whatIfSeat,
+  setWhatIfSeat,
+  whatIfFleetOptions,
+  selectedWhatIfFleet,
+  setSelectedWhatIfFleet,
+  whatIfBaseOptions,
+  selectedWhatIfBase,
+  setSelectedWhatIfBase,
+  whatIfEstimates,
+}: {
+  currentPilot: PilotRecord | null;
+  preferences: PilotPreferences;
+  milestones: ReturnType<typeof buildCareerMilestones>;
+  activeWhatIfCategory: CategoryEntry | null;
+  whatIfSeat: Exclude<SeatFilter, "All">;
+  setWhatIfSeat: (value: Exclude<SeatFilter, "All">) => void;
+  whatIfFleetOptions: string[];
+  selectedWhatIfFleet: string;
+  setSelectedWhatIfFleet: (value: string) => void;
+  whatIfBaseOptions: string[];
+  selectedWhatIfBase: string;
+  setSelectedWhatIfBase: (value: string) => void;
+  whatIfEstimates: HoldEstimate[];
+}) {
+  return (
+    <SectionCard
+      title="Career & Planning"
+      description="Plan the next meaningful milestone first, then use the hold tool to drill into one specific seat."
+    >
+      <View style={styles.mobileCardStack}>
+        {milestones.map((milestone) => (
+          <View
+            key={`milestone-${milestone.key}`}
+            style={[styles.mobileDecisionCard, statusBackgroundStyle(milestone.tone)]}
+          >
+            <View style={styles.mobileDecisionHeader}>
+              <View style={styles.mobileDecisionTitleWrap}>
+                <Text style={styles.mobileDecisionTitle}>{milestone.label}</Text>
+                <Text style={styles.mobileDecisionSubtitle}>{milestone.targetCode}</Text>
+              </View>
+              <MobileStatusBadge label={milestone.statusLabel} tone={milestone.tone} />
+            </View>
+            <Text style={styles.mobileDecisionFooter}>{milestone.timing}</Text>
+          </View>
+        ))}
+      </View>
+      <View style={styles.mobilePreferencesCard}>
+        <Text style={styles.mobileSectionTitle}>When can I hold this?</Text>
+        <Text style={styles.mobileSectionText}>
+          Use the exact seat you care about and compare the 1% and 2% planning paths.
+        </Text>
+        <Text style={styles.inputLabel}>Seat</Text>
+        <View style={styles.baseSelector}>
+          {(["Captain", "First Officer"] as const).map((seat) => (
+            <TouchableOpacity
+              key={`mobile-career-seat-${seat}`}
+              style={[styles.baseChip, whatIfSeat === seat && styles.baseChipActive]}
+              onPress={() => setWhatIfSeat(seat)}
+            >
+              <Text style={[styles.baseChipLabel, whatIfSeat === seat && styles.baseChipLabelActive]}>
+                {seat === "Captain" ? "CA" : "FO"}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <Text style={styles.inputLabel}>Fleet</Text>
+        <View style={styles.baseSelector}>
+          {whatIfFleetOptions.map((fleet) => (
+            <TouchableOpacity
+              key={`mobile-career-fleet-${fleet}`}
+              style={[styles.baseChip, selectedWhatIfFleet === fleet && styles.baseChipActive]}
+              onPress={() => setSelectedWhatIfFleet(fleet)}
+            >
+              <Text style={[styles.baseChipLabel, selectedWhatIfFleet === fleet && styles.baseChipLabelActive]}>
+                {fleet}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <Text style={styles.inputLabel}>Base</Text>
+        <View style={styles.baseSelector}>
+          {whatIfBaseOptions.map((base) => (
+            <TouchableOpacity
+              key={`mobile-career-base-${base}`}
+              style={[styles.baseChip, selectedWhatIfBase === base && styles.baseChipActive]}
+              onPress={() => setSelectedWhatIfBase(base)}
+            >
+              <Text style={[styles.baseChipLabel, selectedWhatIfBase === base && styles.baseChipLabelActive]}>
+                {base}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        {activeWhatIfCategory && currentPilot ? (
+          <>
+            <Text style={styles.mobileSectionText}>
+              {formatCategoryEntryCode(activeWhatIfCategory)} • Current Junior{" "}
+              {activeWhatIfCategory.seat === "Captain" ? "CA" : "FO"} #
+              {activeWhatIfCategory.mostJuniorNumber}
+            </Text>
+            <View style={styles.mobileCardStack}>
+              {whatIfEstimates.map((estimate) => (
+                <View
+                  key={`mobile-what-if-${estimate.growthRate}`}
+                  style={[styles.mobileDecisionCard, styles.mobileNeutralCard]}
+                >
+                  <View style={styles.mobileDecisionHeader}>
+                    <View style={styles.mobileDecisionTitleWrap}>
+                      <Text style={styles.mobileDecisionTitle}>
+                        {Math.round(estimate.growthRate * 100)}% growth
+                      </Text>
+                      <Text style={styles.mobileDecisionSubtitle}>
+                        {estimate.firstHoldPoint
+                          ? estimate.firstHoldPoint.label === "Today"
+                            ? "Can Hold now"
+                            : `Est. hold by ${estimate.firstHoldPoint.label}`
+                          : "Longer-range"}
+                      </Text>
+                    </View>
+                    <MobileStatusBadge
+                      label={estimate.currentGap === 0 ? "Can Hold" : "Senior to You"}
+                      tone={estimate.currentGap === 0 ? "green" : "red"}
+                      compact
+                    />
+                  </View>
+                  <View style={styles.mobileInfoRow}>
+                    <InfoChip label="Your number" value={estimate.firstHoldPoint ? `#${estimate.firstHoldPoint.projectedRank}` : `#${currentPilot.seniorityNumber}`} />
+                    <InfoChip label="Junior line" value={estimate.firstHoldPoint ? `#${estimate.firstHoldPoint.projectedJuniorLine}` : "—"} />
+                    <InfoChip label="Gap today" value={`${estimate.currentGap}`} />
+                  </View>
+                </View>
+              ))}
+            </View>
+          </>
+        ) : null}
+      </View>
+    </SectionCard>
+  );
+}
+
+function MobileDashboardCard({
+  eyebrow,
+  title,
+  children,
+}: {
+  eyebrow: string;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <View style={styles.mobileDashboardCard}>
+      <Text style={styles.mobileDashboardEyebrow}>{eyebrow}</Text>
+      <Text style={styles.mobileDashboardTitle}>{title}</Text>
+      {children}
+    </View>
+  );
+}
+
+function MobileStatusBadge({
+  label,
+  tone,
+  compact,
+}: {
+  label: string;
+  tone: "green" | "amber" | "red" | "neutral";
+  compact?: boolean;
+}) {
+  return (
+    <View
+      style={[
+        styles.mobileStatusBadge,
+        tone === "green" && styles.mobileStatusBadgeGreen,
+        tone === "amber" && styles.mobileStatusBadgeAmber,
+        tone === "red" && styles.mobileStatusBadgeRed,
+        compact && styles.mobileStatusBadgeCompact,
+      ]}
+    >
+      <Text style={styles.mobileStatusBadgeText}>{label}</Text>
+    </View>
+  );
+}
+
+function InfoChip({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.mobileInfoChip}>
+      <Text style={styles.mobileInfoChipLabel}>{label}</Text>
+      <Text style={styles.mobileInfoChipValue}>{value}</Text>
+    </View>
+  );
+}
+
+function mobileTabLabel(tab: TabKey) {
+  if (tab === "seniority") {
+    return "Categories";
+  }
+  if (tab === "ae") {
+    return "Movement";
+  }
+  if (tab === "schedule") {
+    return "Career";
+  }
+  return tabs.find((entry) => entry.key === tab)?.label ?? tab;
+}
+
+function displayCategoryPreference(goal: string) {
+  const [base = "", fleet = "", seatCode = ""] = goal.split("-");
+  if (!base || !fleet || !seatCode) {
+    return goal;
+  }
+  return `${base}-${fleet}-${seatCode === "A" ? "CA" : seatCode === "B" ? "FO" : seatCode}`;
+}
+
+function buildCategoryKeyFromCategoryCode(categoryCode: string) {
+  const normalized = categoryCode.trim().toUpperCase();
+  if (normalized.length < 5) {
+    return null;
+  }
+  const base = normalized.slice(0, 3);
+  const seatCode = normalized.slice(-1);
+  const fleet = normalized.slice(3, -1);
+  if (!base || !fleet) {
+    return null;
+  }
+  const positionCode = seatCode === "A" ? "A" : seatCode === "B" ? "B" : seatCode;
+  return `${base}-${fleet}-${positionCode}`;
+}
+
+function buildAwardCategoryFromCategoryCode(categoryCode: string) {
+  const categoryKey = buildCategoryKeyFromCategoryCode(categoryCode);
+  if (!categoryKey) {
+    return null;
+  }
+  const [base = "", fleet = "", seatCode = ""] = categoryKey.split("-");
+  return `${base}-${fleet}-${seatCode === "A" ? "CA" : seatCode === "B" ? "FO" : seatCode}`;
+}
+
+function normalizeCategoryPreference(value: string) {
+  const trimmed = value.trim().toUpperCase();
+  if (!trimmed) {
+    return null;
+  }
+  if (trimmed.includes("-CA") || trimmed.includes("-FO")) {
+    return buildCategoryKeyFromAeCategory(trimmed);
+  }
+  if (trimmed.includes("-A") || trimmed.includes("-B")) {
+    return trimmed;
+  }
+  return buildCategoryKeyFromCategoryCode(trimmed);
+}
+
+function toneForPilotStatus(label: string) {
+  if (label === "Can Hold" || label === "Junior to You") {
+    return "green" as const;
+  }
+  if (label === "Close") {
+    return "amber" as const;
+  }
+  if (label === "Senior to You") {
+    return "red" as const;
+  }
+  return "neutral" as const;
+}
+
+function statusBackgroundStyle(tone: "green" | "amber" | "red" | "neutral") {
+  if (tone === "green") {
+    return styles.mobileGreenCard;
+  }
+  if (tone === "amber") {
+    return styles.mobileAmberCard;
+  }
+  if (tone === "red") {
+    return styles.mobileRedCard;
+  }
+  return styles.mobileNeutralCard;
+}
+
+function describeMovementDirection(value: number | null) {
+  if (value == null || value === 0) {
+    return "Flat latest line";
+  }
+  return value > 0 ? "Moved junior" : "Moved senior";
+}
+
+function buildRelevantHoldEntries({
+  entries,
+  currentPilot,
+  userSeniorityNumber,
+  currentCategoryKey,
+  relevantBases,
+  priority,
+  goalCategoryKeys,
+  categoryAssignmentsByKey,
+}: {
+  entries: readonly CategoryEntry[];
+  currentPilot: PilotRecord | null;
+  userSeniorityNumber: number;
+  currentCategoryKey: string | null;
+  relevantBases: string[];
+  priority: PilotPriorityKey;
+  goalCategoryKeys: readonly string[];
+  categoryAssignmentsByKey: ReadonlyMap<string, LatestCategoryAssignment[]>;
+}) {
+  const preferredBaseSet = new Set(relevantBases);
+
+  return entries
+    .filter((entry) => {
+      if (priority === "systemwide-opportunities") {
+        return true;
+      }
+      if (!preferredBaseSet.size) {
+        return true;
+      }
+      return preferredBaseSet.has(entry.base);
+    })
+    .map((entry) => buildMobileCategoryCardDatum(entry, currentPilot, userSeniorityNumber, currentCategoryKey, goalCategoryKeys, categoryAssignmentsByKey))
+    .sort((left, right) => right.score - left.score);
+}
+
+function buildMobileCategoryCards({
+  entries,
+  currentPilot,
+  userSeniorityNumber,
+  currentCategoryKey,
+  relevantBases,
+  goalCategoryKeys,
+  filter,
+  categoryAssignmentsByKey,
+}: {
+  entries: readonly CategoryEntry[];
+  currentPilot: PilotRecord | null;
+  userSeniorityNumber: number;
+  currentCategoryKey: string | null;
+  relevantBases: string[];
+  goalCategoryKeys: readonly string[];
+  filter: MobileCategoryFilterKey;
+  categoryAssignmentsByKey: ReadonlyMap<string, LatestCategoryAssignment[]>;
+}) {
+  const preferredBaseSet = new Set(relevantBases);
+
+  return entries
+    .map((entry) =>
+      buildMobileCategoryCardDatum(
+        entry,
+        currentPilot,
+        userSeniorityNumber,
+        currentCategoryKey,
+        goalCategoryKeys,
+        categoryAssignmentsByKey
+      )
+    )
+    .filter((item) => {
+      if (filter === "all") return true;
+      if (filter === "can-hold") return item.statusLabel === "Can Hold";
+      if (filter === "close") return item.statusLabel === "Close";
+      if (filter === "senior-to-you") return item.statusLabel === "Senior to You";
+      if (filter === "captain") return item.entry.seat === "Captain";
+      if (filter === "fo") return item.entry.seat === "First Officer";
+      if (filter === "my-bases") return preferredBaseSet.size === 0 ? true : preferredBaseSet.has(item.entry.base);
+      if (filter === "goals") return item.isGoal;
+      return true;
+    })
+    .sort((left, right) => {
+      if (filter === "all" || filter === "my-bases") {
+        return right.score - left.score;
+      }
+      return right.score - left.score;
+    });
+}
+
+function buildMobileCategoryCardDatum(
+  entry: CategoryEntry,
+  currentPilot: PilotRecord | null,
+  userSeniorityNumber: number,
+  currentCategoryKey: string | null,
+  goalCategoryKeys: readonly string[],
+  categoryAssignmentsByKey: ReadonlyMap<string, LatestCategoryAssignment[]>
+) {
+  const fit = evaluateCategoryHold(entry, userSeniorityNumber, currentCategoryKey);
+  const trend = deltaSnapshot.categoryTrends.find((item) => item.key === entry.key) ?? null;
+  const assignments = categoryAssignmentsByKey.get(entry.key) ?? [];
+  const userPosition = describeUserCategoryPosition(
+    entry,
+    fit,
+    userSeniorityNumber,
+    currentPilot,
+    assignments
+  );
+  const isGoal = goalCategoryKeys.includes(entry.key);
+  const statusLabel = fit.label === "Current category" ? "Can Hold" : fit.label;
+  const tone = toneForPilotStatus(statusLabel);
+  const holdDisplay =
+    statusLabel === "Can Hold" ? userPosition.secondary ?? "Holdable" : statusLabel === "Close" ? "—" : "—";
+  const gap = Math.max(0, userSeniorityNumber - entry.mostJuniorNumber);
+  const supportingText =
+    statusLabel === "Can Hold"
+      ? `You'd likely sit ${userPosition.secondary ?? "inside the category"} here.`
+      : statusLabel === "Close"
+        ? `${gap} numbers from the current line.`
+        : statusLabel === "Senior to You"
+          ? "Not holdable today."
+          : "Current category.";
+  const relevanceText = isGoal
+    ? "Goal category"
+    : currentPilot && entry.base === currentPilot.currentCategoryCode?.slice(0, 3)
+      ? "Current base priority"
+      : "Useful bid option";
+  const score =
+    (statusLabel === "Can Hold" ? 90 : statusLabel === "Close" ? 70 : statusLabel === "Senior to You" ? 40 : 80) +
+    (isGoal ? 25 : 0) +
+    (entry.seat === "Captain" ? 4 : 0) -
+    gap / 1000;
+
+  return {
+    entry,
+    fit,
+    userPosition,
+    trend,
+    isGoal,
+    statusLabel,
+    tone,
+    holdDisplay,
+    supportingText,
+    relevanceText,
+    trendText: describeMovementDirection(trend?.lineMovement ?? null),
+    score,
+  };
+}
+
+function buildMobileMovementFeed({
+  aeEntries,
+  aeTrends,
+  categoryTrends,
+  userSeniorityNumber,
+  relevantBases,
+  priority,
+  goalCategoryKeys,
+}: {
+  aeEntries: readonly AeEntry[];
+  aeTrends: readonly AeTrendEntry[];
+  categoryTrends: readonly {
+    key: string;
+    base: string;
+    fleet: string;
+    seat: string;
+    latestJuniorNumber: number;
+    previousJuniorNumber: number | null;
+    lineMovement: number | null;
+    latestPilotCount: number;
+    previousPilotCount: number | null;
+    pilotCountDelta: number | null;
+  }[];
+  userSeniorityNumber: number;
+  relevantBases: readonly string[];
+  priority: PilotPriorityKey;
+  goalCategoryKeys: readonly string[];
+}) {
+  const relevantBaseSet = new Set(relevantBases);
+  return aeEntries
+    .filter((entry) => {
+      if (priority === "systemwide-opportunities") {
+        return true;
+      }
+      if (!relevantBaseSet.size) {
+        return true;
+      }
+      return relevantBaseSet.has(entry.base);
+    })
+    .map((entry) => {
+      const reach = evaluateAeReach(entry, userSeniorityNumber);
+      const trend = aeTrends.find((item) => item.awardCategory === entry.awardCategory) ?? null;
+      const categoryTrend =
+        categoryTrends.find((item) => item.key === buildCategoryKeyFromAeCategory(entry.awardCategory)) ?? null;
+      const isGoal = goalCategoryKeys.includes(buildCategoryKeyFromAeCategory(entry.awardCategory));
+      const statusLabel = reach.label === "No line yet" ? "Close" : reach.label;
+      const tone = toneForPilotStatus(statusLabel);
+      return {
+        entry,
+        statusLabel,
+        tone,
+        summaryText: `${describeMovementDirection(trend?.lineMovement ?? null)} • ${formatSignedCount(
+          trend?.awardsDelta ?? null
+        )} awards`,
+        trendText: formatSignedChange(trend?.lineMovement ?? categoryTrend?.lineMovement ?? null, "#") ?? "Flat",
+        relevanceText: isGoal ? "Goal category movement" : `${entry.base} ${entry.seat === "Captain" ? "Captain" : "FO"} movement`,
+        score:
+          (statusLabel === "Junior to You" ? 90 : statusLabel === "Close" ? 70 : 50) +
+          (isGoal ? 25 : 0) +
+          Math.abs(trend?.lineMovement ?? 0),
+      };
+    })
+    .sort((left, right) => right.score - left.score)
+    .slice(0, 10);
+}
+
+function buildCareerMilestones({
+  currentPilot,
+  categories,
+  pilots,
+  relevantBases,
+  priority,
+  goalCategoryKeys,
+}: {
+  currentPilot: PilotRecord | null;
+  categories: readonly CategoryEntry[];
+  pilots: readonly PilotRecord[];
+  relevantBases: readonly string[];
+  priority: PilotPriorityKey;
+  goalCategoryKeys: readonly string[];
+}) {
+  if (!currentPilot) {
+    return [];
+  }
+
+  const relevantBaseSet = new Set(relevantBases);
+  const candidatePool = categories.filter((entry) => {
+    if (priority === "systemwide-opportunities") {
+      return true;
+    }
+    if (!relevantBaseSet.size) {
+      return true;
+    }
+    return relevantBaseSet.has(entry.base);
+  });
+
+  const pickBest = (label: string, entries: readonly CategoryEntry[]) => {
+    const sorted = [...entries].sort((left, right) => {
+      const leftGap = Math.max(0, currentPilot.seniorityNumber - left.mostJuniorNumber);
+      const rightGap = Math.max(0, currentPilot.seniorityNumber - right.mostJuniorNumber);
+      return leftGap - rightGap;
+    });
+    const target = sorted[0];
+    if (!target) {
+      return null;
+    }
+    const estimate = buildCategoryHoldEstimate(currentPilot, target, pilots, 0.01);
+    const fit = evaluateCategoryHold(target, currentPilot.seniorityNumber, currentPilot.currentCategoryKey);
+    const statusLabel = fit.label === "Current category" ? "Can Hold" : fit.label;
+    return {
+      key: `${label}-${target.key}`,
+      label,
+      targetCode: formatCategoryEntryCode(target),
+      statusLabel,
+      tone: toneForPilotStatus(statusLabel),
+      timing:
+        estimate.firstHoldPoint == null
+          ? "Longer-range"
+          : estimate.firstHoldPoint.label === "Today"
+            ? "Can Hold now"
+            : `Est. ${estimate.firstHoldPoint.label}`,
+      isGoal: goalCategoryKeys.includes(target.key),
+    };
+  };
+
+  const widebodyFleets = new Set(["330", "350", "765", "7ER"]);
+  const narrowbodyCaptain = pickBest(
+    "Narrowbody Captain",
+    candidatePool.filter((entry) => entry.seat === "Captain" && !widebodyFleets.has(entry.fleet))
+  );
+  const widebodyFo = pickBest(
+    "Widebody FO",
+    categories.filter((entry) => entry.seat === "First Officer" && widebodyFleets.has(entry.fleet))
+  );
+  const betterCaptainSeat = pickBest(
+    "Better Captain Seat",
+    categories
+      .filter((entry) => entry.seat === "Captain")
+      .sort((left, right) => payPriorityScore(right) - payPriorityScore(left))
+  );
+
+  return [narrowbodyCaptain, widebodyFo, betterCaptainSeat].filter(Boolean) as Array<{
+    key: string;
+    label: string;
+    targetCode: string;
+    statusLabel: string;
+    tone: "green" | "amber" | "red" | "neutral";
+    timing: string;
+    isGoal: boolean;
+  }>;
+}
+
+function buildCommuteBaseSuggestions(commuteOrigin: string, userSeniorityNumber: number) {
+  const normalized = commuteOrigin.trim().toUpperCase();
+  const nearbyBaseMap: Record<string, string[]> = {
+    SNA: ["LAX", "SEA", "SLC"],
+    ONT: ["LAX", "SLC", "SEA"],
+    SAN: ["LAX", "SLC", "SEA"],
+    PHX: ["SLC", "LAX", "SEA"],
+    LAS: ["LAX", "SLC", "SEA"],
+    DEN: ["SLC", "SEA", "MSP"],
+    BOI: ["SLC", "SEA", "MSP"],
+    PDX: ["SEA", "SLC", "LAX"],
+    OAK: ["LAX", "SEA", "SLC"],
+    SFO: ["LAX", "SEA", "SLC"],
+    JFK: ["NYC", "BOS", "ATL"],
+    LGA: ["NYC", "BOS", "ATL"],
+    EWR: ["NYC", "BOS", "ATL"],
+    MCO: ["ATL", "NYC", "DTW"],
+    TPA: ["ATL", "NYC", "DTW"],
+    AUS: ["ATL", "LAX", "MSP"],
+  };
+
+  const nearbyBases = nearbyBaseMap[normalized] ?? (bases.includes(normalized) ? [normalized] : bases);
+
+  return nearbyBases
+    .map((base) => {
+      const baseEntries = deltaSnapshot.categories.filter((entry) => entry.base === base);
+      const holdable = baseEntries.filter((entry) => userSeniorityNumber <= entry.mostJuniorNumber).length;
+      const close = baseEntries.filter(
+        (entry) => userSeniorityNumber > entry.mostJuniorNumber && userSeniorityNumber - entry.mostJuniorNumber <= 300
+      ).length;
+      return {
+        base,
+        score: holdable * 10 + close * 4,
+        label: holdable > 0 ? `${holdable} holdable` : close > 0 ? `${close} close` : "longer-range",
+      };
+    })
+    .sort((left, right) => right.score - left.score)
+    .slice(0, 4);
+}
+
+function payPriorityScore(entry: CategoryEntry) {
+  const equipment = normalizePayEquipment(entry.fleet, entry.seat);
+  if (!equipment) {
+    return 0;
+  }
+  const seatKey = entry.seat === "Captain" ? "Captain" : "First Officer";
+  const rates = payScales[seatKey][equipment];
+  return rates?.[rates.length - 1] ?? 0;
 }
 
 const styles = StyleSheet.create({
@@ -4736,6 +6394,431 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     borderWidth: 1,
   },
+  mobileCategoryCard: {
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    gap: 10,
+  },
+  mobileCategoryHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+  mobileCategoryTitleWrap: {
+    flex: 1,
+    gap: 4,
+  },
+  mobileCategoryBadge: {
+    minWidth: 68,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "rgba(12,35,64,0.08)",
+  },
+  mobileCategoryBadgeText: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#0C2340",
+  },
+  mobileMetricGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  mobileMetricCard: {
+    flexGrow: 1,
+    flexBasis: "47%",
+    minWidth: 120,
+    backgroundColor: "rgba(255,255,255,0.45)",
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    gap: 3,
+    borderWidth: 1,
+    borderColor: "rgba(12,35,64,0.08)",
+  },
+  mobileMetricLabel: {
+    fontSize: 10,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    color: "#6B7C93",
+  },
+  mobileMetricValue: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: "#0C2340",
+  },
+  mobileMetricDetail: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#6B7C93",
+  },
+  mobileDashboardStack: {
+    gap: 12,
+  },
+  desktopDashboardGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+  },
+  desktopDashboardColumn: {
+    flex: 1,
+    minWidth: 280,
+  },
+  mobileSummaryMetricRow: {
+    flexDirection: "row",
+    gap: 10,
+    flexWrap: "wrap",
+  },
+  mobileKeyMetricCard: {
+    flexGrow: 1,
+    flexBasis: 180,
+    minWidth: 160,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#D4DEE9",
+    padding: 14,
+    gap: 6,
+  },
+  mobileKeyMetricLabel: {
+    fontSize: 11,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+    color: "#6B7C93",
+  },
+  mobileKeyMetricValue: {
+    fontSize: 28,
+    fontWeight: "900",
+    color: "#0C2340",
+  },
+  mobileKeyMetricDetail: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: "#52606D",
+    fontWeight: "600",
+  },
+  mobileKeyMetricSubdetail: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: "#0C2340",
+    fontWeight: "800",
+  },
+  mobileDashboardCard: {
+    backgroundColor: "#F8FBFF",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#D4DEE9",
+    padding: 16,
+    gap: 10,
+  },
+  mobileDashboardEyebrow: {
+    fontSize: 11,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 1.2,
+    color: "#6B7C93",
+  },
+  mobileDashboardTitle: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#0C2340",
+  },
+  mobileDashboardHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 10,
+  },
+  mobileDashboardMeta: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#6B7C93",
+  },
+  mobileDashboardBodyText: {
+    fontSize: 14,
+    lineHeight: 21,
+    color: "#52606D",
+  },
+  mobilePreferencesCard: {
+    backgroundColor: "#F7FAFC",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#D4DEE9",
+    padding: 16,
+    gap: 12,
+  },
+  mobilePreferencesEditor: {
+    gap: 12,
+    paddingTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: "#D4DEE9",
+  },
+  mobileSectionTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#0C2340",
+  },
+  mobileSectionText: {
+    fontSize: 13,
+    lineHeight: 20,
+    color: "#52606D",
+  },
+  mobilePrefsSummaryCard: {
+    backgroundColor: "#F8FBFF",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#D4DEE9",
+    padding: 16,
+    gap: 12,
+  },
+  mobilePrefsCollapsedWrap: {
+    marginTop: -2,
+  },
+  mobilePrefsCollapsedButton: {
+    minHeight: 48,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#D4DEE9",
+    backgroundColor: "#F8FBFF",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 18,
+  },
+  mobilePrefsCollapsedButtonText: {
+    color: "#0C2340",
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  mobilePrefsSummaryHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+  mobileEditPrefsButton: {
+    backgroundColor: "#E4EEF8",
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  mobileEditPrefsButtonText: {
+    color: "#0C2340",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  mobileFormGroup: {
+    gap: 8,
+  },
+  textChipShell: {
+    minHeight: 48,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#CFD9E5",
+    backgroundColor: "#FFFFFF",
+    justifyContent: "center",
+    paddingHorizontal: 14,
+  },
+  textChipInput: {
+    fontSize: 16,
+    color: "#102A43",
+    paddingVertical: 10,
+  },
+  mobileGoalRow: {
+    flexDirection: "row",
+    gap: 10,
+    alignItems: "center",
+  },
+  mobileGoalInputWrap: {
+    flex: 1,
+  },
+  mobileAddGoalButton: {
+    backgroundColor: "#A6192E",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 14,
+  },
+  mobileAddGoalButtonText: {
+    color: "#F8FBFF",
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  mobileSavePrefsButton: {
+    alignSelf: "flex-start",
+    backgroundColor: "#A6192E",
+    borderRadius: 999,
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+  },
+  mobileSavePrefsButtonText: {
+    color: "#F8FBFF",
+    fontSize: 13,
+    fontWeight: "800",
+  },
+  mobileChartStack: {
+    gap: 14,
+  },
+  goalChip: {
+    backgroundColor: "#E4EEF8",
+  },
+  goalChipRemovable: {
+    paddingRight: 14,
+  },
+  goalChipLabel: {
+    color: "#0C2340",
+  },
+  mobileCardStack: {
+    gap: 12,
+  },
+  mobileDecisionCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 14,
+    gap: 10,
+  },
+  mobileGreenCard: {
+    backgroundColor: "#DFF0DB",
+    borderColor: "#B9D7B1",
+  },
+  mobileAmberCard: {
+    backgroundColor: "#F4E9D2",
+    borderColor: "#DEC99B",
+  },
+  mobileRedCard: {
+    backgroundColor: "#F8E1E5",
+    borderColor: "#E5B7C0",
+  },
+  mobileNeutralCard: {
+    backgroundColor: "#F1F5F9",
+    borderColor: "#D4DEE9",
+  },
+  mobileDecisionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+  mobileDecisionTitleWrap: {
+    flex: 1,
+    gap: 4,
+  },
+  mobileDecisionTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#0C2340",
+  },
+  mobileDecisionSubtitle: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: "#52606D",
+  },
+  mobileDecisionFooter: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#52606D",
+  },
+  mobileStatusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "#E7EEF6",
+  },
+  mobileStatusBadgeCompact: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  mobileStatusBadgeGreen: {
+    backgroundColor: "#2F6B36",
+  },
+  mobileStatusBadgeAmber: {
+    backgroundColor: "#B88A28",
+  },
+  mobileStatusBadgeRed: {
+    backgroundColor: "#A6192E",
+  },
+  mobileStatusBadgeText: {
+    color: "#F8FBFF",
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
+  mobileInfoRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  mobileInfoChip: {
+    minWidth: 88,
+    flexGrow: 1,
+    backgroundColor: "rgba(255,255,255,0.5)",
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 2,
+  },
+  mobileInfoChipLabel: {
+    fontSize: 10,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    color: "#6B7C93",
+  },
+  mobileInfoChipValue: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: "#0C2340",
+  },
+  mobileListStack: {
+    gap: 10,
+  },
+  mobileListRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 10,
+  },
+  mobileListMainAction: {
+    flex: 1,
+  },
+  mobileListActions: {
+    alignItems: "flex-end",
+    gap: 8,
+  },
+  mobileListCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  mobileListTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#0C2340",
+  },
+  mobileListText: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: "#52606D",
+  },
+  mobileDeleteMiniButton: {
+    backgroundColor: "#F8E1E5",
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: "#E5B7C0",
+  },
+  mobileDeleteMiniButtonText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#A6192E",
+  },
   tableRowHold: {
     backgroundColor: "#E4EEF8",
     borderColor: "#B8CBE0",
@@ -4766,6 +6849,10 @@ const styles = StyleSheet.create({
     padding: 20,
     justifyContent: "center",
   },
+  modalBackdropCompact: {
+    padding: 10,
+    justifyContent: "flex-end",
+  },
   modalCard: {
     maxHeight: "88%",
     backgroundColor: "#FCF8EF",
@@ -4774,6 +6861,10 @@ const styles = StyleSheet.create({
     borderColor: "#D9C9A5",
     padding: 18,
     position: "relative",
+  },
+  modalCardCompact: {
+    maxHeight: "94%",
+    padding: 14,
   },
   modalHeader: {
     flexDirection: "row",
@@ -4837,6 +6928,15 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     paddingTop: 8,
   },
+  modalScrollContentCompact: {
+    gap: 12,
+    paddingBottom: 20,
+    paddingTop: 6,
+  },
+  modalSummaryPanelCompact: {
+    padding: 14,
+    gap: 10,
+  },
   modalTableRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -4872,6 +6972,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#DDD2C1",
   },
+  listCompareCardCompact: {
+    minWidth: 0,
+    padding: 12,
+    gap: 6,
+  },
   listCompareTitle: {
     fontSize: 15,
     fontWeight: "800",
@@ -4892,6 +6997,12 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderBottomWidth: 1,
     borderBottomColor: "#EEE5D6",
+  },
+  listCompareRowCompact: {
+    alignItems: "flex-start",
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: 12,
   },
   listCompareRowSenior: {
     backgroundColor: "#F8E1E5",
@@ -4928,6 +7039,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
     color: "#173645",
+  },
+  listCompareNumberCompact: {
+    fontSize: 14,
+    marginTop: 2,
   },
   baseNetBar: {
     marginTop: 10,
@@ -5069,10 +7184,20 @@ const styles = StyleSheet.create({
   chartCard: {
     gap: 10,
   },
+  chartCardCompact: {
+    backgroundColor: "#F7FAFC",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#D4DEE9",
+    padding: 14,
+  },
   chartLegendRow: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 12,
+  },
+  chartLegendRowCompact: {
+    gap: 10,
   },
   dropdownWrap: {
     flex: 1,
@@ -5178,16 +7303,29 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
     minHeight: 210,
   },
+  chartRowCompact: {
+    gap: 12,
+    minHeight: 194,
+    paddingBottom: 2,
+  },
   chartColumn: {
     width: 34,
     alignItems: "center",
     gap: 6,
+  },
+  chartColumnCompact: {
+    width: 40,
+    gap: 8,
   },
   chartValue: {
     fontSize: 10,
     color: "#16395D",
     fontWeight: "700",
     textAlign: "center",
+  },
+  chartValueCompact: {
+    fontSize: 11,
+    lineHeight: 14,
   },
   chartValueFuture: {
     color: "#A6192E",
@@ -5203,10 +7341,19 @@ const styles = StyleSheet.create({
     position: "relative",
     overflow: "hidden",
   },
+  chartBarWrapCompact: {
+    width: 28,
+    height: 118,
+    borderRadius: 10,
+  },
   chartBar: {
     width: 16,
     backgroundColor: "#0C2340",
     borderRadius: 6,
+  },
+  chartBarCompact: {
+    width: 18,
+    borderRadius: 7,
   },
   chartBarFuture: {
     backgroundColor: "#C8102E",
@@ -5228,6 +7375,10 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: "#6B7C93",
     textAlign: "center",
+  },
+  chartLabelCompact: {
+    fontSize: 11,
+    lineHeight: 14,
   },
   seniorityCard: {
     backgroundColor: "#F4EFE4",
