@@ -9,19 +9,27 @@
     "android": "expo start --android",
     "web": "expo start --web",
     "web:3000": "expo start --web --port 3000",
+    "serve:web": "node --experimental-strip-types --experimental-specifier-resolution=node ./server/serve-web.ts",
     "parse:delta": "node ./scripts/parse-delta-data.mjs",
+    "build:compensation-index": "node ./scripts/build-compensation-manual-index.mjs",
+    "build:scheduler-index": "node ./scripts/build-scheduler-manual-index.mjs",
+    "build:contract-index": "node ./scripts/build-contract-source-index.mjs && node ./scripts/build-compensation-manual-index.mjs && node ./scripts/build-scheduler-manual-index.mjs",
     "refresh:delta": "node ./scripts/refresh-delta.mjs",
-    "build:web": "node ./scripts/export-web.mjs"
+    "build:web": "node ./scripts/export-web.mjs",
+    "qa:contract-copilot": "node ./scripts/run-contract-copilot-qa.mjs",
+    "qa:contract-support": "node ./scripts/run-contract-copilot-qa.mjs --support-only"
   },
   "dependencies": {
     "@expo/metro-runtime": "~5.0.5",
     "@react-native-community/slider": "^5.2.0",
+    "@tesseract.js-data/eng": "^1.0.0",
     "expo": "~53.0.9",
     "expo-status-bar": "~2.2.3",
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "react-native": "0.79.2",
-    "react-native-web": "^0.20.0"
+    "react-native-web": "^0.20.0",
+    "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

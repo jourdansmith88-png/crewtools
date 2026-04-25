@@ -47,6 +47,7 @@ export const payScales = {
 } as const;
 
 export type PaySeat = keyof typeof payScales;
+export type PayEquipmentLabel = keyof (typeof payScales)["Captain"];
 
 export type PayScenarioOption = {
   code: string;
@@ -123,4 +124,22 @@ export function normalizePayEquipment(fleet: string, seat: "Captain" | "First Of
 export function resolvePayScenario(code: string) {
   const normalizedCode = code.toUpperCase();
   return payScenarioOptions.find((option) => option.code === normalizedCode) ?? null;
+}
+
+export function getHourlyBlockPayRate(args: {
+  seat: PaySeat;
+  equipmentLabel: PayEquipmentLabel;
+  longevityYear: number;
+}) {
+  const rates = payScales[args.seat][args.equipmentLabel];
+  if (!Array.isArray(rates)) {
+    return null;
+  }
+
+  const index = args.longevityYear - 1;
+  if (!Number.isInteger(index) || index < 0 || index >= rates.length) {
+    return null;
+  }
+
+  return rates[index];
 }

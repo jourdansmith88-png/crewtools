@@ -2,6 +2,7 @@ import { StatusBar } from "expo-status-bar";
 import { Component, useEffect, useMemo, useRef, useState } from "react";
 import Slider from "@react-native-community/slider";
 import {
+  useColorScheme,
   Modal,
   Platform,
   SafeAreaView,
@@ -13,6 +14,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import { FliegerMarker } from "./src/components/FliegerMarker";
 import { deltaCharts as embeddedDeltaCharts } from "./src/data/deltaCharts";
 import { deltaSnapshot } from "./src/data/deltaSnapshot";
 import { payAuditPriorityRules } from "./src/data/payAuditRules";
@@ -36,6 +38,14 @@ import {
   buildPayAuditResult,
 } from "./src/utils/payAuditEngine";
 import { parseDeltaTimecard, parseTimeValue } from "./src/utils/deltaTimecardParser";
+import {
+  analyzeCurrentAE,
+  forecastHoldability,
+  type CurrentAeAnalysisResult,
+  type HoldForecastResult,
+} from "./src/utils/holdForecast";
+import { ContractCopilotPanel } from "./src/components/contractCopilot/ContractCopilotPanel";
+import { fliegerTypography, getFliegerPalette } from "./src/theme/flieger";
 
 const embeddedChartData = embeddedDeltaCharts as unknown as DeltaChartsData;
 
@@ -116,6 +126,7 @@ type MobileCategoryFilterKey =
   | "fo"
   | "my-bases"
   | "goals";
+type HoldPlannerView = "ae" | "forecast";
 type PilotPreferences = {
   currentCategory: string;
   homeBase: string;
@@ -218,19 +229,6 @@ type AeResidualSummary = {
   aeNet: number;
   residual: number | null;
 };
-type HoldEstimate = {
-  growthRate: number;
-  targetLabel: string;
-  currentJuniorLine: number;
-  currentGap: number;
-  firstHoldPoint: {
-    label: string;
-    timeMs: number;
-    projectedRank: number;
-    projectedJuniorLine: number;
-  } | null;
-};
-
 type PilotRecord = {
   employeeNumber: string;
   name: string;
@@ -373,6 +371,8 @@ class AppErrorBoundary extends Component<
 
 export default function App() {
   const { width } = useWindowDimensions();
+  const colorScheme = useColorScheme();
+  const flieger = getFliegerPalette(colorScheme);
   const isCompactMobile = width < 520;
   const [activeTab, setActiveTab] = useState<TabKey>("home");
   const [employeeNumberInput, setEmployeeNumberInput] = useState("");
@@ -411,6 +411,7 @@ export default function App() {
   const [mobileGoalInput, setMobileGoalInput] = useState("");
   const [mobileCategoryFilter, setMobileCategoryFilter] =
     useState<MobileCategoryFilterKey>("all");
+  const [holdPlannerView, setHoldPlannerView] = useState<HoldPlannerView>("forecast");
 
   const [blockHours, setBlockHours] = useState("18");
   const [dutyHours, setDutyHours] = useState("31");
@@ -606,6 +607,14 @@ export default function App() {
     () => new Map(deltaSnapshot.categoryTrends.map((entry) => [entry.key, entry])),
     []
   );
+  const aeHistoryByAwardCategory = useMemo(
+    () =>
+      new Map(
+        ((deltaSnapshot as unknown as { aeHistoryByCategory?: readonly AeHistoryRecord[] })
+          .aeHistoryByCategory ?? []).map((entry) => [entry.awardCategory, entry])
+      ),
+    []
+  );
 
   const groupedCategoryTables = useMemo(
     () =>
@@ -797,6 +806,25 @@ export default function App() {
           entry.base === selectedWhatIfBase
       ) ?? null,
     [whatIfCategoryOptions, whatIfSeat, selectedWhatIfFleet, selectedWhatIfBase]
+  );
+  const activeWhatIfAwardCategory = activeWhatIfCategory
+    ? formatCategoryEntryCode(activeWhatIfCategory)
+    : null;
+  const activeWhatIfAeEntry = useMemo(
+    () =>
+      activeWhatIfAwardCategory
+        ? deltaSnapshot.aeOpportunities.find((entry) => entry.awardCategory === activeWhatIfAwardCategory) ??
+          null
+        : null,
+    [activeWhatIfAwardCategory]
+  );
+  const activeWhatIfAeHistory = useMemo(
+    () => (activeWhatIfAwardCategory ? aeHistoryByAwardCategory.get(activeWhatIfAwardCategory) ?? null : null),
+    [activeWhatIfAwardCategory, aeHistoryByAwardCategory]
+  );
+  const activeWhatIfCategoryTrend = useMemo(
+    () => (activeWhatIfCategory ? categoryTrendMap.get(activeWhatIfCategory.key) ?? null : null),
+    [activeWhatIfCategory, categoryTrendMap]
   );
 
   const groupedAeTables = useMemo(
@@ -1075,19 +1103,36 @@ export default function App() {
     [currentPilot, growthRate, chartStartMode]
   );
 
-  const whatIfEstimates = useMemo(
+  const currentAeAnalysis = useMemo<CurrentAeAnalysisResult | null>(
     () =>
-      currentPilot && activeWhatIfCategory
-        ? [0.01, 0.02].map((scenarioGrowthRate) =>
-            buildCategoryHoldEstimate(
-              currentPilot,
-              activeWhatIfCategory,
-              deltaSnapshot.pilotDirectory as unknown as readonly PilotRecord[],
-              scenarioGrowthRate
-            )
-          )
-        : [],
-    [currentPilot, activeWhatIfCategory]
+      analyzeCurrentAE({
+        pilot: currentPilot,
+        target: activeWhatIfCategory,
+        latestAe: activeWhatIfAeEntry,
+        aeHistory: activeWhatIfAeHistory,
+      }),
+    [currentPilot, activeWhatIfCategory, activeWhatIfAeEntry, activeWhatIfAeHistory]
+  );
+
+  const holdForecast = useMemo<HoldForecastResult | null>(
+    () =>
+      forecastHoldability({
+        pilot: currentPilot,
+        target: activeWhatIfCategory,
+        latestAe: activeWhatIfAeEntry,
+        aeHistory: activeWhatIfAeHistory,
+        categoryTrend: activeWhatIfCategoryTrend,
+        pilots: deltaSnapshot.pilotDirectory as unknown as readonly PilotRecord[],
+        growthRate: forecastGrowthRate,
+      }),
+    [
+      currentPilot,
+      activeWhatIfCategory,
+      activeWhatIfAeEntry,
+      activeWhatIfAeHistory,
+      activeWhatIfCategoryTrend,
+      forecastGrowthRate,
+    ]
   );
 
   const pilotHistory = useMemo(() => {
@@ -1692,19 +1737,50 @@ export default function App() {
 
   return (
     <AppErrorBoundary>
-      <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="dark" />
+      <SafeAreaView style={[styles.safeArea, { backgroundColor: flieger.background }]}>
+      <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
       <ScrollView
         ref={scrollRef}
-        contentContainerStyle={styles.container}
+        contentContainerStyle={[styles.container, { backgroundColor: flieger.background }]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.hero}>
-          <Text style={styles.eyebrow}>Delta Pilot Toolkit</Text>
-          <Text style={styles.title}>CrewTools</Text>
-          <Text style={styles.subtitle}>
-            Know what you can hold... dream of what you can't.
+        <View
+          style={[
+            styles.hero,
+            {
+              backgroundColor: flieger.surface,
+              borderWidth: 2,
+              borderColor: flieger.borderStrong,
+              borderRadius: 16,
+            },
+          ]}
+        >
+          <View style={{ alignItems: "center", gap: 12 }}>
+            <FliegerMarker color={flieger.cream} dotSize={7} triangleWidth={14} triangleHeight={12} />
+            <Text
+              style={[
+                styles.title,
+                {
+                  color: flieger.cream,
+                  fontFamily: fliegerTypography.family,
+                },
+              ]}
+            >
+              FLIGHTCREWTOOLS
+            </Text>
+          <Text
+            style={[
+                styles.subtitle,
+                {
+                  color: flieger.label,
+                  textAlign: "center",
+                  fontFamily: fliegerTypography.familyBody,
+                },
+              ]}
+          >
+              DATA. DECISION. ACTION.
           </Text>
+          </View>
         </View>
 
         {activeTab === "home" && (
@@ -1753,23 +1829,6 @@ export default function App() {
         )}
 
         {activeTab === "schedule" && (
-          isCompactMobile ? (
-            <MobileCareerPlanningView
-              currentPilot={currentPilot}
-              preferences={mobilePreferences}
-              milestones={mobileCareerMilestones}
-              activeWhatIfCategory={activeWhatIfCategory}
-              whatIfSeat={whatIfSeat}
-              setWhatIfSeat={setWhatIfSeat}
-              whatIfFleetOptions={whatIfFleetOptions}
-              selectedWhatIfFleet={selectedWhatIfFleet}
-              setSelectedWhatIfFleet={setSelectedWhatIfFleet}
-              whatIfBaseOptions={whatIfBaseOptions}
-              selectedWhatIfBase={selectedWhatIfBase}
-              setSelectedWhatIfBase={setSelectedWhatIfBase}
-              whatIfEstimates={whatIfEstimates}
-            />
-          ) : (
           <SectionCard
             title="Schedule Analyzer"
             description="Keep the schedule tools nearby for trip quality, fatigue risk, and reroute awareness."
@@ -1788,8 +1847,11 @@ export default function App() {
               <ResultLine label="Complexity" value={`${Math.round(tripHealth.complexity)}/100`} />
             </View>
             <Text style={styles.insightText}>{tripHealth.recommendation}</Text>
+
+            <View style={styles.sectionStack}>
+              <ContractCopilotPanel />
+            </View>
           </SectionCard>
-          )
         )}
 
         {activeTab === "pay" && (
@@ -2119,21 +2181,6 @@ export default function App() {
         )}
 
         {activeTab === "seniority" && (
-          isCompactMobile ? (
-            <MobileCategoriesView
-              currentPilot={currentPilot}
-              entries={mobileFilteredCategoryEntries}
-              filter={mobileCategoryFilter}
-              onFilterChange={setMobileCategoryFilter}
-              relevantBases={relevantBases}
-              onOpenCategory={(entry) =>
-                setSelectedCategoryDetail({
-                  categoryKey: entry.key,
-                  label: formatCategoryEntryCode(entry),
-                })
-              }
-            />
-          ) : (
           <SectionCard
             title="Seniority"
             description="Green means you can hold it. Beige means it is close. Red means the category is still senior to you. White is the current category."
@@ -2249,49 +2296,27 @@ export default function App() {
                         activeOpacity={0.88}
                       >
                         {isCompactMobile ? (
-                          <>
-                            <View style={styles.mobileCategoryHeader}>
-                              <View style={styles.mobileCategoryTitleWrap}>
-                                <Text style={styles.tableCategoryText}>
-                                  {entry.fleet} {entry.seat === "Captain" ? "CA" : "FO"}
-                                </Text>
-                                <Text style={styles.tableSubtext}>{fit.label} • Tap for list</Text>
-                              </View>
-                              <View style={styles.mobileCategoryBadge}>
-                                <Text style={styles.mobileCategoryBadgeText}>
-                                  {userPosition.secondary ?? userPosition.primary}
-                                </Text>
-                              </View>
-                            </View>
-                            <View style={styles.mobileMetricGrid}>
-                              <MobileMetric label="SR" value={`#${entry.mostSeniorNumber}`} />
-                              <MobileMetric
-                                label="MID"
-                                value={
-                                  entry.middleSeniorityNumber != null
-                                    ? `#${entry.middleSeniorityNumber}`
-                                    : "-"
-                                }
-                              />
-                              <MobileMetric
-                                label="Junior"
-                                value={`#${entry.mostJuniorNumber}`}
-                                detail={formatSignedChange(trend?.lineMovement ?? null, "#")}
-                                detailTone={toneForDelta(trend?.lineMovement ?? null)}
-                              />
-                              <MobileMetric
-                                label="You"
-                                value={userPosition.secondary ?? userPosition.primary}
-                              />
-                            </View>
-                          </>
+                          <InstrumentCategoryCard
+                            title={`${entry.fleet} ${entry.seat === "Captain" ? "CA" : "FO"}`}
+                            status={fliegerStatusCopy(fit.label === "Current category" ? "Can Hold" : fit.label).status}
+                            tone={toneForPilotStatus(fit.label === "Current category" ? "Can Hold" : fit.label)}
+                            badgePrimary={userPosition.secondary ?? userPosition.primary}
+                            badgeLabel={fliegerStatusCopy(fit.label === "Current category" ? "Can Hold" : fit.label).badgeLabel}
+                            statPairs={[
+                              { label: "SR", value: `#${entry.mostSeniorNumber}` },
+                              { label: "MID", value: entry.middleSeniorityNumber != null ? `#${entry.middleSeniorityNumber}` : "-" },
+                              { label: "JUNIOR", value: `#${entry.mostJuniorNumber}` },
+                              { label: "YOU", value: `${userPosition.secondary ?? userPosition.primary}${formatSignedChange(trend?.lineMovement ?? null, "#") ? ` ${formatSignedChange(trend?.lineMovement ?? null, "#")}` : ""}` },
+                            ]}
+                            footer="Tap for details"
+                          />
                         ) : (
                           <>
                             <View style={styles.tableCategoryCell}>
                               <Text style={styles.tableCategoryText}>
                                 {entry.fleet} {entry.seat === "Captain" ? "CA" : "FO"}
                               </Text>
-                              <Text style={styles.tableSubtext}>{fit.label} • Tap for list</Text>
+                              <Text style={styles.tableSubtext}>{fit.label === "Can Hold" || fit.label === "Current category" ? "CAN HOLD • Tap for details" : fit.label === "Senior to You" ? "NOT HOLDABLE • Tap for details" : `${fit.label.toUpperCase()} • Tap for details`}</Text>
                             </View>
                             <TableValueCell primary={`#${entry.mostSeniorNumber}`} />
                             <TableValueCell
@@ -2342,45 +2367,25 @@ export default function App() {
                         activeOpacity={0.88}
                       >
                         {isCompactMobile ? (
-                          <>
-                            <View style={styles.mobileCategoryHeader}>
-                              <View style={styles.mobileCategoryTitleWrap}>
-                                <Text style={styles.tableCategoryText}>{entry.fleet} FO</Text>
-                                <Text style={styles.tableSubtext}>{fit.label} • Tap for list</Text>
-                              </View>
-                              <View style={styles.mobileCategoryBadge}>
-                                <Text style={styles.mobileCategoryBadgeText}>
-                                  {userPosition.secondary ?? userPosition.primary}
-                                </Text>
-                              </View>
-                            </View>
-                            <View style={styles.mobileMetricGrid}>
-                              <MobileMetric label="SR" value={`#${entry.mostSeniorNumber}`} />
-                              <MobileMetric
-                                label="MID"
-                                value={
-                                  entry.middleSeniorityNumber != null
-                                    ? `#${entry.middleSeniorityNumber}`
-                                    : "-"
-                                }
-                              />
-                              <MobileMetric
-                                label="Junior"
-                                value={`#${entry.mostJuniorNumber}`}
-                                detail={formatSignedChange(trend?.lineMovement ?? null, "#")}
-                                detailTone={toneForDelta(trend?.lineMovement ?? null)}
-                              />
-                              <MobileMetric
-                                label="You"
-                                value={userPosition.secondary ?? userPosition.primary}
-                              />
-                            </View>
-                          </>
+                          <InstrumentCategoryCard
+                            title={`${entry.fleet} FO`}
+                            status={fliegerStatusCopy(fit.label === "Current category" ? "Can Hold" : fit.label).status}
+                            tone={toneForPilotStatus(fit.label === "Current category" ? "Can Hold" : fit.label)}
+                            badgePrimary={userPosition.secondary ?? userPosition.primary}
+                            badgeLabel={fliegerStatusCopy(fit.label === "Current category" ? "Can Hold" : fit.label).badgeLabel}
+                            statPairs={[
+                              { label: "SR", value: `#${entry.mostSeniorNumber}` },
+                              { label: "MID", value: entry.middleSeniorityNumber != null ? `#${entry.middleSeniorityNumber}` : "-" },
+                              { label: "JUNIOR", value: `#${entry.mostJuniorNumber}` },
+                              { label: "YOU", value: `${userPosition.secondary ?? userPosition.primary}${formatSignedChange(trend?.lineMovement ?? null, "#") ? ` ${formatSignedChange(trend?.lineMovement ?? null, "#")}` : ""}` },
+                            ]}
+                            footer="Tap for details"
+                          />
                         ) : (
                           <>
                             <View style={styles.tableCategoryCell}>
                               <Text style={styles.tableCategoryText}>{entry.fleet} FO</Text>
-                              <Text style={styles.tableSubtext}>{fit.label} • Tap for list</Text>
+                              <Text style={styles.tableSubtext}>{fit.label === "Can Hold" || fit.label === "Current category" ? "CAN HOLD • Tap for details" : fit.label === "Senior to You" ? "NOT HOLDABLE • Tap for details" : `${fit.label.toUpperCase()} • Tap for details`}</Text>
                             </View>
                             <TableValueCell primary={`#${entry.mostSeniorNumber}`} />
                             <TableValueCell
@@ -2502,26 +2507,9 @@ export default function App() {
             </View>
 
           </SectionCard>
-          )
         )}
 
         {activeTab === "ae" && (
-          isCompactMobile ? (
-            <MobileMovementView
-              currentPilot={currentPilot}
-              currentCategoryCode={preferredCurrentCategoryCode}
-              currentCategoryMovement={preferredCurrentAeMovement}
-              currentCategoryReach={preferredCurrentAeReach}
-              currentCategoryTrend={preferredCurrentAeTrend}
-              feedItems={mobileMovementFeed}
-              onOpenAe={(item) =>
-                setSelectedAeDetailCategory({
-                  awardCategory: item.entry.awardCategory,
-                  seat: item.entry.seat,
-                })
-              }
-            />
-          ) : (
           <SectionCard
             title="AE"
             description="Spoiler: you probably didn't get 350A. Let's see what actually moved."
@@ -2693,50 +2681,31 @@ export default function App() {
                               seat: entry.seat,
                             })
                           }
-                          activeOpacity={0.88}
-                        >
-                          {isCompactMobile ? (
-                            <>
-                              <View style={styles.mobileCategoryHeader}>
-                                <View style={styles.mobileCategoryTitleWrap}>
-                                  <Text style={styles.tableCategoryText}>
-                                    {entry.fleet} {entry.seat === "Captain" ? "CA" : "FO"}
-                                  </Text>
-                                  <Text style={styles.tableSubtext}>{fit.label} • Tap for awards</Text>
-                                </View>
-                                <View style={styles.mobileCategoryBadge}>
-                                  <Text style={styles.mobileCategoryBadgeText}>
-                                    {userPosition.secondary ?? userPosition.primary}
-                                  </Text>
-                                </View>
-                              </View>
-                              <View style={styles.mobileMetricGrid}>
-                                <MobileMetric
-                                  label="High"
-                                  value={formatSeniorityValue(entry.mostSeniorAwardNumber)}
-                                />
-                                <MobileMetric
-                                  label="Mid"
-                                  value={formatSeniorityValue(entry.middleAwardNumber)}
-                                />
-                                <MobileMetric
-                                  label={`Junior ${entry.seat === "Captain" ? "CA" : "FO"}`}
-                                  value={formatSeniorityValue(entry.mostJuniorAwardNumber)}
-                                />
-                                <MobileMetric
-                                  label="You"
-                                  value={userPosition.secondary ?? userPosition.primary}
-                                />
-                              </View>
-                            </>
-                          ) : (
-                            <>
-                              <View style={styles.tableCategoryCell}>
-                                <Text style={styles.tableCategoryText}>
-                                  {entry.fleet} {entry.seat === "Captain" ? "CA" : "FO"}
-                                </Text>
-                                <Text style={styles.tableSubtext}>{fit.label} • Tap for awards</Text>
-                              </View>
+                        activeOpacity={0.88}
+                      >
+                        {isCompactMobile ? (
+                          <InstrumentCategoryCard
+                            title={`${entry.fleet} ${entry.seat === "Captain" ? "CA" : "FO"}`}
+                            status={fit.label === "Junior to You" ? "CAN HOLD" : fit.label === "Senior to You" ? "NOT HOLDABLE" : fit.label.toUpperCase()}
+                            tone={fit.label === "Junior to You" ? "green" : fit.label === "Senior to You" ? "red" : "amber"}
+                            badgePrimary={userPosition.secondary ?? userPosition.primary}
+                            badgeLabel={fit.label === "Junior to You" ? "IN CATEGORY" : fit.label === "Senior to You" ? "SENIOR TO YOU" : "STATUS"}
+                            statPairs={[
+                              { label: "HIGH", value: formatSeniorityValue(entry.mostSeniorAwardNumber) },
+                              { label: "MID", value: formatSeniorityValue(entry.middleAwardNumber) },
+                              { label: "JUNIOR", value: formatSeniorityValue(entry.mostJuniorAwardNumber) },
+                              { label: "YOU", value: userPosition.secondary ?? userPosition.primary },
+                            ]}
+                            footer="Tap for awards"
+                          />
+                        ) : (
+                          <>
+                            <View style={styles.tableCategoryCell}>
+                              <Text style={styles.tableCategoryText}>
+                                {entry.fleet} {entry.seat === "Captain" ? "CA" : "FO"}
+                              </Text>
+                                <Text style={styles.tableSubtext}>{fit.label === "Junior to You" ? "CAN HOLD • Tap for awards" : fit.label === "Senior to You" ? "NOT HOLDABLE • Tap for awards" : `${fit.label.toUpperCase()} • Tap for awards`}</Text>
+                            </View>
                               <TableValueCell primary={formatSeniorityValue(entry.mostSeniorAwardNumber)} />
                               <TableValueCell primary={formatSeniorityValue(entry.middleAwardNumber)} />
                               <TableValueCell primary={formatSeniorityValue(entry.mostJuniorAwardNumber)} />
@@ -2776,46 +2745,29 @@ export default function App() {
                               seat: entry.seat,
                             })
                           }
-                          activeOpacity={0.88}
-                        >
-                          {isCompactMobile ? (
-                            <>
-                              <View style={styles.mobileCategoryHeader}>
-                                <View style={styles.mobileCategoryTitleWrap}>
-                                  <Text style={styles.tableCategoryText}>{entry.fleet} FO</Text>
-                                  <Text style={styles.tableSubtext}>{fit.label} • Tap for awards</Text>
-                                </View>
-                                <View style={styles.mobileCategoryBadge}>
-                                  <Text style={styles.mobileCategoryBadgeText}>
-                                    {userPosition.secondary ?? userPosition.primary}
-                                  </Text>
-                                </View>
-                              </View>
-                              <View style={styles.mobileMetricGrid}>
-                                <MobileMetric
-                                  label="High"
-                                  value={formatSeniorityValue(entry.mostSeniorAwardNumber)}
-                                />
-                                <MobileMetric
-                                  label="Mid"
-                                  value={formatSeniorityValue(entry.middleAwardNumber)}
-                                />
-                                <MobileMetric
-                                  label="Junior FO"
-                                  value={formatSeniorityValue(entry.mostJuniorAwardNumber)}
-                                />
-                                <MobileMetric
-                                  label="You"
-                                  value={userPosition.secondary ?? userPosition.primary}
-                                />
-                              </View>
-                            </>
-                          ) : (
-                            <>
-                              <View style={styles.tableCategoryCell}>
-                                <Text style={styles.tableCategoryText}>{entry.fleet} FO</Text>
-                                <Text style={styles.tableSubtext}>{fit.label} • Tap for awards</Text>
-                              </View>
+                        activeOpacity={0.88}
+                      >
+                        {isCompactMobile ? (
+                          <InstrumentCategoryCard
+                            title={`${entry.fleet} FO`}
+                            status={fit.label === "Junior to You" ? "CAN HOLD" : fit.label === "Senior to You" ? "NOT HOLDABLE" : fit.label.toUpperCase()}
+                            tone={fit.label === "Junior to You" ? "green" : fit.label === "Senior to You" ? "red" : "amber"}
+                            badgePrimary={userPosition.secondary ?? userPosition.primary}
+                            badgeLabel={fit.label === "Junior to You" ? "IN CATEGORY" : fit.label === "Senior to You" ? "SENIOR TO YOU" : "STATUS"}
+                            statPairs={[
+                              { label: "HIGH", value: formatSeniorityValue(entry.mostSeniorAwardNumber) },
+                              { label: "MID", value: formatSeniorityValue(entry.middleAwardNumber) },
+                              { label: "JUNIOR", value: formatSeniorityValue(entry.mostJuniorAwardNumber) },
+                              { label: "YOU", value: userPosition.secondary ?? userPosition.primary },
+                            ]}
+                            footer="Tap for awards"
+                          />
+                        ) : (
+                          <>
+                            <View style={styles.tableCategoryCell}>
+                              <Text style={styles.tableCategoryText}>{entry.fleet} FO</Text>
+                                <Text style={styles.tableSubtext}>{fit.label === "Junior to You" ? "CAN HOLD • Tap for awards" : fit.label === "Senior to You" ? "NOT HOLDABLE • Tap for awards" : `${fit.label.toUpperCase()} • Tap for awards`}</Text>
+                            </View>
                               <TableValueCell primary={formatSeniorityValue(entry.mostSeniorAwardNumber)} />
                               <TableValueCell primary={formatSeniorityValue(entry.middleAwardNumber)} />
                               <TableValueCell primary={formatSeniorityValue(entry.mostJuniorAwardNumber)} />
@@ -2923,106 +2875,123 @@ export default function App() {
                   </TouchableOpacity>
                 ))}
               </View>
+              <View style={styles.baseSelector}>
+                <TouchableOpacity
+                  style={[styles.baseChip, holdPlannerView === "ae" && styles.baseChipActive]}
+                  onPress={() => setHoldPlannerView("ae")}
+                >
+                  <Text style={[styles.baseChipLabel, holdPlannerView === "ae" && styles.baseChipLabelActive]}>
+                    This Award
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.baseChip, holdPlannerView === "forecast" && styles.baseChipActive]}
+                  onPress={() => setHoldPlannerView("forecast")}
+                >
+                  <Text
+                    style={[
+                      styles.baseChipLabel,
+                      holdPlannerView === "forecast" && styles.baseChipLabelActive,
+                    ]}
+                  >
+                    Forecast
+                  </Text>
+                </TouchableOpacity>
+              </View>
 
               {activeWhatIfCategory && currentPilot ? (
                 <>
                   <View style={styles.resultPanel}>
                     <ResultLine label="Target" value={formatCategoryEntryCode(activeWhatIfCategory)} />
                     <ResultLine
-                      label={`Current Junior ${activeWhatIfCategory.seat === "Captain" ? "CA" : "FO"}`}
+                      label={`Current list ${activeWhatIfCategory.seat === "Captain" ? "CA" : "FO"} line`}
                       value={`#${activeWhatIfCategory.mostJuniorNumber}`}
                     />
                     <ResultLine label="Your number today" value={`#${currentPilot.seniorityNumber}`} />
-                    <ResultLine
-                      label="Gap today"
-                      value={
-                        currentPilot.seniorityNumber <= activeWhatIfCategory.mostJuniorNumber
-                          ? "Can hold now"
-                          : `${currentPilot.seniorityNumber - activeWhatIfCategory.mostJuniorNumber} numbers away`
-                      }
-                      emphasis
-                    />
                     <Text style={styles.insightText}>
-                      When you can hold the most Junior seat. Its a planning estimate, Not a guarantee.
+                      AE analysis answers this month. Forecast answers the broader holdability question.
                     </Text>
                   </View>
 
-                  <FormRow>
-                    {whatIfEstimates.map((estimate) => (
-                      <View
-                        key={`${estimate.targetLabel}-${estimate.growthRate}`}
-                        style={[styles.resultPanel, styles.whatIfScenarioPanel]}
-                      >
-                        <ResultLine
-                          label={`${Math.round(estimate.growthRate * 100)}% growth`}
-                          value={
-                            estimate.firstHoldPoint
-                              ? estimate.firstHoldPoint.label === "Today"
-                                ? "Can hold now"
-                                : `Est. hold by ${estimate.firstHoldPoint.label}`
-                              : "Not by retirement"
-                          }
-                          emphasis
-                        />
-                        <ResultLine
-                          label="Projected your number"
-                          value={
-                            estimate.firstHoldPoint
-                              ? `#${estimate.firstHoldPoint.projectedRank}`
-                              : "—"
-                          }
-                        />
-                        <ResultLine
-                          label={`Projected Junior ${activeWhatIfCategory.seat === "Captain" ? "CA" : "FO"}`}
-                          value={
-                            estimate.firstHoldPoint
-                              ? `#${estimate.firstHoldPoint.projectedJuniorLine}`
-                              : "—"
-                          }
-                        />
-                        <ResultLine
-                          label="Numbers away today"
-                          value={
-                            estimate.currentGap === 0
-                              ? "0"
-                              : `${estimate.currentGap}`
-                          }
-                        />
-                      </View>
-                    ))}
-                  </FormRow>
+                  {holdPlannerView === "ae" ? (
+                    <CurrentAeDesktopPanel analysis={currentAeAnalysis} />
+                  ) : (
+                    <ForecastDesktopPanel
+                      forecast={holdForecast}
+                      analysis={currentAeAnalysis}
+                      forecastGrowthRate={forecastGrowthRate}
+                      forecastGrowthMenuOpen={forecastGrowthMenuOpen}
+                      setForecastGrowthRate={setForecastGrowthRate}
+                      setForecastGrowthMenuOpen={setForecastGrowthMenuOpen}
+                    />
+                  )}
                 </>
               ) : (
                 <Text style={styles.insightText}>
-                  Enter your employee number and pick a target category to estimate when your
-                  projected seniority could hold that seat.
+                  Enter your employee number and pick a target category to compare this award against the broader hold forecast.
                 </Text>
               )}
             </View>
           </SectionCard>
-          )
         )}
       </ScrollView>
-      <View style={styles.bottomTabBar}>
+      <View
+        style={[
+          styles.bottomTabBar,
+          {
+            backgroundColor: flieger.surface,
+            borderTopWidth: 2,
+            borderTopColor: flieger.borderStrong,
+          },
+        ]}
+      >
+        <View style={{ position: "absolute", top: -18, left: 0, right: 0, alignItems: "center" }}>
+          <FliegerMarker color={flieger.cream} dotSize={5} triangleWidth={10} triangleHeight={9} />
+        </View>
         {tabs.map((tab) => (
           <TouchableOpacity
             key={tab.key}
-            style={[styles.tabButton, activeTab === tab.key && styles.tabButtonActive]}
+            style={[
+              styles.tabButton,
+              {
+                backgroundColor: flieger.surfaceRaised,
+                borderColor: activeTab === tab.key ? flieger.accent : flieger.border,
+                borderWidth: 2,
+              },
+              activeTab === tab.key && styles.tabButtonActive,
+            ]}
             onPress={() => setActiveTab(tab.key)}
           >
-            <View style={[styles.tabIconCircle, activeTab === tab.key && styles.tabIconCircleActive]}>
+            <View
+              style={[
+                styles.tabIconCircle,
+                {
+                  backgroundColor: activeTab === tab.key ? flieger.accentSoft : flieger.inputBackground,
+                  borderWidth: 2,
+                  borderColor: activeTab === tab.key ? flieger.accent : flieger.borderStrong,
+                },
+                activeTab === tab.key && styles.tabIconCircleActive,
+              ]}
+            >
               <Text
                 style={[
                   styles.tabIconText,
                   tab.icon.length > 1 && styles.tabIconTextWide,
+                  { color: flieger.textSecondary, fontFamily: fliegerTypography.family },
                   activeTab === tab.key && styles.tabIconTextActive,
                 ]}
               >
                 {tab.icon}
               </Text>
             </View>
-            <Text style={[styles.tabLabel, activeTab === tab.key && styles.tabLabelActive]}>
-              {isCompactMobile ? mobileTabLabel(tab.key) : tab.label}
+            <Text
+              style={[
+                styles.tabLabel,
+                { color: flieger.textSecondary, fontFamily: fliegerTypography.familyBody },
+                activeTab === tab.key && styles.tabLabelActive,
+              ]}
+            >
+              {tab.label}
             </Text>
           </TouchableOpacity>
         ))}
@@ -3386,6 +3355,10 @@ function formatCategoryEntryCode(entry: Pick<CategoryEntry, "base" | "fleet" | "
   return `${entry.base}-${entry.fleet}-${entry.seat === "Captain" ? "CA" : "FO"}`;
 }
 
+function formatFliegerCategoryTitle(entry: Pick<CategoryEntry, "fleet" | "seat">) {
+  return `${entry.fleet} ${entry.seat === "Captain" ? "CA" : "FO"}`;
+}
+
 function buildTotalMovement(
   movement: AeMovementSummary | null,
   residual: AeResidualSummary | null
@@ -3402,37 +3375,6 @@ function buildTotalMovement(
     totalIn,
     totalOut,
     net,
-  };
-}
-
-function buildCategoryHoldEstimate(
-  pilot: PilotRecord,
-  target: CategoryEntry,
-  pilots: readonly PilotRecord[],
-  growthRate: number
-): HoldEstimate {
-  const currentTotalPilots = Math.max(1, pilots.length);
-  const currentJuniorLine = target.mostJuniorNumber;
-  const juniorLineShare = currentJuniorLine / currentTotalPilots;
-  const futurePath = buildCareerProjection(pilot, pilots, growthRate, "today");
-
-  const checkpoints = futurePath.map((point) => ({
-    label: point.label,
-    timeMs: point.timeMs ?? Date.now(),
-    projectedRank: point.projectedRank,
-    projectedJuniorLine: Math.max(
-      currentJuniorLine,
-      Math.round(point.projectedTotal * juniorLineShare)
-    ),
-  }));
-
-  return {
-    growthRate,
-    targetLabel: formatCategoryEntryCode(target),
-    currentJuniorLine,
-    currentGap: Math.max(0, pilot.seniorityNumber - currentJuniorLine),
-    firstHoldPoint:
-      checkpoints.find((point) => point.projectedRank <= point.projectedJuniorLine) ?? null,
   };
 }
 
@@ -4318,10 +4260,30 @@ function SectionCard({
   description: string;
   children: React.ReactNode;
 }) {
+  const palette = getFliegerPalette();
   return (
-    <View style={styles.card}>
-      <Text style={styles.cardTitle}>{title}</Text>
-      <Text style={styles.cardDescription}>{description}</Text>
+    <View
+      style={[
+        styles.card,
+        {
+          backgroundColor: palette.surface,
+          borderColor: palette.borderStrong,
+          borderWidth: 1.5,
+          borderRadius: 14,
+        },
+      ]}
+    >
+      <Text style={[styles.cardTitle, { color: palette.label, fontFamily: fliegerTypography.family }]}>
+        {title}
+      </Text>
+      <Text
+        style={[
+          styles.cardDescription,
+          { color: palette.textSecondary, fontFamily: fliegerTypography.familyBody },
+        ]}
+      >
+        {description}
+      </Text>
       <View style={styles.cardBody}>{children}</View>
     </View>
   );
@@ -4336,19 +4298,64 @@ function MetricCard({
   value: string;
   tone: "blue" | "gold" | "green";
 }) {
+  const palette = getFliegerPalette();
   return (
-    <View style={[styles.metricCard, tone === "gold" && styles.metricGold, tone === "green" && styles.metricGreen]}>
-      <Text style={styles.metricLabel}>{label}</Text>
-      <Text style={styles.metricValue}>{value}</Text>
+    <View
+      style={[
+        styles.metricCard,
+        tone === "gold" && styles.metricGold,
+        tone === "green" && styles.metricGreen,
+        {
+          backgroundColor:
+            tone === "gold"
+              ? palette.surface
+              : tone === "green"
+                ? palette.surface
+                : palette.surfaceRaised,
+          borderColor: tone === "gold" ? palette.redBorder : tone === "green" ? palette.greenBorder : palette.border,
+          borderWidth: 1.5,
+          borderRadius: 14,
+        },
+      ]}
+    >
+      <Text style={[styles.metricLabel, { color: palette.label, fontFamily: fliegerTypography.familyBody }]}>
+        {label}
+      </Text>
+      <Text
+        style={[
+          styles.metricValue,
+          {
+            color: tone === "gold" ? palette.red : tone === "green" ? palette.green : palette.textPrimary,
+            fontFamily: fliegerTypography.family,
+          },
+        ]}
+      >
+        {value}
+      </Text>
     </View>
   );
 }
 
 function SnapshotPill({ label, value }: { label: string; value: string }) {
+  const palette = getFliegerPalette();
   return (
-    <View style={styles.snapshotPill}>
-      <Text style={styles.snapshotLabel}>{label}</Text>
-      <Text style={styles.snapshotValue}>{value}</Text>
+    <View
+      style={[
+        styles.snapshotPill,
+        {
+          backgroundColor: palette.surfaceRaised,
+          borderColor: palette.border,
+          borderWidth: 2,
+          borderRadius: 16,
+        },
+      ]}
+    >
+      <Text style={[styles.snapshotLabel, { color: palette.textMuted, fontFamily: fliegerTypography.familyBody }]}>
+        {label}
+      </Text>
+      <Text style={[styles.snapshotValue, { color: palette.textPrimary, fontFamily: fliegerTypography.family }]}>
+        {value}
+      </Text>
     </View>
   );
 }
@@ -4366,14 +4373,40 @@ function SummaryCard({
   subValue: string;
   progress: number;
 }) {
+  const palette = getFliegerPalette();
   return (
-    <View style={styles.summaryCard}>
-      <Text style={styles.summaryTitle}>{title}</Text>
-      <Text style={styles.summaryMain}>{mainValue}</Text>
-      <Text style={styles.summaryDetail}>{detailValue}</Text>
-      <Text style={styles.summarySub}>{subValue}</Text>
-      <View style={styles.summaryTrack}>
-        <View style={[styles.summaryFill, { width: `${Math.max(6, Math.min(100, progress))}%` }]} />
+    <View
+      style={[
+        styles.summaryCard,
+        {
+          backgroundColor: palette.surfaceRaised,
+          borderWidth: 2,
+          borderColor: palette.borderStrong,
+          borderRadius: 14,
+        },
+      ]}
+    >
+      <Text style={[styles.summaryTitle, { color: palette.label, fontFamily: fliegerTypography.family }]}>
+        {title}
+      </Text>
+      <Text style={[styles.summaryMain, { color: palette.cream, fontFamily: fliegerTypography.family }]}>
+        {mainValue}
+      </Text>
+      <Text
+        style={[styles.summaryDetail, { color: palette.textSecondary, fontFamily: fliegerTypography.familyBody }]}
+      >
+        {detailValue}
+      </Text>
+      <Text style={[styles.summarySub, { color: palette.textMuted, fontFamily: fliegerTypography.familyBody }]}>
+        {subValue}
+      </Text>
+      <View style={[styles.summaryTrack, { backgroundColor: palette.accentSoft }]}>
+        <View
+          style={[
+            styles.summaryFill,
+            { width: `${Math.max(6, Math.min(100, progress))}%`, backgroundColor: palette.red },
+          ]}
+        />
       </View>
     </View>
   );
@@ -4415,19 +4448,29 @@ function LabeledInput({
   suffix?: string;
   keyboardType?: "default" | "numeric";
 }) {
+  const palette = getFliegerPalette();
   return (
     <View style={styles.inputGroup}>
-      <Text style={styles.inputLabel}>{label}</Text>
-      <View style={styles.inputShell}>
-        {prefix ? <Text style={styles.inputAffix}>{prefix}</Text> : null}
+      <Text style={[styles.inputLabel, { color: palette.label, fontFamily: fliegerTypography.familyBody }]}>{label}</Text>
+      <View
+        style={[
+          styles.inputShell,
+          {
+            backgroundColor: palette.inputBackground,
+            borderColor: palette.borderStrong,
+            borderWidth: 1.5,
+          },
+        ]}
+      >
+        {prefix ? <Text style={[styles.inputAffix, { color: palette.textMuted }]}>{prefix}</Text> : null}
         <TextInput
           keyboardType={keyboardType ?? "numeric"}
           value={value}
           onChangeText={onChangeText}
-          style={styles.input}
-          placeholderTextColor="#7B7367"
+          style={[styles.input, { color: palette.textPrimary, fontFamily: fliegerTypography.familyBody }]}
+          placeholderTextColor={palette.textMuted}
         />
-        {suffix ? <Text style={styles.inputAffix}>{suffix}</Text> : null}
+        {suffix ? <Text style={[styles.inputAffix, { color: palette.textMuted }]}>{suffix}</Text> : null}
       </View>
     </View>
   );
@@ -4444,17 +4487,27 @@ function TextAreaInput({
   onChangeText: (value: string) => void;
   placeholder?: string;
 }) {
+  const palette = getFliegerPalette();
   return (
     <View style={styles.inputGroup}>
-      <Text style={styles.inputLabel}>{label}</Text>
-      <View style={styles.textAreaShell}>
+      <Text style={[styles.inputLabel, { color: palette.label, fontFamily: fliegerTypography.familyBody }]}>{label}</Text>
+      <View
+        style={[
+          styles.textAreaShell,
+          {
+            backgroundColor: palette.inputBackground,
+            borderColor: palette.borderStrong,
+            borderWidth: 1.5,
+          },
+        ]}
+      >
         <TextInput
           multiline
           value={value}
           onChangeText={onChangeText}
-          style={styles.textAreaInput}
+          style={[styles.textAreaInput, { color: palette.textPrimary, fontFamily: fliegerTypography.familyBody }]}
           placeholder={placeholder}
-          placeholderTextColor="#7B7367"
+          placeholderTextColor={palette.textMuted}
           textAlignVertical="top"
           autoCapitalize="characters"
         />
@@ -4535,6 +4588,214 @@ function MobileMetric({
       ) : null}
     </View>
   );
+}
+
+function fliegerStatusCopy(label: string) {
+  if (label === "Can Hold" || label === "Junior to You") {
+    return {
+      status: "CAN HOLD",
+      badgeLabel: "IN CATEGORY",
+    };
+  }
+  if (label === "Senior to You") {
+    return {
+      status: "NOT HOLDABLE",
+      badgeLabel: "SENIOR TO YOU",
+    };
+  }
+  return {
+    status: label.toUpperCase(),
+    badgeLabel: "STATUS",
+  };
+}
+
+function fliegerTonePalette(tone: "green" | "amber" | "red" | "neutral") {
+  const palette = getFliegerPalette();
+  if (tone === "green") {
+    return {
+      borderColor: palette.greenBorder,
+      statusColor: palette.green,
+      badgeBackground: palette.surfaceRaised,
+      badgeBorder: palette.greenBorder,
+    };
+  }
+  if (tone === "red") {
+    return {
+      borderColor: palette.redBorder,
+      statusColor: palette.red,
+      badgeBackground: palette.surfaceRaised,
+      badgeBorder: palette.redBorder,
+    };
+  }
+  return {
+    borderColor: palette.borderStrong,
+    statusColor: tone === "amber" ? palette.label : palette.textSecondary,
+    badgeBackground: palette.surfaceRaised,
+    badgeBorder: palette.borderStrong,
+  };
+}
+
+function InstrumentCategoryCard({
+  title,
+  status,
+  tone,
+  badgePrimary,
+  badgeLabel,
+  statPairs,
+  footer,
+  onPress,
+}: {
+  title: string;
+  status: string;
+  tone: "green" | "amber" | "red" | "neutral";
+  badgePrimary: string;
+  badgeLabel: string;
+  statPairs: Array<{ label: string; value: string }>;
+  footer?: string;
+  onPress?: () => void;
+}) {
+  const palette = getFliegerPalette();
+  const tonePalette = fliegerTonePalette(tone);
+  const content = (
+    <View
+      style={{
+        backgroundColor: palette.surface,
+        borderRadius: 16,
+        borderWidth: 2,
+        borderColor: tonePalette.borderColor,
+        padding: 16,
+        gap: 12,
+      }}
+    >
+      <View style={styles.instrumentCardHeader}>
+        <View style={styles.instrumentCardTitleWrap}>
+          <Text
+            style={{
+              fontSize: 30,
+              lineHeight: 30,
+              fontWeight: "900",
+              color: palette.textPrimary,
+              fontFamily: fliegerTypography.family,
+            }}
+          >
+            {title}
+          </Text>
+          <Text
+            style={{
+              fontSize: 13,
+              lineHeight: 16,
+              fontWeight: "800",
+              textTransform: "uppercase",
+              letterSpacing: 1.2,
+              color: tonePalette.statusColor,
+              fontFamily: fliegerTypography.family,
+            }}
+          >
+            {status}
+          </Text>
+        </View>
+        <View
+          style={{
+            minWidth: 94,
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 2,
+            backgroundColor: tonePalette.badgeBackground,
+            borderColor: tonePalette.badgeBorder,
+            borderWidth: 2,
+            borderRadius: 14,
+            paddingHorizontal: 10,
+            paddingVertical: 8,
+          }}
+        >
+          <Text
+            style={{
+              color: palette.textPrimary,
+              fontSize: 20,
+              lineHeight: 21,
+              fontWeight: "900",
+              fontFamily: fliegerTypography.family,
+            }}
+          >
+            {badgePrimary}
+          </Text>
+          <Text
+            style={{
+              color: palette.textSecondary,
+              fontSize: 10,
+              lineHeight: 12,
+              fontWeight: "800",
+              textTransform: "uppercase",
+              letterSpacing: 1.1,
+              textAlign: "center",
+              fontFamily: fliegerTypography.familyBody,
+            }}
+          >
+            {badgeLabel}
+          </Text>
+        </View>
+      </View>
+      <View style={{ height: 1, backgroundColor: palette.borderStrong, opacity: 0.8 }} />
+      <View style={styles.instrumentStatGrid}>
+        {statPairs.map((pair, index) => (
+          <View
+            key={`${title}-${pair.label}-${index}`}
+            style={[
+              styles.instrumentStatCell,
+              index % 2 === 0 ? styles.instrumentStatCellLeft : styles.instrumentStatCellRight,
+            ]}
+          >
+            <Text
+              style={{
+                fontSize: 10,
+                lineHeight: 12,
+                fontWeight: "800",
+                textTransform: "uppercase",
+                letterSpacing: 1.1,
+                color: palette.textMuted,
+                fontFamily: fliegerTypography.familyBody,
+              }}
+            >
+              {pair.label}
+            </Text>
+            <Text
+              style={{
+                fontSize: 19,
+                lineHeight: 20,
+                fontWeight: "900",
+                color: palette.textPrimary,
+                fontFamily: fliegerTypography.family,
+              }}
+            >
+              {pair.value}
+            </Text>
+          </View>
+        ))}
+      </View>
+      {footer ? (
+        <Text
+          style={{
+            fontSize: 12,
+            lineHeight: 16,
+            color: palette.textMuted,
+            fontFamily: fliegerTypography.familyBody,
+          }}
+        >
+          {footer}
+        </Text>
+      ) : null}
+    </View>
+  );
+
+  if (onPress) {
+    return (
+      <TouchableOpacity activeOpacity={0.9} onPress={onPress}>
+        {content}
+      </TouchableOpacity>
+    );
+  }
+
+  return content;
 }
 
 function MiniBarChart({
@@ -4655,6 +4916,7 @@ function MobileHomeDashboard({
   systemTotalPilots,
   currentCategoryPercent,
   currentCategorySummary,
+  onOpenCurrentCategory,
   projectedCategoryPercent,
   projectedCategoryRank,
   projectedCategoryTotal,
@@ -4686,6 +4948,7 @@ function MobileHomeDashboard({
   systemTotalPilots: number;
   currentCategoryPercent: number | null;
   currentCategorySummary: CategoryEntry | null;
+  onOpenCurrentCategory: (entry: CategoryEntry) => void;
   projectedCategoryPercent: number | null;
   projectedCategoryRank: number | null;
   projectedCategoryTotal: number | null;
@@ -4775,6 +5038,7 @@ function MobileHomeDashboard({
 
       <MobilePreferencesPanel
         currentPilot={currentPilot}
+        currentCategoryEntry={currentCategoryEntry}
         preferencesEditing={preferencesEditing}
         preferencesComplete={preferencesComplete}
         onPreferencesEditingChange={onPreferencesEditingChange}
@@ -4783,51 +5047,10 @@ function MobileHomeDashboard({
         onAddGoal={addGoal}
         onPreferencesChange={onPreferencesChange}
         watchedCategories={trackedCategories.map((item) => item.entry.key)}
+        trackedCategoryItems={trackedCategories}
+        onOpenCurrentCategory={onOpenCurrentCategory}
+        onOpenTrackedCategory={onOpenTrackedCategory}
       />
-
-      <View style={styles.mobileDashboardStack}>
-        <MobileDashboardCard eyebrow="The Dream List" title="The dream list">
-          <Text style={styles.mobileDashboardBodyText}>
-            Add the categories you want on Home, tap a row for the current seniority list, and delete it when you no longer need it.
-          </Text>
-          {trackedCategories.length > 0 ? (
-            <View style={styles.mobileListStack}>
-              {trackedCategories.map((item) => (
-                <View key={`tracked-${item.entry.key}`} style={styles.mobileListRow}>
-                  <TouchableOpacity
-                    style={styles.mobileListMainAction}
-                    activeOpacity={0.88}
-                    onPress={() => onOpenTrackedCategory(item.entry)}
-                  >
-                    <View style={styles.mobileListCopy}>
-                      <Text style={styles.mobileListTitle}>{formatCategoryEntryCode(item.entry)}</Text>
-                      <Text style={styles.mobileListText}>{item.supportingText}</Text>
-                    </View>
-                  </TouchableOpacity>
-                  <View style={styles.mobileListActions}>
-                    <MobileStatusBadge label={item.statusLabel} tone={item.tone} compact />
-                    <TouchableOpacity
-                      style={styles.mobileDeleteMiniButton}
-                      onPress={() =>
-                        onPreferencesChange((current) => ({
-                          ...current,
-                          goalCategories: current.goalCategories.filter((entry) => entry !== item.entry.key),
-                        }))
-                      }
-                    >
-                      <Text style={styles.mobileDeleteMiniButtonText}>Delete</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ))}
-            </View>
-          ) : (
-            <Text style={styles.mobileDecisionFooter}>
-              No watched categories yet. Use Edit to add the seats you want pinned on Home.
-            </Text>
-          )}
-        </MobileDashboardCard>
-      </View>
 
       <MobileDashboardCard eyebrow="Seniority Progression" title="How your seniority grows over time">
         <Text style={styles.mobileDashboardBodyText}>
@@ -4907,7 +5130,7 @@ function MobilePreferencesEditor({
       <View style={styles.mobileFormGroup}>
         <Text style={styles.inputLabel}>Categories I'm Watching</Text>
         <Text style={styles.mobileSectionText}>
-          Add target categories here. Tap a saved chip to remove it.
+          Add the seats you want pinned on Home. You can remove saved seats from the list above.
         </Text>
         <View style={styles.mobileGoalRow}>
           <View style={[styles.textChipShell, styles.mobileGoalInputWrap]}>
@@ -4958,6 +5181,7 @@ function MobilePreferencesEditor({
 
 function MobilePreferencesPanel({
   currentPilot,
+  currentCategoryEntry,
   preferencesEditing,
   preferencesComplete,
   onPreferencesEditingChange,
@@ -4966,8 +5190,12 @@ function MobilePreferencesPanel({
   onAddGoal,
   onPreferencesChange,
   watchedCategories,
+  trackedCategoryItems,
+  onOpenCurrentCategory,
+  onOpenTrackedCategory,
 }: {
   currentPilot: PilotRecord | null;
+  currentCategoryEntry: CategoryEntry | null;
   preferencesEditing: boolean;
   preferencesComplete: boolean;
   onPreferencesEditingChange: (value: boolean) => void;
@@ -4976,7 +5204,48 @@ function MobilePreferencesPanel({
   onAddGoal: () => void;
   onPreferencesChange: React.Dispatch<React.SetStateAction<PilotPreferences>>;
   watchedCategories: string[];
+  trackedCategoryItems: ReturnType<typeof buildMobileCategoryCardDatum>[];
+  onOpenCurrentCategory: (entry: CategoryEntry) => void;
+  onOpenTrackedCategory: (entry: CategoryEntry) => void;
 }) {
+  const watchedRows = [
+    ...(currentCategoryEntry
+      ? [
+          {
+            key: `current-${currentCategoryEntry.key}`,
+            title: formatCategoryEntryCode(currentCategoryEntry),
+            subtitle: "CAN HOLD • Tap for details",
+            badge: "Current",
+            tone: "green" as const,
+            deletable: false,
+            onPress: () => onOpenTrackedCategory(currentCategoryEntry),
+            onDelete: null,
+          },
+        ]
+      : []),
+    ...trackedCategoryItems
+      .filter((item) => item.entry.key !== currentCategoryEntry?.key)
+      .map((item) => ({
+        key: `watch-${item.entry.key}`,
+        title: formatCategoryEntryCode(item.entry),
+        subtitle:
+          item.statusLabel === "Can Hold"
+            ? "CAN HOLD • Tap for details"
+            : item.statusLabel === "Senior to You"
+              ? "NOT HOLDABLE • Tap for details"
+              : `${item.statusLabel.toUpperCase()} • Tap for details`,
+        badge: item.statusLabel === "Can Hold" ? "IN CATEGORY" : item.statusLabel === "Senior to You" ? "SENIOR TO YOU" : item.statusLabel.toUpperCase(),
+        tone: item.tone,
+        deletable: true,
+        onPress: () => onOpenTrackedCategory(item.entry),
+        onDelete: () =>
+          onPreferencesChange((current) => ({
+            ...current,
+            goalCategories: current.goalCategories.filter((entry) => entry !== item.entry.key),
+          })),
+      })),
+  ];
+
   return (
     <View style={styles.mobilePreferencesCard}>
       <View style={styles.mobilePrefsSummaryHeader}>
@@ -4997,33 +5266,37 @@ function MobilePreferencesPanel({
           </Text>
         </TouchableOpacity>
       </View>
-      <View style={styles.mobileFormGroup}>
-        <Text style={styles.inputLabel}>Categories I'm Watching</Text>
-        {watchedCategories.length > 0 ? (
-          <View style={styles.baseSelector}>
-            {watchedCategories.map((goal) => (
+      {watchedRows.length > 0 ? (
+        <View style={styles.mobileTrackedCategoryList}>
+          {watchedRows.map((row) => (
+            <View key={row.key} style={styles.mobileTrackedCategoryRow}>
               <TouchableOpacity
-                key={`summary-goal-${goal}`}
-                style={[styles.baseChip, styles.goalChip, styles.goalChipRemovable]}
-                onPress={() =>
-                  onPreferencesChange((current) => ({
-                    ...current,
-                    goalCategories: current.goalCategories.filter((entry) => entry !== goal),
-                  }))
-                }
+                style={[
+                  styles.mobileTrackedCategoryMain,
+                  statusBackgroundStyle(row.tone),
+                ]}
+                activeOpacity={0.85}
+                onPress={row.onPress}
               >
-                <Text style={[styles.baseChipLabel, styles.goalChipLabel]}>
-                  {displayCategoryPreference(goal)} ×
-                </Text>
+                <View style={styles.mobileTrackedCategoryCopy}>
+                  <Text style={styles.mobileTrackedCategoryTitle}>{row.title}</Text>
+                  <Text style={styles.mobileTrackedCategorySubtitle}>{row.subtitle}</Text>
+                </View>
+                <MobileStatusBadge label={row.badge} tone={row.tone} />
               </TouchableOpacity>
-            ))}
-          </View>
-        ) : (
-          <Text style={styles.mobileDecisionFooter}>
-            No tracked categories yet. Tap Edit to add the seats you want to follow.
-          </Text>
-        )}
-      </View>
+              {row.deletable && row.onDelete ? (
+                <TouchableOpacity style={styles.mobileTrackedDeleteButton} onPress={row.onDelete}>
+                  <Text style={styles.mobileTrackedDeleteButtonText}>Delete</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          ))}
+        </View>
+      ) : (
+        <Text style={styles.mobileDecisionFooter}>
+          Your current category will always live here. Tap Edit to add more seats to follow.
+        </Text>
+      )}
       {preferencesEditing ? (
         <MobilePreferencesEditor
           currentPilot={currentPilot}
@@ -5103,32 +5376,34 @@ function MobileCategoriesView({
       </View>
       <View style={styles.mobileCardStack}>
         {entries.map((item) => (
-          <TouchableOpacity
+          <InstrumentCategoryCard
             key={`mobile-category-${item.entry.key}`}
-            style={[styles.mobileDecisionCard, statusBackgroundStyle(item.tone)]}
-            activeOpacity={0.9}
+            title={formatFliegerCategoryTitle(item.entry)}
+            status={
+              item.statusLabel === "Can Hold"
+                ? "CAN HOLD"
+                : item.statusLabel === "Senior to You"
+                  ? "NOT HOLDABLE"
+                  : item.statusLabel.toUpperCase()
+            }
+            tone={item.tone}
+            badgePrimary={item.badgePrimary}
+            badgeLabel={item.badgeLabel}
+            statPairs={[
+              { label: "SR", value: `#${item.entry.mostSeniorNumber}` },
+              {
+                label: "MID",
+                value: item.entry.middleSeniorityNumber != null ? `#${item.entry.middleSeniorityNumber}` : "-",
+              },
+              {
+                label: "JUNIOR",
+                value: `#${item.entry.mostJuniorNumber}${item.userPosition.primary.startsWith("+") ? ` ${item.userPosition.primary}` : ""}`,
+              },
+              { label: "YOU", value: item.userPosition.secondary ?? item.userPosition.primary },
+            ]}
+            footer="Tap for details"
             onPress={() => onOpenCategory(item.entry)}
-          >
-            <View style={styles.mobileDecisionHeader}>
-              <View style={styles.mobileDecisionTitleWrap}>
-                <Text style={styles.mobileDecisionTitle}>{formatCategoryEntryCode(item.entry)}</Text>
-                <Text style={styles.mobileDecisionSubtitle}>{item.supportingText}</Text>
-              </View>
-              <MobileStatusBadge label={item.statusLabel} tone={item.tone} />
-            </View>
-            <View style={styles.mobileInfoRow}>
-              <InfoChip label="Junior line" value={`#${item.entry.mostJuniorNumber}`} />
-              <InfoChip
-                label="You there"
-                value={item.holdDisplay}
-              />
-              <InfoChip
-                label="Trend"
-                value={item.trendText}
-              />
-            </View>
-            <Text style={styles.mobileDecisionFooter}>{item.relevanceText}</Text>
-          </TouchableOpacity>
+          />
         ))}
       </View>
     </SectionCard>
@@ -5175,26 +5450,22 @@ function MobileMovementView({
       </MobileDashboardCard>
       <View style={styles.mobileCardStack}>
         {feedItems.map((item) => (
-          <TouchableOpacity
+          <InstrumentCategoryCard
             key={`movement-${item.entry.awardCategory}`}
-            style={[styles.mobileDecisionCard, statusBackgroundStyle(item.tone)]}
-            activeOpacity={0.9}
+            title={item.entry.awardCategory}
+            status={item.statusLabel === "Junior to You" ? "CAN HOLD" : item.statusLabel === "Senior to You" ? "NOT HOLDABLE" : item.statusLabel.toUpperCase()}
+            tone={item.tone}
+            badgePrimary={item.summaryText.includes("#") ? item.summaryText.split(" ").find((part) => part.startsWith("#")) ?? item.summaryText : item.statusLabel === "Senior to You" ? "AE" : "LIVE"}
+            badgeLabel={item.statusLabel === "Senior to You" ? "SENIOR TO YOU" : item.statusLabel === "Junior to You" ? "IN CATEGORY" : "LATEST AE"}
+            statPairs={[
+              { label: "JUNIOR", value: formatSeniorityValue(item.entry.mostJuniorAwardNumber) },
+              { label: "TREND", value: item.trendText.replace("Moved ", "") },
+              { label: "AWARDS", value: `${item.entry.awards}` },
+              { label: "BASE", value: item.entry.base },
+            ]}
+            footer="Tap for awards"
             onPress={() => onOpenAe(item)}
-          >
-            <View style={styles.mobileDecisionHeader}>
-              <View style={styles.mobileDecisionTitleWrap}>
-                <Text style={styles.mobileDecisionTitle}>{item.entry.awardCategory}</Text>
-                <Text style={styles.mobileDecisionSubtitle}>{item.summaryText}</Text>
-              </View>
-              <MobileStatusBadge label={item.statusLabel} tone={item.tone} />
-            </View>
-            <View style={styles.mobileInfoRow}>
-              <InfoChip label="Junior line" value={formatSeniorityValue(item.entry.mostJuniorAwardNumber)} />
-              <InfoChip label="Trend" value={item.trendText} />
-              <InfoChip label="Awards" value={`${item.entry.awards}`} />
-            </View>
-            <Text style={styles.mobileDecisionFooter}>{item.relevanceText}</Text>
-          </TouchableOpacity>
+          />
         ))}
       </View>
     </SectionCard>
@@ -5203,7 +5474,6 @@ function MobileMovementView({
 
 function MobileCareerPlanningView({
   currentPilot,
-  preferences,
   milestones,
   activeWhatIfCategory,
   whatIfSeat,
@@ -5214,10 +5484,16 @@ function MobileCareerPlanningView({
   whatIfBaseOptions,
   selectedWhatIfBase,
   setSelectedWhatIfBase,
-  whatIfEstimates,
+  holdPlannerView,
+  setHoldPlannerView,
+  currentAeAnalysis,
+  holdForecast,
+  forecastGrowthRate,
+  setForecastGrowthRate,
+  forecastGrowthMenuOpen,
+  setForecastGrowthMenuOpen,
 }: {
   currentPilot: PilotRecord | null;
-  preferences: PilotPreferences;
   milestones: ReturnType<typeof buildCareerMilestones>;
   activeWhatIfCategory: CategoryEntry | null;
   whatIfSeat: Exclude<SeatFilter, "All">;
@@ -5228,7 +5504,14 @@ function MobileCareerPlanningView({
   whatIfBaseOptions: string[];
   selectedWhatIfBase: string;
   setSelectedWhatIfBase: (value: string) => void;
-  whatIfEstimates: HoldEstimate[];
+  holdPlannerView: HoldPlannerView;
+  setHoldPlannerView: (value: HoldPlannerView) => void;
+  currentAeAnalysis: CurrentAeAnalysisResult | null;
+  holdForecast: HoldForecastResult | null;
+  forecastGrowthRate: number;
+  setForecastGrowthRate: (value: number) => void;
+  forecastGrowthMenuOpen: boolean;
+  setForecastGrowthMenuOpen: (value: boolean) => void;
 }) {
   return (
     <SectionCard
@@ -5253,9 +5536,9 @@ function MobileCareerPlanningView({
         ))}
       </View>
       <View style={styles.mobilePreferencesCard}>
-        <Text style={styles.mobileSectionTitle}>When can I hold this?</Text>
+        <Text style={styles.mobileSectionTitle}>Hold Planner</Text>
         <Text style={styles.mobileSectionText}>
-          Use the exact seat you care about and compare the 1% and 2% planning paths.
+          Use `This Award` for the monthly AE question. Use `Forecast` for the broader planning question.
         </Text>
         <Text style={styles.inputLabel}>Seat</Text>
         <View style={styles.baseSelector}>
@@ -5299,50 +5582,333 @@ function MobileCareerPlanningView({
             </TouchableOpacity>
           ))}
         </View>
-        {activeWhatIfCategory && currentPilot ? (
+        <View style={styles.baseSelector}>
+          <TouchableOpacity
+            style={[styles.baseChip, holdPlannerView === "ae" && styles.baseChipActive]}
+            onPress={() => setHoldPlannerView("ae")}
+          >
+            <Text style={[styles.baseChipLabel, holdPlannerView === "ae" && styles.baseChipLabelActive]}>
+              This Award
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.baseChip, holdPlannerView === "forecast" && styles.baseChipActive]}
+            onPress={() => setHoldPlannerView("forecast")}
+          >
+            <Text
+              style={[
+                styles.baseChipLabel,
+                holdPlannerView === "forecast" && styles.baseChipLabelActive,
+              ]}
+            >
+              Forecast
+            </Text>
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.plannerModeHint}>
+          {holdPlannerView === "ae"
+            ? "This Award answers: did this seat actually award this month, where was the line, and were you senior enough?"
+            : "Forecast answers: can you generally hold it, how far away are you, and when does blended evidence suggest it opens up?"}
+        </Text>
+            {activeWhatIfCategory && currentPilot ? (
           <>
             <Text style={styles.mobileSectionText}>
-              {formatCategoryEntryCode(activeWhatIfCategory)} • Current Junior{" "}
-              {activeWhatIfCategory.seat === "Captain" ? "CA" : "FO"} #
+              {formatCategoryEntryCode(activeWhatIfCategory)} • Current JR pilot #
               {activeWhatIfCategory.mostJuniorNumber}
             </Text>
-            <View style={styles.mobileCardStack}>
-              {whatIfEstimates.map((estimate) => (
-                <View
-                  key={`mobile-what-if-${estimate.growthRate}`}
-                  style={[styles.mobileDecisionCard, styles.mobileNeutralCard]}
-                >
-                  <View style={styles.mobileDecisionHeader}>
-                    <View style={styles.mobileDecisionTitleWrap}>
-                      <Text style={styles.mobileDecisionTitle}>
-                        {Math.round(estimate.growthRate * 100)}% growth
-                      </Text>
-                      <Text style={styles.mobileDecisionSubtitle}>
-                        {estimate.firstHoldPoint
-                          ? estimate.firstHoldPoint.label === "Today"
-                            ? "Can Hold now"
-                            : `Est. hold by ${estimate.firstHoldPoint.label}`
-                          : "Longer-range"}
-                      </Text>
-                    </View>
-                    <MobileStatusBadge
-                      label={estimate.currentGap === 0 ? "Can Hold" : "Senior to You"}
-                      tone={estimate.currentGap === 0 ? "green" : "red"}
-                      compact
-                    />
-                  </View>
-                  <View style={styles.mobileInfoRow}>
-                    <InfoChip label="Your number" value={estimate.firstHoldPoint ? `#${estimate.firstHoldPoint.projectedRank}` : `#${currentPilot.seniorityNumber}`} />
-                    <InfoChip label="Junior line" value={estimate.firstHoldPoint ? `#${estimate.firstHoldPoint.projectedJuniorLine}` : "—"} />
-                    <InfoChip label="Gap today" value={`${estimate.currentGap}`} />
-                  </View>
-                </View>
-              ))}
-            </View>
+            {holdPlannerView === "ae" ? (
+              <CurrentAePlannerCard analysis={currentAeAnalysis} />
+            ) : (
+              <ForecastPlannerCard
+                forecast={holdForecast}
+                analysis={currentAeAnalysis}
+                forecastGrowthRate={forecastGrowthRate}
+                forecastGrowthMenuOpen={forecastGrowthMenuOpen}
+                setForecastGrowthRate={setForecastGrowthRate}
+                setForecastGrowthMenuOpen={setForecastGrowthMenuOpen}
+              />
+            )}
           </>
-        ) : null}
+        ) : (
+          <Text style={styles.mobileSectionText}>
+            Enter your employee number and pick a target category to compare the current award versus the broader hold forecast.
+          </Text>
+        )}
       </View>
     </SectionCard>
+  );
+}
+
+function CurrentAePlannerCard({
+  analysis,
+}: {
+  analysis: CurrentAeAnalysisResult | null;
+}) {
+  if (!analysis) {
+    return null;
+  }
+
+  return (
+    <View style={[styles.mobileDecisionCard, styles.mobileNeutralCard]}>
+      <View style={styles.mobileDecisionHeader}>
+        <View style={styles.mobileDecisionTitleWrap}>
+          <Text style={styles.mobileDecisionTitle}>This Award</Text>
+          <Text style={styles.mobileDecisionSubtitle}>
+            Tactical monthly read. Latest AE visibility only, not general holdability.
+          </Text>
+        </View>
+        <MobileStatusBadge label={analysis.status} tone={toneForCurrentAeStatus(analysis.status)} compact />
+      </View>
+      <View style={styles.mobileInfoRow}>
+        <InfoChip label="Awarded" value={analysis.awardedInLatestAe ? "Yes" : "No"} />
+        <InfoChip label="Latest AE JR pilot" value={analysis.awardLine != null ? `#${analysis.awardLine}` : "—"} />
+        <InfoChip label="Recent AEs" value={`${analysis.recentSignalCount}`} />
+      </View>
+      {analysis.recentAwardsAverage != null ? (
+        <Text style={styles.mobileDecisionFooter}>
+          Recent AE average: {analysis.recentAwardsAverage.toFixed(1)} awards.
+        </Text>
+      ) : null}
+      <Text style={styles.plannerSectionLabel}>What this award says</Text>
+      <View style={styles.mobileEvidenceList}>
+        {analysis.explanation.map((line) => (
+          <Text key={`ae-analysis-${line}`} style={styles.mobileEvidenceText}>
+            • {line}
+          </Text>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function ForecastPlannerCard({
+  forecast,
+  analysis,
+  forecastGrowthRate,
+  forecastGrowthMenuOpen,
+  setForecastGrowthRate,
+  setForecastGrowthMenuOpen,
+}: {
+  forecast: HoldForecastResult | null;
+  analysis: CurrentAeAnalysisResult | null;
+  forecastGrowthRate: number;
+  forecastGrowthMenuOpen: boolean;
+  setForecastGrowthRate: (value: number) => void;
+  setForecastGrowthMenuOpen: (value: boolean) => void;
+}) {
+  if (!forecast) {
+    return null;
+  }
+
+  return (
+    <View style={[styles.mobileDecisionCard, styles.mobileNeutralCard]}>
+      <View style={styles.mobileDecisionHeader}>
+        <View style={styles.mobileDecisionTitleWrap}>
+          <Text style={styles.mobileDecisionTitle}>Forecast</Text>
+          <Text style={styles.mobileDecisionSubtitle}>
+            Broader planning read using current list, AE history, movement, and list growth.
+          </Text>
+        </View>
+        <MobileStatusBadge
+          label={forecast.status}
+          tone={toneForForecastStatus(forecast.status)}
+          compact
+        />
+      </View>
+      <View style={styles.dropdownWrap}>
+        <Text style={styles.inputLabel}>Forecast growth</Text>
+        <TouchableOpacity
+          style={styles.dropdownButton}
+          onPress={() => setForecastGrowthMenuOpen(!forecastGrowthMenuOpen)}
+        >
+          <Text style={styles.dropdownButtonText}>
+            {Math.round(forecastGrowthRate * 100)}% annual growth
+          </Text>
+        </TouchableOpacity>
+        {forecastGrowthMenuOpen ? (
+          <View style={styles.dropdownMenu}>
+            {forecastGrowthRates.map((option) => (
+              <TouchableOpacity
+                key={`forecast-growth-${option.value}`}
+                style={styles.dropdownItem}
+                onPress={() => {
+                  setForecastGrowthRate(option.value);
+                  setForecastGrowthMenuOpen(false);
+                }}
+              >
+                <Text style={styles.dropdownItemText}>{option.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        ) : null}
+      </View>
+      <View style={styles.mobileInfoRow}>
+        <InfoChip label="Window" value={forecast.holdWindow} />
+        <InfoChip label="Confidence" value={forecast.confidence} />
+        <InfoChip label="Gap today" value={`${forecast.currentGap}`} />
+      </View>
+      <View style={styles.mobileInfoRow}>
+        <InfoChip label="Current JR pilot" value={`#${forecast.currentListLine}`} />
+        <InfoChip label="Forecast JR pilot" value={`#${forecast.blendedLine}`} />
+        <InfoChip label="Est. date" value={forecast.estimatedDateLabel ?? "Longer-range"} />
+      </View>
+      {forecast.differsFromAe && analysis ? (
+        <View style={styles.mobilePlannerCallout}>
+          <Text style={styles.mobilePlannerCalloutTitle}>Why Forecast can differ from This Award</Text>
+          <Text style={styles.mobilePlannerCalloutText}>
+            Latest AE did not fully answer this seat. Forecast blends broader seniority, trend, and progression data.
+          </Text>
+        </View>
+      ) : null}
+      <Text style={styles.plannerSectionLabel}>Blended evidence</Text>
+      <View style={styles.mobileEvidenceList}>
+        {forecast.evidenceSummary.map((line) => (
+          <Text key={`forecast-evidence-${line}`} style={styles.mobileEvidenceText}>
+            • {line}
+          </Text>
+        ))}
+      </View>
+      <Text style={styles.plannerSectionLabel}>Why the forecast says this</Text>
+      <View style={styles.mobileEvidenceList}>
+        {forecast.explanation.map((line) => (
+          <Text key={`forecast-explanation-${line}`} style={styles.mobileEvidenceTextMuted}>
+            • {line}
+          </Text>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function CurrentAeDesktopPanel({
+  analysis,
+}: {
+  analysis: CurrentAeAnalysisResult | null;
+}) {
+  if (!analysis) {
+    return null;
+  }
+
+  return (
+    <View style={[styles.resultPanel, styles.desktopPlannerPanel]}>
+      <View style={styles.mobileDecisionHeader}>
+        <View style={styles.mobileDecisionTitleWrap}>
+          <Text style={styles.projectionTitle}>This Award</Text>
+          <Text style={styles.projectionMeta}>
+            Tactical monthly read. This answers what happened in the latest AE, not general holdability.
+          </Text>
+        </View>
+        <MobileStatusBadge label={analysis.status} tone={toneForCurrentAeStatus(analysis.status)} compact />
+      </View>
+      <FormRow>
+        <ResultLine label="Awarded in latest AE" value={analysis.awardedInLatestAe ? "Yes" : "No"} />
+        <ResultLine label="Latest AE JR pilot" value={analysis.awardLine != null ? `#${analysis.awardLine}` : "—"} />
+        <ResultLine label="Recent AEs" value={`${analysis.recentSignalCount}`} />
+      </FormRow>
+      <Text style={styles.plannerSectionLabel}>What this award says</Text>
+      <View style={styles.mobileEvidenceList}>
+        {analysis.explanation.map((line) => (
+          <Text key={`desktop-ae-${line}`} style={styles.mobileEvidenceText}>
+            • {line}
+          </Text>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function ForecastDesktopPanel({
+  forecast,
+  analysis,
+  forecastGrowthRate,
+  forecastGrowthMenuOpen,
+  setForecastGrowthRate,
+  setForecastGrowthMenuOpen,
+}: {
+  forecast: HoldForecastResult | null;
+  analysis: CurrentAeAnalysisResult | null;
+  forecastGrowthRate: number;
+  forecastGrowthMenuOpen: boolean;
+  setForecastGrowthRate: (value: number) => void;
+  setForecastGrowthMenuOpen: (value: boolean) => void;
+}) {
+  if (!forecast) {
+    return null;
+  }
+
+  return (
+    <View style={[styles.resultPanel, styles.desktopPlannerPanel]}>
+      <View style={styles.mobileDecisionHeader}>
+        <View style={styles.mobileDecisionTitleWrap}>
+          <Text style={styles.projectionTitle}>Forecast</Text>
+          <Text style={styles.projectionMeta}>
+            Broader planning read based on current list, AE history, category movement, and projected seniority progression.
+          </Text>
+        </View>
+        <MobileStatusBadge label={forecast.status} tone={toneForForecastStatus(forecast.status)} compact />
+      </View>
+      <View style={[styles.forecastControlRow, styles.desktopForecastControlRow]}>
+        <View style={styles.forecastGrowthWrap}>
+          <Text style={styles.inputLabel}>Forecast growth</Text>
+          <TouchableOpacity
+            style={styles.dropdownButton}
+            onPress={() => setForecastGrowthMenuOpen(!forecastGrowthMenuOpen)}
+          >
+            <Text style={styles.dropdownButtonText}>{Math.round(forecastGrowthRate * 100)}% annual growth</Text>
+          </TouchableOpacity>
+          {forecastGrowthMenuOpen ? (
+            <View style={styles.dropdownMenu}>
+              {forecastGrowthRates.map((option) => (
+                <TouchableOpacity
+                  key={`desktop-forecast-growth-${option.value}`}
+                  style={styles.dropdownItem}
+                  onPress={() => {
+                    setForecastGrowthRate(option.value);
+                    setForecastGrowthMenuOpen(false);
+                  }}
+                >
+                  <Text style={styles.dropdownItemText}>{option.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : null}
+        </View>
+      </View>
+      <FormRow>
+        <ResultLine label="Hold window" value={forecast.holdWindow} emphasis />
+        <ResultLine label="Confidence" value={forecast.confidence} />
+        <ResultLine label="Gap today" value={`${forecast.currentGap}`} />
+      </FormRow>
+      <FormRow>
+        <ResultLine label="Current JR pilot" value={`#${forecast.currentListLine}`} />
+        <ResultLine label="Forecast JR pilot" value={`#${forecast.blendedLine}`} />
+        <ResultLine label="Estimated date" value={forecast.estimatedDateLabel ?? "Longer-range"} />
+      </FormRow>
+      {forecast.differsFromAe && analysis ? (
+        <View style={styles.mobilePlannerCallout}>
+          <Text style={styles.mobilePlannerCalloutTitle}>Why Forecast can differ from This Award</Text>
+          <Text style={styles.mobilePlannerCalloutText}>
+            Latest AE did not fully answer this seat. Forecast blends broader seniority, trend, and progression data.
+          </Text>
+        </View>
+      ) : null}
+      <Text style={styles.plannerSectionLabel}>Blended evidence</Text>
+      <View style={styles.mobileEvidenceList}>
+        {forecast.evidenceSummary.map((line) => (
+          <Text key={`desktop-forecast-${line}`} style={styles.mobileEvidenceText}>
+            • {line}
+          </Text>
+        ))}
+      </View>
+      <Text style={styles.plannerSectionLabel}>Why the forecast says this</Text>
+      <View style={styles.mobileEvidenceList}>
+        {forecast.explanation.map((line) => (
+          <Text key={`desktop-forecast-explain-${line}`} style={styles.mobileEvidenceTextMuted}>
+            • {line}
+          </Text>
+        ))}
+      </View>
+    </View>
   );
 }
 
@@ -5355,10 +5921,25 @@ function MobileDashboardCard({
   title: string;
   children: React.ReactNode;
 }) {
+  const palette = getFliegerPalette();
   return (
-    <View style={styles.mobileDashboardCard}>
-      <Text style={styles.mobileDashboardEyebrow}>{eyebrow}</Text>
-      <Text style={styles.mobileDashboardTitle}>{title}</Text>
+    <View
+      style={[
+        styles.mobileDashboardCard,
+        {
+          backgroundColor: palette.surface,
+          borderColor: palette.borderStrong,
+          borderWidth: 1.5,
+          shadowColor: "transparent",
+        },
+      ]}
+    >
+      <Text style={[styles.mobileDashboardEyebrow, { color: palette.label, fontFamily: fliegerTypography.familyBody }]}>
+        {eyebrow}
+      </Text>
+      <Text style={[styles.mobileDashboardTitle, { color: palette.textPrimary, fontFamily: fliegerTypography.family }]}>
+        {title}
+      </Text>
       {children}
     </View>
   );
@@ -5373,26 +5954,83 @@ function MobileStatusBadge({
   tone: "green" | "amber" | "red" | "neutral";
   compact?: boolean;
 }) {
+  const palette = getFliegerPalette();
   return (
     <View
       style={[
         styles.mobileStatusBadge,
+        {
+          backgroundColor:
+            tone === "green"
+              ? palette.surfaceRaised
+              : tone === "amber"
+                ? palette.badgeNeutral
+                : tone === "red"
+                  ? palette.surfaceRaised
+                  : palette.badgeNeutral,
+          borderColor:
+            tone === "green"
+              ? palette.greenBorder
+              : tone === "amber"
+                ? palette.borderStrong
+                : tone === "red"
+                  ? palette.redBorder
+                  : palette.badgeNeutralBorder,
+          borderWidth: 2,
+          borderRadius: 14,
+        },
         tone === "green" && styles.mobileStatusBadgeGreen,
         tone === "amber" && styles.mobileStatusBadgeAmber,
         tone === "red" && styles.mobileStatusBadgeRed,
         compact && styles.mobileStatusBadgeCompact,
       ]}
     >
-      <Text style={styles.mobileStatusBadgeText}>{label}</Text>
+      <Text
+        style={[
+          styles.mobileStatusBadgeText,
+          {
+            color:
+              tone === "green"
+                ? palette.green
+                : tone === "red"
+                  ? palette.red
+                  : tone === "amber"
+                    ? palette.label
+                    : palette.textPrimary,
+            fontFamily: fliegerTypography.family,
+          },
+        ]}
+      >
+        {label.toUpperCase()}
+      </Text>
     </View>
   );
 }
 
 function InfoChip({ label, value }: { label: string; value: string }) {
+  const palette = getFliegerPalette();
   return (
-    <View style={styles.mobileInfoChip}>
-      <Text style={styles.mobileInfoChipLabel}>{label}</Text>
-      <Text style={styles.mobileInfoChipValue}>{value}</Text>
+    <View
+      style={[
+        styles.mobileInfoChip,
+        {
+          backgroundColor: palette.surfaceRaised,
+          borderWidth: 2,
+          borderColor: palette.border,
+          borderRadius: 14,
+        },
+      ]}
+    >
+      <Text
+        style={[styles.mobileInfoChipLabel, { color: palette.textMuted, fontFamily: fliegerTypography.familyBody }]}
+      >
+        {label}
+      </Text>
+      <Text
+        style={[styles.mobileInfoChipValue, { color: palette.textPrimary, fontFamily: fliegerTypography.family }]}
+      >
+        {value}
+      </Text>
     </View>
   );
 }
@@ -5469,17 +6107,54 @@ function toneForPilotStatus(label: string) {
   return "neutral" as const;
 }
 
+function toneForCurrentAeStatus(status: CurrentAeAnalysisResult["status"]) {
+  if (status === "Can Hold This AE") {
+    return "green" as const;
+  }
+  if (status === "Not Awarded This AE" || status === "No Recent AE Signal") {
+    return "amber" as const;
+  }
+  return "red" as const;
+}
+
+function toneForForecastStatus(status: HoldForecastResult["status"]) {
+  if (status === "Already Holding" || status === "Can Generally Hold") {
+    return "green" as const;
+  }
+  if (status === "Likely Hold Soon") {
+    return "amber" as const;
+  }
+  return "red" as const;
+}
+
 function statusBackgroundStyle(tone: "green" | "amber" | "red" | "neutral") {
+  const palette = getFliegerPalette();
   if (tone === "green") {
-    return styles.mobileGreenCard;
+    return {
+      backgroundColor: palette.surface,
+      borderColor: palette.greenBorder,
+      borderWidth: 2,
+    };
   }
   if (tone === "amber") {
-    return styles.mobileAmberCard;
+    return {
+      backgroundColor: palette.surface,
+      borderColor: palette.borderStrong,
+      borderWidth: 2,
+    };
   }
   if (tone === "red") {
-    return styles.mobileRedCard;
+    return {
+      backgroundColor: palette.surface,
+      borderColor: palette.redBorder,
+      borderWidth: 2,
+    };
   }
-  return styles.mobileNeutralCard;
+  return {
+    backgroundColor: palette.surface,
+    borderColor: palette.borderStrong,
+    borderWidth: 2,
+  };
 }
 
 function describeMovementDirection(value: number | null) {
@@ -5618,6 +6293,23 @@ function buildMobileCategoryCardDatum(
     (entry.seat === "Captain" ? 4 : 0) -
     gap / 1000;
 
+  const badgePrimary =
+    statusLabel === "Can Hold"
+      ? userPosition.secondary ?? "IN"
+      : statusLabel === "Senior to You"
+        ? userPosition.primary
+        : statusLabel === "Close"
+          ? userPosition.primary
+          : userPosition.secondary ?? userPosition.primary;
+  const badgeLabel =
+    statusLabel === "Can Hold"
+      ? "IN CATEGORY"
+      : statusLabel === "Senior to You"
+        ? "SENIOR TO YOU"
+        : statusLabel === "Close"
+          ? "FROM LINE"
+          : "STATUS";
+
   return {
     entry,
     fit,
@@ -5630,6 +6322,8 @@ function buildMobileCategoryCardDatum(
     supportingText,
     relevanceText,
     trendText: describeMovementDirection(trend?.lineMovement ?? null),
+    badgePrimary,
+    badgeLabel,
     score,
   };
 }
@@ -5740,7 +6434,15 @@ function buildCareerMilestones({
     if (!target) {
       return null;
     }
-    const estimate = buildCategoryHoldEstimate(currentPilot, target, pilots, 0.01);
+    const estimate = forecastHoldability({
+      pilot: currentPilot,
+      target,
+      latestAe: null,
+      aeHistory: null,
+      categoryTrend: null,
+      pilots,
+      growthRate: 0.01,
+    });
     const fit = evaluateCategoryHold(target, currentPilot.seniorityNumber, currentPilot.currentCategoryKey);
     const statusLabel = fit.label === "Current category" ? "Can Hold" : fit.label;
     return {
@@ -5749,12 +6451,7 @@ function buildCareerMilestones({
       targetCode: formatCategoryEntryCode(target),
       statusLabel,
       tone: toneForPilotStatus(statusLabel),
-      timing:
-        estimate.firstHoldPoint == null
-          ? "Longer-range"
-          : estimate.firstHoldPoint.label === "Today"
-            ? "Can Hold now"
-            : `Est. ${estimate.firstHoldPoint.label}`,
+      timing: estimate?.estimatedDateLabel ? `Est. ${estimate.estimatedDateLabel}` : estimate?.holdWindow ?? "Longer-range",
       isGoal: goalCategoryKeys.includes(target.key),
     };
   };
@@ -5839,7 +6536,7 @@ function payPriorityScore(entry: CategoryEntry) {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#EEF3F8",
+    backgroundColor: "#D7DCE0",
   },
   container: {
     padding: 20,
@@ -5847,8 +6544,8 @@ const styles = StyleSheet.create({
     gap: 18,
   },
   hero: {
-    backgroundColor: "#0C2340",
-    borderRadius: 28,
+    backgroundColor: "#15181C",
+    borderRadius: 16,
     padding: 22,
     gap: 12,
   },
@@ -5856,17 +6553,21 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textTransform: "uppercase",
     letterSpacing: 2,
-    color: "#C7D3E3",
+    color: "#74D2E7",
+    textAlign: "center",
   },
   title: {
-    fontSize: 36,
+    fontSize: 34,
     fontWeight: "800",
-    color: "#F8FBFF",
+    color: "#F2E9DC",
+    textAlign: "center",
+    letterSpacing: 2.4,
   },
   subtitle: {
     fontSize: 15,
     lineHeight: 22,
-    color: "#D6E0EC",
+    color: "#A8B0B8",
+    letterSpacing: 0.9,
   },
   heroMetrics: {
     flexDirection: "row",
@@ -5905,37 +6606,37 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 8,
     paddingHorizontal: 14,
-    paddingTop: 14,
+    paddingTop: 18,
     paddingBottom: 20,
-    backgroundColor: "#F7FAFD",
+    backgroundColor: "#0B0D10",
     borderTopWidth: 1,
-    borderTopColor: "#CFD9E5",
+    borderTopColor: "#2A2F36",
   },
   tabButton: {
     flex: 1,
     paddingHorizontal: 10,
     paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: "#E7EEF6",
+    borderRadius: 14,
+    backgroundColor: "#15181C",
     alignItems: "center",
     gap: 8,
   },
   tabButtonActive: {
-    backgroundColor: "#EAF0F7",
+    backgroundColor: "rgba(116,210,231,0.10)",
   },
   tabIconCircle: {
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: "#D3DEE9",
+    backgroundColor: "#0B0D10",
     alignItems: "center",
     justifyContent: "center",
   },
   tabIconCircleActive: {
-    backgroundColor: "#A6192E",
+    backgroundColor: "rgba(116,210,231,0.14)",
   },
   tabIconText: {
-    color: "#30465F",
+    color: "#F2E9DC",
     fontWeight: "900",
     fontSize: 22,
     lineHeight: 24,
@@ -5946,36 +6647,40 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
   },
   tabIconTextActive: {
-    color: "#F8FBFF",
+    color: "#74D2E7",
   },
   tabLabel: {
-    color: "#30465F",
+    color: "#A8B0B8",
     fontWeight: "700",
-    fontSize: 12,
+    fontSize: 11,
+    textTransform: "uppercase",
+    letterSpacing: 1.1,
   },
   tabLabelActive: {
-    color: "#A6192E",
+    color: "#74D2E7",
   },
   sectionStack: {
     gap: 14,
   },
   card: {
-    backgroundColor: "#FBFDFF",
-    borderRadius: 24,
-    padding: 20,
+    backgroundColor: "#C3CAD1",
+    borderRadius: 14,
+    padding: 18,
     gap: 10,
-    borderWidth: 1,
-    borderColor: "#CFD9E5",
+    borderWidth: 1.5,
+    borderColor: "#68737D",
   },
   cardTitle: {
     fontSize: 22,
     fontWeight: "800",
-    color: "#102A43",
+    color: "#2F8EA6",
+    letterSpacing: 1.1,
+    textTransform: "uppercase",
   },
   cardDescription: {
     fontSize: 14,
     lineHeight: 21,
-    color: "#55677D",
+    color: "#41505C",
   },
   cardBody: {
     gap: 14,
@@ -5993,62 +6698,64 @@ const styles = StyleSheet.create({
   summaryCard: {
     flex: 1,
     minWidth: 220,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
+    backgroundColor: "#C3CAD1",
+    borderRadius: 14,
     padding: 18,
     gap: 10,
-    borderWidth: 1,
-    borderColor: "#D4DEE9",
+    borderWidth: 1.5,
+    borderColor: "#68737D",
   },
   summaryTitle: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#102A43",
+    color: "#2F8EA6",
+    textTransform: "uppercase",
+    letterSpacing: 1,
   },
   summaryMain: {
     fontSize: 42,
     fontWeight: "800",
-    color: "#0C2340",
+    color: "#0B0D10",
     lineHeight: 44,
   },
   summaryDetail: {
     fontSize: 14,
-    color: "#6B7C93",
+    color: "#41505C",
     fontWeight: "600",
   },
   summarySub: {
     fontSize: 13,
     lineHeight: 19,
-    color: "#52606D",
+    color: "#41505C",
   },
   summaryTrack: {
     height: 18,
     borderRadius: 999,
-    backgroundColor: "#E3EAF2",
+    backgroundColor: "#AEB7C0",
     overflow: "hidden",
   },
   summaryFill: {
     height: "100%",
     borderRadius: 999,
-    backgroundColor: "#A6192E",
+    backgroundColor: "#74D2E7",
   },
   snapshotPill: {
-    backgroundColor: "#0C2340",
-    borderRadius: 18,
+    backgroundColor: "#15181C",
+    borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 12,
     gap: 4,
   },
   snapshotLabel: {
     fontSize: 11,
-    color: "#C9D7E6",
+    color: "#74D2E7",
     textTransform: "uppercase",
     letterSpacing: 1,
   },
   snapshotValue: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#F8FBFF",
+    color: "#F2E9DC",
   },
   formRow: {
     flexDirection: "row",
@@ -6062,35 +6769,37 @@ const styles = StyleSheet.create({
   },
   inputLabel: {
     fontSize: 13,
-    color: "#52606D",
-    fontWeight: "600",
+    color: "#2F8EA6",
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 1.1,
   },
   inputShell: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F7FAFC",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#CFD9E5",
+    backgroundColor: "#DDE2E6",
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: "#68737D",
     paddingHorizontal: 14,
     minHeight: 52,
   },
   inputAffix: {
-    color: "#6B7C93",
+    color: "#41505C",
     fontSize: 16,
     fontWeight: "700",
   },
   input: {
     flex: 1,
     fontSize: 18,
-    color: "#102A43",
+    color: "#0B0D10",
     paddingVertical: 12,
   },
   textAreaShell: {
-    backgroundColor: "#F7FAFC",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#CFD9E5",
+    backgroundColor: "#DDE2E6",
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: "#68737D",
     paddingHorizontal: 14,
     paddingVertical: 12,
     minHeight: 220,
@@ -6099,37 +6808,41 @@ const styles = StyleSheet.create({
     minHeight: 192,
     fontSize: 15,
     lineHeight: 21,
-    color: "#102A43",
+    color: "#0B0D10",
   },
   resultPanel: {
-    backgroundColor: "#F5F8FC",
-    borderRadius: 18,
+    backgroundColor: "#C3CAD1",
+    borderRadius: 14,
     padding: 16,
     gap: 12,
+    borderWidth: 1.5,
+    borderColor: "#68737D",
   },
   quickLinkButton: {
     alignSelf: "flex-start",
-    backgroundColor: "#A6192E",
+    backgroundColor: "#15181C",
     borderRadius: 999,
+    borderWidth: 1.5,
+    borderColor: "#74D2E7",
     paddingHorizontal: 16,
     paddingVertical: 10,
   },
   quickLinkButtonText: {
     fontSize: 13,
     fontWeight: "800",
-    color: "#F8FBFF",
+    color: "#74D2E7",
   },
   whatIfScenarioPanel: {
     flex: 1,
     minWidth: 260,
   },
   paySummaryCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
+    backgroundColor: "#C3CAD1",
+    borderRadius: 14,
     padding: 16,
     gap: 12,
-    borderWidth: 1,
-    borderColor: "#D4DEE9",
+    borderWidth: 1.5,
+    borderColor: "#68737D",
   },
   payToolGrid: {
     flexDirection: "row",
@@ -6140,23 +6853,18 @@ const styles = StyleSheet.create({
   payToolCard: {
     flex: 1,
     minWidth: 240,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 22,
+    backgroundColor: "#C3CAD1",
+    borderRadius: 14,
     overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "#D4DEE9",
+    borderWidth: 1.5,
+    borderColor: "#68737D",
   },
   payToolCardActive: {
-    borderColor: "#A6192E",
-    shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 3,
+    borderColor: "#74D2E7",
   },
   payToolHero: {
     minHeight: 104,
-    backgroundColor: "#E8EFF7",
+    backgroundColor: "#AEB7C0",
     paddingHorizontal: 18,
     paddingVertical: 16,
     justifyContent: "space-between",
@@ -6164,12 +6872,12 @@ const styles = StyleSheet.create({
   payToolGlyph: {
     fontSize: 28,
     fontWeight: "900",
-    color: "#A6192E",
+    color: "#74D2E7",
   },
   payToolBadge: {
     alignSelf: "flex-start",
-    backgroundColor: "#FFFFFF",
-    color: "#0C2340",
+    backgroundColor: "#DDE2E6",
+    color: "#0B0D10",
     fontSize: 11,
     fontWeight: "800",
     paddingHorizontal: 10,
@@ -6186,65 +6894,69 @@ const styles = StyleSheet.create({
   payToolTitle: {
     fontSize: 22,
     fontWeight: "800",
-    color: "#0C2340",
+    color: "#0B0D10",
   },
   payToolSubtitle: {
     fontSize: 14,
     lineHeight: 21,
-    color: "#52606D",
+    color: "#46515C",
   },
   payToolButton: {
     marginHorizontal: 18,
     marginBottom: 18,
-    backgroundColor: "#A6192E",
-    color: "#F8FBFF",
+    backgroundColor: "#15181C",
+    color: "#F2E9DC",
     textAlign: "center",
     fontSize: 14,
     fontWeight: "800",
     borderRadius: 12,
     overflow: "hidden",
     paddingVertical: 12,
+    borderWidth: 1.5,
+    borderColor: "#74D2E7",
   },
   payToolPlaceholder: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
+    backgroundColor: "#C3CAD1",
+    borderRadius: 14,
     padding: 18,
     gap: 10,
-    borderWidth: 1,
-    borderColor: "#D4DEE9",
+    borderWidth: 1.5,
+    borderColor: "#68737D",
   },
   payToolPlaceholderTitle: {
     fontSize: 20,
     fontWeight: "800",
-    color: "#0C2340",
+    color: "#0B0D10",
   },
   payToolPlaceholderText: {
     fontSize: 14,
     lineHeight: 22,
-    color: "#52606D",
+    color: "#46515C",
   },
   auditButton: {
     alignSelf: "flex-start",
-    backgroundColor: "#A6192E",
+    backgroundColor: "#15181C",
     borderRadius: 14,
     paddingHorizontal: 18,
     paddingVertical: 12,
+    borderWidth: 1.5,
+    borderColor: "#74D2E7",
   },
   auditButtonDisabled: {
-    backgroundColor: "#9FB2C8",
+    backgroundColor: "#AEB7C0",
   },
   auditButtonText: {
     fontSize: 14,
     fontWeight: "800",
-    color: "#F8FBFF",
+    color: "#F2E9DC",
   },
   auditSummaryHero: {
-    backgroundColor: "#EAF1F8",
-    borderRadius: 20,
+    backgroundColor: "#C3CAD1",
+    borderRadius: 14,
     padding: 18,
     gap: 14,
-    borderWidth: 1,
-    borderColor: "#CFD9E5",
+    borderWidth: 1.5,
+    borderColor: "#74D2E7",
   },
   auditSummaryHeader: {
     gap: 4,
@@ -6256,7 +6968,7 @@ const styles = StyleSheet.create({
   },
   auditSummaryMeta: {
     fontSize: 13,
-    color: "#52606D",
+    color: "#46515C",
     fontWeight: "700",
   },
   auditSummaryMetrics: {
@@ -6287,10 +6999,10 @@ const styles = StyleSheet.create({
   resultValue: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#0C2340",
+    color: "#0B0D10",
   },
   resultValueEmphasis: {
-    color: "#A6192E",
+    color: "#74D2E7",
   },
   baseSelector: {
     flexDirection: "row",
@@ -6300,18 +7012,23 @@ const styles = StyleSheet.create({
   baseChip: {
     paddingHorizontal: 14,
     paddingVertical: 10,
-    borderRadius: 999,
-    backgroundColor: "#E7EEF6",
+    borderRadius: 14,
+    backgroundColor: "#15181C",
+    borderWidth: 1.5,
+    borderColor: "#2A2F36",
   },
   baseChipActive: {
-    backgroundColor: "#A6192E",
+    backgroundColor: "rgba(116,210,231,0.12)",
+    borderColor: "#74D2E7",
   },
   baseChipLabel: {
-    color: "#334E68",
+    color: "#A8B0B8",
     fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.9,
   },
   baseChipLabelActive: {
-    color: "#F8FBFF",
+    color: "#74D2E7",
   },
   legendRow: {
     flexDirection: "row",
@@ -6334,42 +7051,43 @@ const styles = StyleSheet.create({
   },
   legendText: {
     fontSize: 13,
-    color: "#52606D",
+    color: "#46515C",
     fontWeight: "600",
   },
   identityCard: {
-    backgroundColor: "#F7FAFC",
-    borderRadius: 18,
+    backgroundColor: "#C3CAD1",
+    borderRadius: 14,
     padding: 16,
-    borderWidth: 1,
-    borderColor: "#D4DEE9",
+    borderWidth: 1.5,
+    borderColor: "#68737D",
     gap: 6,
   },
   identityName: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#0C2340",
+    color: "#0B0D10",
   },
   identityMeta: {
     fontSize: 14,
-    color: "#52606D",
+    color: "#46515C",
   },
   tableCard: {
-    backgroundColor: "#FDFEFF",
-    borderRadius: 18,
-    padding: 12,
-    gap: 6,
+    backgroundColor: "#101418",
+    borderRadius: 16,
+    padding: 16,
+    gap: 10,
     borderWidth: 2,
-    borderColor: "#C5D2E1",
+    borderColor: "#59616a",
   },
   tableTitle: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#0C2340",
+    color: "#f3ead7",
+    letterSpacing: 1.1,
   },
   tableMeta: {
     fontSize: 12,
-    color: "#6B7C93",
+    color: "#aeb6c2",
     fontWeight: "600",
   },
   tableHeader: {
@@ -6377,14 +7095,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingBottom: 4,
     borderBottomWidth: 1,
-    borderBottomColor: "#D7E0EA",
+    borderBottomColor: "#59616a",
   },
   tableHeaderCell: {
     flex: 1,
     textAlign: "center",
     fontSize: 11,
     fontWeight: "800",
-    color: "#52606D",
+    color: "#7d8794",
+    textTransform: "uppercase",
+    letterSpacing: 1,
   },
   tableRow: {
     flexDirection: "row",
@@ -6392,7 +7112,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 8,
     paddingHorizontal: 8,
-    borderWidth: 1,
+    borderWidth: 2,
   },
   mobileCategoryCard: {
     borderRadius: 16,
@@ -6406,6 +7126,16 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "flex-start",
     gap: 10,
+  },
+  instrumentCardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 12,
+  },
+  instrumentCardTitleWrap: {
+    flex: 1,
+    gap: 4,
   },
   mobileCategoryTitleWrap: {
     flex: 1,
@@ -6430,34 +7160,58 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 8,
   },
+  instrumentStatGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    borderWidth: 1,
+    borderColor: "#3a4148",
+    borderRadius: 12,
+    overflow: "hidden",
+    backgroundColor: "#141a20",
+  },
+  instrumentStatCell: {
+    width: "50%",
+    minHeight: 54,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 4,
+    justifyContent: "center",
+    borderBottomWidth: 1,
+    borderBottomColor: "#3a4148",
+  },
+  instrumentStatCellLeft: {
+    borderRightWidth: 1,
+    borderRightColor: "#3a4148",
+  },
+  instrumentStatCellRight: {},
   mobileMetricCard: {
     flexGrow: 1,
     flexBasis: "47%",
     minWidth: 120,
-    backgroundColor: "rgba(255,255,255,0.45)",
+    backgroundColor: "#1A1F24",
     borderRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 10,
     gap: 3,
     borderWidth: 1,
-    borderColor: "rgba(12,35,64,0.08)",
+    borderColor: "#2A2F36",
   },
   mobileMetricLabel: {
     fontSize: 10,
     fontWeight: "800",
     textTransform: "uppercase",
     letterSpacing: 0.8,
-    color: "#6B7C93",
+    color: "#74D2E7",
   },
   mobileMetricValue: {
     fontSize: 17,
     fontWeight: "800",
-    color: "#0C2340",
+    color: "#F2E9DC",
   },
   mobileMetricDetail: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#6B7C93",
+    color: "#A8B0B8",
   },
   mobileDashboardStack: {
     gap: 12,
@@ -6480,10 +7234,10 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     flexBasis: 180,
     minWidth: 160,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: "#D4DEE9",
+    backgroundColor: "#15181C",
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: "#2A2F36",
     padding: 14,
     gap: 6,
   },
@@ -6492,30 +7246,30 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     textTransform: "uppercase",
     letterSpacing: 1,
-    color: "#6B7C93",
+    color: "#74D2E7",
   },
   mobileKeyMetricValue: {
     fontSize: 28,
     fontWeight: "900",
-    color: "#0C2340",
+    color: "#F2E9DC",
   },
   mobileKeyMetricDetail: {
     fontSize: 12,
     lineHeight: 18,
-    color: "#52606D",
+    color: "#A8B0B8",
     fontWeight: "600",
   },
   mobileKeyMetricSubdetail: {
     fontSize: 12,
     lineHeight: 18,
-    color: "#0C2340",
+    color: "#F2E9DC",
     fontWeight: "800",
   },
   mobileDashboardCard: {
-    backgroundColor: "#F8FBFF",
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: "#D4DEE9",
+    backgroundColor: "#15181C",
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: "#2A2F36",
     padding: 16,
     gap: 10,
   },
@@ -6524,12 +7278,12 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     textTransform: "uppercase",
     letterSpacing: 1.2,
-    color: "#6B7C93",
+    color: "#74D2E7",
   },
   mobileDashboardTitle: {
     fontSize: 22,
     fontWeight: "800",
-    color: "#0C2340",
+    color: "#F2E9DC",
   },
   mobileDashboardHeaderRow: {
     flexDirection: "row",
@@ -6540,18 +7294,18 @@ const styles = StyleSheet.create({
   mobileDashboardMeta: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#6B7C93",
+    color: "#A8B0B8",
   },
   mobileDashboardBodyText: {
     fontSize: 14,
     lineHeight: 21,
-    color: "#52606D",
+    color: "#A8B0B8",
   },
   mobilePreferencesCard: {
-    backgroundColor: "#F7FAFC",
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: "#D4DEE9",
+    backgroundColor: "#15181C",
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: "#2A2F36",
     padding: 16,
     gap: 12,
   },
@@ -6559,23 +7313,23 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingTop: 4,
     borderTopWidth: 1,
-    borderTopColor: "#D4DEE9",
+    borderTopColor: "#2A2F36",
   },
   mobileSectionTitle: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#0C2340",
+    color: "#F2E9DC",
   },
   mobileSectionText: {
     fontSize: 13,
     lineHeight: 20,
-    color: "#52606D",
+    color: "#A8B0B8",
   },
   mobilePrefsSummaryCard: {
-    backgroundColor: "#F8FBFF",
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: "#D4DEE9",
+    backgroundColor: "#15181C",
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: "#2A2F36",
     padding: 16,
     gap: 12,
   },
@@ -6584,16 +7338,16 @@ const styles = StyleSheet.create({
   },
   mobilePrefsCollapsedButton: {
     minHeight: 48,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "#D4DEE9",
-    backgroundColor: "#F8FBFF",
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: "#2A2F36",
+    backgroundColor: "#0B0D10",
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 18,
   },
   mobilePrefsCollapsedButtonText: {
-    color: "#0C2340",
+    color: "#F2E9DC",
     fontSize: 14,
     fontWeight: "800",
   },
@@ -6604,31 +7358,79 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   mobileEditPrefsButton: {
-    backgroundColor: "#E4EEF8",
-    borderRadius: 999,
+    backgroundColor: "rgba(116,210,231,0.12)",
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: "#74D2E7",
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
   mobileEditPrefsButtonText: {
-    color: "#0C2340",
+    color: "#74D2E7",
     fontSize: 12,
     fontWeight: "800",
   },
   mobileFormGroup: {
     gap: 8,
   },
+  mobileTrackedCategoryList: {
+    gap: 10,
+  },
+  mobileTrackedCategoryRow: {
+    gap: 8,
+  },
+  mobileTrackedCategoryMain: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 12,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: "#59616a",
+    backgroundColor: "#101418",
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+  },
+  mobileTrackedCategoryCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  mobileTrackedCategoryTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#f3ead7",
+  },
+  mobileTrackedCategorySubtitle: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: "#aeb6c2",
+  },
+  mobileTrackedDeleteButton: {
+    alignSelf: "flex-start",
+    backgroundColor: "#201315",
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: "#A92B2B",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  mobileTrackedDeleteButtonText: {
+    color: "#FF6C6C",
+    fontSize: 12,
+    fontWeight: "800",
+  },
   textChipShell: {
     minHeight: 48,
     borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#CFD9E5",
-    backgroundColor: "#FFFFFF",
+    borderWidth: 1.5,
+    borderColor: "#2A2F36",
+    backgroundColor: "#0B0D10",
     justifyContent: "center",
     paddingHorizontal: 14,
   },
   textChipInput: {
     fontSize: 16,
-    color: "#102A43",
+    color: "#F2E9DC",
     paddingVertical: 10,
   },
   mobileGoalRow: {
@@ -6640,25 +7442,27 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   mobileAddGoalButton: {
-    backgroundColor: "#A6192E",
+    backgroundColor: "#15181C",
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 14,
   },
   mobileAddGoalButtonText: {
-    color: "#F8FBFF",
+    color: "#F2E9DC",
     fontSize: 13,
     fontWeight: "800",
   },
   mobileSavePrefsButton: {
     alignSelf: "flex-start",
-    backgroundColor: "#A6192E",
-    borderRadius: 999,
+    backgroundColor: "#15181C",
+    borderRadius: 14,
     paddingHorizontal: 16,
     paddingVertical: 11,
+    borderWidth: 1.5,
+    borderColor: "#74D2E7",
   },
   mobileSavePrefsButtonText: {
-    color: "#F8FBFF",
+    color: "#F2E9DC",
     fontSize: 13,
     fontWeight: "800",
   },
@@ -6666,38 +7470,40 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   goalChip: {
-    backgroundColor: "#E4EEF8",
+    backgroundColor: "rgba(116,210,231,0.12)",
+    borderWidth: 1.5,
+    borderColor: "#74D2E7",
   },
   goalChipRemovable: {
     paddingRight: 14,
   },
   goalChipLabel: {
-    color: "#0C2340",
+    color: "#74D2E7",
   },
   mobileCardStack: {
     gap: 12,
   },
   mobileDecisionCard: {
-    borderRadius: 18,
-    borderWidth: 1,
+    borderRadius: 16,
+    borderWidth: 2,
     padding: 14,
     gap: 10,
   },
   mobileGreenCard: {
-    backgroundColor: "#DFF0DB",
-    borderColor: "#B9D7B1",
+    backgroundColor: "#101418",
+    borderColor: "#6f874d",
   },
   mobileAmberCard: {
-    backgroundColor: "#F4E9D2",
-    borderColor: "#DEC99B",
+    backgroundColor: "#101418",
+    borderColor: "#59616a",
   },
   mobileRedCard: {
-    backgroundColor: "#F8E1E5",
-    borderColor: "#E5B7C0",
+    backgroundColor: "#101418",
+    borderColor: "#9f2d34",
   },
   mobileNeutralCard: {
-    backgroundColor: "#F1F5F9",
-    borderColor: "#D4DEE9",
+    backgroundColor: "#101418",
+    borderColor: "#59616a",
   },
   mobileDecisionHeader: {
     flexDirection: "row",
@@ -6712,22 +7518,66 @@ const styles = StyleSheet.create({
   mobileDecisionTitle: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#0C2340",
+    color: "#F2E9DC",
+    letterSpacing: 1.1,
   },
   mobileDecisionSubtitle: {
     fontSize: 13,
     lineHeight: 19,
-    color: "#52606D",
+    color: "#A8B0B8",
   },
   mobileDecisionFooter: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#52606D",
+    color: "#A8B0B8",
+  },
+  plannerModeHint: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: "#A8B0B8",
+  },
+  plannerSectionLabel: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#74D2E7",
+    textTransform: "uppercase",
+    letterSpacing: 1,
+  },
+  mobileEvidenceList: {
+    gap: 6,
+  },
+  mobileEvidenceText: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: "#F2E9DC",
+  },
+  mobileEvidenceTextMuted: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: "#A8B0B8",
+  },
+  mobilePlannerCallout: {
+    backgroundColor: "#1A1F24",
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: "#74D2E7",
+    padding: 12,
+    gap: 4,
+  },
+  mobilePlannerCalloutTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#74D2E7",
+  },
+  mobilePlannerCalloutText: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: "#A8B0B8",
   },
   mobileStatusBadge: {
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 999,
+    borderRadius: 14,
     backgroundColor: "#E7EEF6",
   },
   mobileStatusBadgeCompact: {
@@ -6758,8 +7608,8 @@ const styles = StyleSheet.create({
   mobileInfoChip: {
     minWidth: 88,
     flexGrow: 1,
-    backgroundColor: "rgba(255,255,255,0.5)",
-    borderRadius: 12,
+    backgroundColor: "#1A1F24",
+    borderRadius: 14,
     paddingHorizontal: 10,
     paddingVertical: 8,
     gap: 2,
@@ -6769,12 +7619,12 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     textTransform: "uppercase",
     letterSpacing: 0.8,
-    color: "#6B7C93",
+    color: "#74D2E7",
   },
   mobileInfoChipValue: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#0C2340",
+    color: "#F2E9DC",
   },
   mobileListStack: {
     gap: 10,
@@ -6820,27 +7670,27 @@ const styles = StyleSheet.create({
     color: "#A6192E",
   },
   tableRowHold: {
-    backgroundColor: "#E4EEF8",
-    borderColor: "#B8CBE0",
+    backgroundColor: "#101418",
+    borderColor: "#6f874d",
   },
   tableRowNoHold: {
-    backgroundColor: "#F8E1E5",
-    borderColor: "#E5B7C0",
+    backgroundColor: "#101418",
+    borderColor: "#9f2d34",
   },
   tableRowCurrent: {
-    backgroundColor: "#FFFFFF",
-    borderColor: "#C7D2E0",
+    backgroundColor: "#141a20",
+    borderColor: "#6f874d",
   },
   tableRowNeutral: {
-    backgroundColor: "#EEF3F8",
-    borderColor: "#D7E0EA",
+    backgroundColor: "#141a20",
+    borderColor: "#59616a",
   },
   seatSectionLabel: {
     fontSize: 11,
     fontWeight: "800",
     textTransform: "uppercase",
     letterSpacing: 1,
-    color: "#6B7C93",
+    color: "#7d8794",
     marginTop: 4,
   },
   modalBackdrop: {
@@ -6855,10 +7705,10 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     maxHeight: "88%",
-    backgroundColor: "#FCF8EF",
+    backgroundColor: "#C3CAD1",
     borderRadius: 24,
-    borderWidth: 1,
-    borderColor: "#D9C9A5",
+    borderWidth: 1.5,
+    borderColor: "#68737D",
     padding: 18,
     position: "relative",
   },
@@ -6880,12 +7730,12 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 24,
     fontWeight: "800",
-    color: "#173645",
+    color: "#111820",
   },
   modalSubtitle: {
     fontSize: 13,
     lineHeight: 18,
-    color: "#5F5A52",
+    color: "#41505C",
   },
   modalFloatingCloseButton: {
     position: "absolute",
@@ -6894,29 +7744,29 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: "#E8DED0",
+    backgroundColor: "#DDE2E6",
     alignItems: "center",
     justifyContent: "center",
     zIndex: 10,
     borderWidth: 1,
-    borderColor: "#D9C9A5",
-    shadowColor: "#0C2340",
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
+    borderColor: "#68737D",
+    shadowColor: "transparent",
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 0,
   },
   modalFloatingCloseText: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#173645",
+    color: "#111820",
     lineHeight: 18,
   },
   modalTableHeader: {
     flexDirection: "row",
     alignItems: "center",
     borderBottomWidth: 1,
-    borderBottomColor: "#D9C9A5",
+    borderBottomColor: "#68737D",
     paddingBottom: 8,
     gap: 10,
   },
@@ -6943,7 +7793,7 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#EEE5D6",
+    borderBottomColor: "#68737D",
   },
   modalNameCell: {
     flex: 1.6,
@@ -6951,7 +7801,7 @@ const styles = StyleSheet.create({
   modalPilotName: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#173645",
+    color: "#111820",
   },
   listCompareWrap: {
     gap: 12,
@@ -6965,12 +7815,12 @@ const styles = StyleSheet.create({
   listCompareCard: {
     flex: 1,
     minWidth: 320,
-    backgroundColor: "#F6F1E8",
+    backgroundColor: "#DDE2E6",
     borderRadius: 16,
     padding: 14,
     gap: 8,
-    borderWidth: 1,
-    borderColor: "#DDD2C1",
+    borderWidth: 1.5,
+    borderColor: "#68737D",
   },
   listCompareCardCompact: {
     minWidth: 0,
@@ -6980,12 +7830,12 @@ const styles = StyleSheet.create({
   listCompareTitle: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#173645",
+    color: "#111820",
   },
   listCompareMeta: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#5F5A52",
+    color: "#41505C",
   },
   listCompareRow: {
     flexDirection: "row",
@@ -6996,7 +7846,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     borderRadius: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#EEE5D6",
+    borderBottomColor: "#68737D",
   },
   listCompareRowCompact: {
     alignItems: "flex-start",
@@ -7005,16 +7855,16 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   listCompareRowSenior: {
-    backgroundColor: "#F8E1E5",
+    backgroundColor: "rgba(255,43,43,0.10)",
   },
   listCompareRowYou: {
-    backgroundColor: "#E4EEF8",
+    backgroundColor: "rgba(116,210,231,0.12)",
   },
   listCompareRowRetiring: {
     backgroundColor: "#F6D6D6",
   },
   listCompareRowJunior: {
-    backgroundColor: "#D8EFD2",
+    backgroundColor: "rgba(0,255,0,0.10)",
   },
   listCompareNameWrap: {
     flex: 1,
@@ -7023,22 +7873,22 @@ const styles = StyleSheet.create({
   listCompareName: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#173645",
+    color: "#111820",
   },
   listCompareStatus: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#4E5968",
+    color: "#41505C",
   },
   listCompareContext: {
     fontSize: 11,
     fontWeight: "600",
-    color: "#6E675D",
+    color: "#41505C",
   },
   listCompareNumber: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#173645",
+    color: "#111820",
   },
   listCompareNumberCompact: {
     fontSize: 14,
@@ -7048,33 +7898,33 @@ const styles = StyleSheet.create({
     marginTop: 10,
     paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: "#CCBEAA",
+    borderTopColor: "#59616a",
   },
   baseNetText: {
     fontSize: 13,
     fontWeight: "800",
-    color: "#24535F",
+    color: "#74D2E7",
     textAlign: "center",
   },
   baseNetSubtext: {
     marginTop: 4,
     fontSize: 12,
     fontWeight: "600",
-    color: "#5B544A",
+    color: "#41505C",
     textAlign: "center",
   },
   seatDivider: {
     marginVertical: 6,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: "#CCBEAA",
+    borderTopColor: "#68737D",
   },
   seatDividerText: {
     fontSize: 11,
     fontWeight: "800",
     textTransform: "uppercase",
     letterSpacing: 1,
-    color: "#6A6054",
+    color: "#7d8794",
   },
   tableCategoryCell: {
     flex: 1.7,
@@ -7083,32 +7933,36 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     gap: 2,
+    minHeight: 48,
+    justifyContent: "center",
+    borderLeftWidth: 1,
+    borderLeftColor: "#3a4148",
   },
   tableCell: {
     textAlign: "center",
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#102A43",
+    fontSize: 14,
+    fontWeight: "900",
+    color: "#f3ead7",
   },
   tableDelta: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#6B7C93",
+    color: "#7d8794",
   },
   tableDeltaPositive: {
-    color: "#355C7D",
+    color: "#8fa36a",
   },
   tableDeltaNegative: {
-    color: "#A6192E",
+    color: "#d94a50",
   },
   tableCategoryText: {
     fontSize: 13,
     fontWeight: "800",
-    color: "#0C2340",
+    color: "#f3ead7",
   },
   tableSubtext: {
     fontSize: 11,
-    color: "#52606D",
+    color: "#aeb6c2",
   },
   insightText: {
     fontSize: 14,
@@ -7116,29 +7970,36 @@ const styles = StyleSheet.create({
     color: "#52606D",
   },
   projectionCard: {
-    backgroundColor: "#F7FAFC",
+    backgroundColor: "#C3CAD1",
     borderRadius: 18,
     padding: 16,
     gap: 12,
-    borderWidth: 1,
-    borderColor: "#D4DEE9",
+    borderWidth: 1.5,
+    borderColor: "#68737D",
   },
   projectionTitle: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#0C2340",
+    color: "#111820",
   },
   projectionMeta: {
     fontSize: 13,
     lineHeight: 20,
-    color: "#52606D",
+    color: "#41505C",
   },
   forecastControlRow: {
     flexDirection: "row",
     justifyContent: "flex-start",
   },
+  desktopForecastControlRow: {
+    marginBottom: 8,
+  },
   forecastGrowthWrap: {
     maxWidth: 220,
+  },
+  desktopPlannerPanel: {
+    marginTop: 12,
+    gap: 12,
   },
   aeTargetWrap: {
     maxWidth: 340,
@@ -7154,17 +8015,17 @@ const styles = StyleSheet.create({
   projectionLabel: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#52606D",
+    color: "#41505C",
   },
   projectionValue: {
     fontSize: 14,
     fontWeight: "800",
-    color: "#0C2340",
+    color: "#111820",
   },
   projectionTrack: {
     height: 10,
     borderRadius: 999,
-    backgroundColor: "#DCE4EE",
+    backgroundColor: "#AEB7C0",
     overflow: "hidden",
   },
   projectionFill: {
@@ -7179,16 +8040,16 @@ const styles = StyleSheet.create({
   },
   projectionStat: {
     fontSize: 12,
-    color: "#6B7C93",
+    color: "#41505C",
   },
   chartCard: {
     gap: 10,
   },
   chartCardCompact: {
-    backgroundColor: "#F7FAFC",
+    backgroundColor: "#C3CAD1",
     borderRadius: 18,
-    borderWidth: 1,
-    borderColor: "#D4DEE9",
+    borderWidth: 1.5,
+    borderColor: "#68737D",
     padding: 14,
   },
   chartLegendRow: {
@@ -7216,47 +8077,47 @@ const styles = StyleSheet.create({
   dropdownButton: {
     minHeight: 46,
     borderRadius: 14,
-    backgroundColor: "#F7FAFC",
-    borderWidth: 1,
-    borderColor: "#CFD9E5",
+    backgroundColor: "#DDE2E6",
+    borderWidth: 1.5,
+    borderColor: "#68737D",
     justifyContent: "center",
     paddingHorizontal: 14,
   },
   dropdownButtonText: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#102A43",
+    color: "#111820",
   },
   dropdownMenu: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#DDE2E6",
     borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#CFD9E5",
+    borderWidth: 1.5,
+    borderColor: "#68737D",
     overflow: "hidden",
   },
   dropdownMenuTall: {
     maxHeight: 240,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#DDE2E6",
     borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#CFD9E5",
+    borderWidth: 1.5,
+    borderColor: "#68737D",
   },
   dropdownItem: {
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#E3EAF2",
+    borderBottomColor: "#68737D",
   },
   dropdownItemText: {
     fontSize: 15,
-    color: "#334E68",
+    color: "#111820",
     fontWeight: "600",
   },
   sliderCard: {
-    backgroundColor: "#F7FAFC",
+    backgroundColor: "#DDE2E6",
     borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#CFD9E5",
+    borderWidth: 1.5,
+    borderColor: "#68737D",
     paddingHorizontal: 12,
     paddingVertical: 8,
     gap: 2,
@@ -7279,22 +8140,22 @@ const styles = StyleSheet.create({
   sliderValue: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#0C2340",
+    color: "#111820",
   },
   sliderMeta: {
     fontSize: 10,
-    color: "#6B7C93",
+    color: "#41505C",
     fontWeight: "600",
   },
   chartTitle: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#0C2340",
+    color: "#111820",
   },
   chartSubtitle: {
     fontSize: 12,
     lineHeight: 18,
-    color: "#52606D",
+    color: "#41505C",
   },
   chartRow: {
     flexDirection: "row",
@@ -7319,7 +8180,7 @@ const styles = StyleSheet.create({
   },
   chartValue: {
     fontSize: 10,
-    color: "#16395D",
+    color: "#111820",
     fontWeight: "700",
     textAlign: "center",
   },
@@ -7335,7 +8196,7 @@ const styles = StyleSheet.create({
     height: 130,
     justifyContent: "flex-end",
     alignItems: "center",
-    backgroundColor: "#E3EAF2",
+    backgroundColor: "#AEB7C0",
     borderRadius: 8,
     paddingBottom: 2,
     position: "relative",
@@ -7348,7 +8209,7 @@ const styles = StyleSheet.create({
   },
   chartBar: {
     width: 16,
-    backgroundColor: "#0C2340",
+    backgroundColor: "#111820",
     borderRadius: 6,
   },
   chartBarCompact: {
@@ -7356,7 +8217,7 @@ const styles = StyleSheet.create({
     borderRadius: 7,
   },
   chartBarFuture: {
-    backgroundColor: "#C8102E",
+    backgroundColor: "#FF2B2B",
   },
   chartReferenceMark: {
     position: "absolute",
@@ -7366,14 +8227,14 @@ const styles = StyleSheet.create({
     opacity: 0.95,
   },
   chartReferenceOne: {
-    backgroundColor: "#A6192E",
+    backgroundColor: "#74D2E7",
   },
   chartReferenceTwo: {
-    backgroundColor: "#5B7FA3",
+    backgroundColor: "#68737D",
   },
   chartLabel: {
     fontSize: 10,
-    color: "#6B7C93",
+    color: "#41505C",
     textAlign: "center",
   },
   chartLabelCompact: {
