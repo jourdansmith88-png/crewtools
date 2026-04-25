@@ -233,6 +233,13 @@ export type ContractCopilotApiSuccessResponse = {
     xDayScenario?: boolean;
     xDayAnchorFound?: boolean;
     governingSectionIncludesXDay?: boolean;
+    pcsSwapScenario?: boolean;
+    pcsSwapAnchorFound?: boolean;
+    pcsSwapMissingSupportReason?: string;
+    governingSectionIncludesPcsSwap?: boolean;
+    pcsSwapVisibleSupportTerms?: string[];
+    pcsSwapSupportPromoted?: boolean;
+    pcsSwapSupportMissingAnchors?: string[];
     shortCallDutyScenario?: boolean;
     shortCallDutyAnchorFound?: boolean;
     governingSectionIncludesDutyLegality?: boolean;

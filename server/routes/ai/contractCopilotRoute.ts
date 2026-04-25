@@ -381,6 +381,12 @@ const SCENARIO_ISSUE_TAGS: ScenarioIssueTag[] = [
   { label: "golden day", patterns: [/\bgolden day\b/] },
   { label: "hard non-fly day", patterns: [/\bhard non-fly day\b/] },
   { label: "assignment timing", patterns: [/\b6pm\b/, /\b1800\b/, /\bday one\b/, /\bday before\b/, /\bearlier than\b/] },
+  { label: "PCS", patterns: [/\bpcs\b/, /\b1200 pcs\b/] },
+  { label: "bid period", patterns: [/\bbid period\b/, /\bapril\b/, /\bmay\b/] },
+  { label: "carry-out", patterns: [/\bcarry-out\b/, /\bcarry out\b/] },
+  { label: "black days", patterns: [/\bblack days?\b/] },
+  { label: "max pickup", patterns: [/\bmax p\/?up\b/, /\bmax pickup\b/, /\bpickup limit\b/] },
+  { label: "drop/add", patterns: [/\bdrop trip\b/, /\bdrop\b/, /\badd\b/, /\bpickup\b/] },
 ];
 
 function detectScenarioIssueTags(question: string) {
@@ -430,7 +436,22 @@ function detectScenarioIssueFamilies(question: string) {
   ) {
     families.add("operational_timing");
   }
-  if (lower.includes("swap with the pot") || lower.includes("capped rsv") || lower.includes("bid period")) {
+  if (
+    lower.includes("swap with the pot") ||
+    lower.includes("swap with pot") ||
+    lower.includes("swap pot") ||
+    lower.includes("capped rsv") ||
+    lower.includes("capped reserve") ||
+    lower.includes("bid period") ||
+    /\bpcs\b/.test(lower) ||
+    lower.includes("1200 pcs") ||
+    lower.includes("carry-out") ||
+    lower.includes("carry out") ||
+    lower.includes("black days") ||
+    lower.includes("max pickup") ||
+    lower.includes("pickup limit") ||
+    lower.includes("coverage works")
+  ) {
     families.add("swap_bid_period");
   }
   if (lower.includes("ioe") || lower.includes("training")) {
@@ -443,6 +464,28 @@ function detectScenarioIssueFamilies(question: string) {
     families.add("future_rotation_change");
   }
   return Array.from(families);
+}
+
+function detectPcsSwapScenario(question: string) {
+  const lower = question.toLowerCase();
+  return (
+    lower.includes("swap with pot") ||
+    lower.includes("swap with the pot") ||
+    lower.includes("swap pot") ||
+    /\bpcs\b/.test(lower) ||
+    lower.includes("1200 pcs") ||
+    lower.includes("bid period") ||
+    (lower.includes("april") && lower.includes("may")) ||
+    lower.includes("carry-out") ||
+    lower.includes("carry out") ||
+    lower.includes("capped reserve days") ||
+    lower.includes("capped rsv") ||
+    lower.includes("black days") ||
+    lower.includes("max pickup") ||
+    lower.includes("pickup limit") ||
+    lower.includes("drop trip for pickup") ||
+    lower.includes("coverage works")
+  );
 }
 
 function coerceClarificationIntent(args: {
@@ -759,34 +802,92 @@ function buildSafeScenarioFallbackAnswer(args: {
       "The overlap day may not be handled the same way as the later GS days, so I would treat this as a split-treatment scenario.";
     likelyApplication =
       "The overlap day likely follows separate pay, credit, and sick-bank treatment, while any later GS days are more likely to stand on their own if they were awarded and flown.";
-  } else if (
-    (lower.includes("swap with the pot") || lower.includes("capped rsv") || lower.includes("capped reserve")) &&
-    lower.includes("bid period")
-  ) {
+  } else if (detectPcsSwapScenario(lower)) {
     shortAnswer =
-      "This looks like a bid-period crossover swap-with-pot problem, and capped reserve days may be blocking it because the system is still seeing reserve coverage exposure across the crossover.";
+      lower.includes("silver slip") && (lower.includes("carry-out") || lower.includes("carry out"))
+        ? "This looks like a Silver Slip carry-out and May bid-period drop question, and the answer usually turns on how PCS processes the April carry-out against the overlapping May trip."
+        : lower.includes("black days") || lower.includes("capped reserve") || lower.includes("capped rsv")
+          ? "This looks like a swap-with-pot and capped-reserve-days question, and black days do not by themselves guarantee that a 2-day to 3-day extra-day pickup will process."
+          : "This looks like a PCS / swap-with-pot processing question, and the answer usually turns on which bid period, PCS run, and reserve-coverage rule the system is evaluating.";
     likelyApplication =
-      "If the request crosses from one bid period into another, the real question is whether iCrew is applying the capped-reserve-day or reserve-coverage check to the period you are dropping into, the period you are dropping out of, or both. The actual-versus-qualified distinction may matter too, but I would not overstate that unless the source packet says it explicitly.";
+      lower.includes("silver slip") && (lower.includes("carry-out") || lower.includes("carry out"))
+        ? "The real issue is whether the Silver Slip carry-out still belongs to April processing even though it overlaps May, and whether PCS will let you drop the separate May bid-period trip against that overlap. That is a bid-period boundary and overlap/drop question, not just a generic Silver Slip question."
+        : lower.includes("black days") || lower.includes("capped reserve") || lower.includes("capped rsv")
+          ? "The real issue is whether the swap with pot is being blocked by reserve coverage or pickup-limit logic even though the days show black. A black-day display does not necessarily override capped reserve days, reserve coverage, or a pickup-limit check when the request adds an extra day."
+          : "These requests are usually not controlled by one simple yes-or-no rule. The result often depends on whether the add and drop sit in the same processing run, whether the system is treating the request as crossover or carry-out processing, and whether capped reserve days, max pickup, or reserve coverage are blocking the request.";
     issueThreadLines = [
       "What this appears to be:",
-      "- A swap-with-pot request that crosses from one bid period into the next.",
+      lower.includes("silver slip") && (lower.includes("carry-out") || lower.includes("carry out"))
+        ? "- A Silver Slip carry-out from April that overlaps May, with a request to drop a separate May bid-period trip."
+        : lower.includes("swap with pot") || lower.includes("swap with the pot") || lower.includes("swap pot")
+          ? "- A swap-with-pot request that may be interacting with PCS run timing or bid-period crossover logic."
+        : "- A PCS/bid-period processing question where the system may not be evaluating the request in the same month or run you expected.",
       "",
-      "Why capped reserve days may block it:",
-      "- The denial suggests the system is seeing a reserve-coverage or capped-reserve-day limit somewhere in the crossover logic, even if you expected it to look only at one bid period.",
+      "What this depends on:",
+      /\bpcs\b/.test(lower) || lower.includes("1200 pcs")
+        ? "- PCS run timing: whether the relevant April or May PCS run has actually executed yet."
+        : null,
+      lower.includes("bid period") || (lower.includes("april") && lower.includes("may"))
+        ? "- Independent bid-period processing: whether the drop and add live in different bid periods or are being processed in different month buckets."
+        : null,
+      lower.includes("carry-out") || lower.includes("carry out")
+        ? "- Carry-out handling: whether the trip is being treated as an April carry-out, May trip, or overlap that still belongs to the original month."
+        : null,
+      lower.includes("silver slip")
+        ? "- Silver Slip carry-out treatment: whether the Silver Slip is coded and processed as an April carry-out rather than a clean May pickup."
+        : null,
+      lower.includes("capped reserve") || lower.includes("capped rsv") || lower.includes("reserve coverage")
+        ? "- Reserve coverage / capped reserve days: whether the system is blocking the request even if the days look open or black."
+        : null,
+      lower.includes("max p/up") || lower.includes("max pickup") || lower.includes("pickup limit")
+        ? "- Max pickup: whether the add would exceed your allowed pickup in the processing month even if the swap looks net-neutral to you."
+        : null,
+      lower.includes("actual") || lower.includes("qualified")
+        ? "- Actual versus qualified treatment: whether the request is being checked under the actual trip state or a qualified/open-time state."
+        : null,
+      lower.includes("black days")
+        ? "- Black days: black/open-looking days do not necessarily guarantee approval if another processing rule still blocks the request."
+        : null,
+      (lower.includes("black days") || lower.includes("capped reserve") || lower.includes("capped rsv")) && (lower.includes("2-day") || lower.includes("3-day") || lower.includes("extra day"))
+        ? "- Extra-day pickup: changing a 2-day into a 3-day may still trip pickup-limit or reserve-coverage logic even when the pot looks open."
+        : null,
       "",
-      "What facts matter:",
-      "- Which trip sits in the April bid period and which sits in the May bid period.",
-      "- Whether the system is treating the request as actual rather than qualified.",
-      "- Whether reserve coverage is being evaluated on the outgoing day, the incoming day, or both.",
+      "Likely paths:",
+      lower.includes("silver slip") && (lower.includes("carry-out") || lower.includes("carry out"))
+        ? "- If PCS keeps the Silver Slip carry-out in April, the overlap with the May bid-period trip may still block a clean drop of the May trip."
+        : "- If both sides of the request process in the same PCS run and the same bid-period bucket, it is more likely to behave like a normal drop/add or swap request.",
+      lower.includes("silver slip") && (lower.includes("carry-out") || lower.includes("carry out"))
+        ? "- If the system treats the Silver Slip carry-out and the May trip as separate month buckets, you may need to analyze the overlap/drop issue under bid-period boundary processing instead of a simple same-month swap."
+        : "- If the add and drop cross April/May boundaries or a carry-out is involved, the system may evaluate them in separate runs or against different month rules.",
+      (lower.includes("black days") || lower.includes("capped reserve") || lower.includes("capped rsv"))
+        ? "- If you are seeing capped reserve days, black days alone do not override reserve-coverage logic."
+        : null,
+      (lower.includes("max p/up") || lower.includes("max pickup") || lower.includes("pickup limit") || lower.includes("2-day") || lower.includes("3-day") || lower.includes("extra day"))
+        ? "- If max pickup is zero or capped, or the request adds an extra day, the system may still reject the longer pickup even when you think the swap should offset it."
+        : "- If max pickup is zero or capped, the system may still reject a longer pickup even when you think the swap should offset it.",
       "",
-      "What to check:",
-      "- Check the exact bid-period dates attached to both trips.",
-      "- Check whether the denial text changes if the request is evaluated as actual versus qualified.",
-      "- Check whether there is source support saying crossover swaps ignore next-bid-period coverage, or whether that is just a common understanding.",
+      "What to check in iCrew/DBMS:",
+      lower.includes("silver slip") && (lower.includes("carry-out") || lower.includes("carry out"))
+        ? "- Check whether the Silver Slip is coded as an April carry-out, how the May bid-period trip is coded, and whether the overlap is treated as a drop issue or a processing conflict."
+        : "- Check which month each side of the request is actually assigned to in iCrew, including any carry-out designation.",
+      (lower.includes("capped reserve") || lower.includes("capped rsv") || lower.includes("black days"))
+        ? "- Check whether the denial references capped reserve days, reserve coverage, black-day display, max pickup, or another PCS run/process restriction."
+        : "- Check whether the denial references capped reserve days, max pickup, or another PCS run/process restriction.",
+      "- Check whether the request is being evaluated as actual versus qualified, and whether the PCS run you expected has already occurred.",
+      lower.includes("silver slip") && (lower.includes("carry-out") || lower.includes("carry out"))
+        ? "- Check whether the request is really a May drop against an April carry-out overlap, not a normal same-month swap."
+        : "- Check whether the request is truly drop/add in one month or a crossover between April and May processing buckets.",
       "",
-      "Practical next step:",
-      "- Save the denial message and the bid-period dates for both trips, then compare that against the swap-with-pot and reserve-coverage language before escalating to Crew Scheduling or filing follow-up.",
-    ];
+      "Source limitation:",
+      lower.includes("silver slip") && (lower.includes("carry-out") || lower.includes("carry out"))
+        ? "- I do not have a fully explicit Silver Slip carry-out overlap/drop rule attached here, so the bid-period boundary answer stays cautious."
+        : (lower.includes("capped reserve") || lower.includes("capped rsv") || lower.includes("black days"))
+          ? "- I do not have direct indexed text that uses the exact capped reserve days or black days wording here, so that part of the answer stays cautious even though the pickup-limit and PCS processing support is relevant."
+          : "- I do not see the exact PCS/swap-with-pot processing rule in the attached support unless the scheduler/process references are attached with this answer.",
+      "",
+      "Sources used:",
+      "- Use Scheduler Manual processing language first for PCS/swap timing, then use direct PWA support only where the contract packet actually speaks to the underlying reserve/open-time constraint.",
+    ].filter((line): line is string => Boolean(line));
   } else if (
     lower.includes("golden day") &&
     (lower.includes("hard non-fly day") || lower.includes("section 2 a.129") || lower.includes("pwa section 2 a.129")) &&
@@ -1119,6 +1220,12 @@ function finalizeScenarioSafetyPipeline(args: {
   const supportPrimaryAnchorMissing = args.supportDebug?.supportPrimaryAnchorMissing === true;
   const xDayScenario = args.supportDebug?.xDayScenario === true;
   const xDayAnchorFound = args.supportDebug?.xDayAnchorFound === true;
+  const pcsSwapScenario = args.supportDebug?.pcsSwapScenario === true;
+  const pcsSwapAnchorFound = args.supportDebug?.pcsSwapAnchorFound === true;
+  const pcsSwapMissingSupportReason =
+    typeof args.supportDebug?.pcsSwapMissingSupportReason === "string"
+      ? args.supportDebug.pcsSwapMissingSupportReason
+      : undefined;
   const shortCallDutyScenario = args.supportDebug?.shortCallDutyScenario === true;
   const shortCallDutyAnchorFound = args.supportDebug?.shortCallDutyAnchorFound === true;
   const answerReferencedSections = Array.isArray(args.supportDebug?.answerReferencedSections)
@@ -1149,6 +1256,9 @@ function finalizeScenarioSafetyPipeline(args: {
   if (xDayScenario && !xDayAnchorFound) {
     downgradeReasons.push("xday_anchor_missing");
   }
+  if (pcsSwapScenario && !pcsSwapAnchorFound) {
+    downgradeReasons.push("pcs_swap_anchor_missing");
+  }
   if (shortCallDutyScenario && !shortCallDutyAnchorFound) {
     downgradeReasons.push("shortcall_duty_anchor_missing");
   }
@@ -1178,6 +1288,17 @@ function finalizeScenarioSafetyPipeline(args: {
 
   if (xDayScenario && !xDayAnchorFound) {
     const note = "I do not see the X-day interruption rule (23 L.9) in the attached support.";
+    adjustedAnswer = {
+      ...adjustedAnswer,
+      plainEnglishExplanation: `${adjustedAnswer.plainEnglishExplanation}\n${note}`.trim(),
+      caveats: Array.from(new Set([...(adjustedAnswer.caveats ?? []), note])),
+      assumptions: Array.from(new Set([...(adjustedAnswer.assumptions ?? []), note])),
+    };
+  }
+  if (pcsSwapScenario && !pcsSwapAnchorFound) {
+    const note =
+      pcsSwapMissingSupportReason ??
+      "I do not see the exact PCS/swap-with-pot processing rule in the attached support.";
     adjustedAnswer = {
       ...adjustedAnswer,
       plainEnglishExplanation: `${adjustedAnswer.plainEnglishExplanation}\n${note}`.trim(),
@@ -1224,6 +1345,9 @@ function finalizeScenarioSafetyPipeline(args: {
       downgradeReasons,
       xDayScenario,
       xDayAnchorFound,
+      pcsSwapScenario,
+      pcsSwapAnchorFound,
+      pcsSwapMissingSupportReason,
       shortCallDutyScenario,
       shortCallDutyAnchorFound,
       answerReferencedSections,
@@ -2267,6 +2391,14 @@ function extractSupportIntentTerms(question: string, answerText: string) {
     { key: "actual", patterns: [/\bactual\b/] },
     { key: "qualified", patterns: [/\bqualified\b/] },
     { key: "open time", patterns: [/\bopen time\b/] },
+    { key: "pcs", patterns: [/\bpcs\b/, /\b1200 pcs\b/] },
+    { key: "carry-out", patterns: [/\bcarry-out\b/, /\bcarry out\b/] },
+    { key: "black days", patterns: [/\bblack days?\b/] },
+    { key: "max pickup", patterns: [/\bmax p\/?up\b/, /\bmax pickup\b/, /\bpickup limit\b/] },
+    { key: "drop/add", patterns: [/\bdrop trip\b/, /\bdrop\b/, /\badd\b/, /\bpickup\b/] },
+    { key: "overlap", patterns: [/\boverlap\b/, /\boverlaps\b/] },
+    { key: "processing", patterns: [/\bprocessing\b/, /\bprocess\b/, /\brun\b/] },
+    { key: "coverage works", patterns: [/\bcoverage works\b/] },
   ];
   return termMap
     .filter((entry) => entry.patterns.some((pattern) => pattern.test(combined)))
@@ -2390,6 +2522,30 @@ function inferSupportSectionAnchor(reference: {
   const combined = normalizeSupportText(
     `${reference.section ?? ""} ${reference.label ?? ""} ${reference.quoteSnippet ?? ""}`
   );
+  if (combined.includes("silver slip carry-out")) {
+    return "Silver Slip carry-out";
+  }
+  if (combined.includes("pcs processing") || (combined.includes("pcs") && combined.includes("run"))) {
+    return "PCS processing";
+  }
+  if (combined.includes("swap with pot")) {
+    return "swap with pot";
+  }
+  if (combined.includes("capped reserve days")) {
+    return "capped reserve days";
+  }
+  if (combined.includes("max pickup") || combined.includes("pickup limit")) {
+    return "max pickup";
+  }
+  if (combined.includes("carry-out")) {
+    return "carry-out";
+  }
+  if (combined.includes("bid-period crossover")) {
+    return "bid-period crossover";
+  }
+  if (combined.includes("open time processing")) {
+    return "open time processing";
+  }
   if (combined.includes("silver slip")) {
     return "Silver Slip (inferred)";
   }
@@ -2463,6 +2619,7 @@ function rerankSupportReferences(args: {
       /both remain on schedule/i.test(args.question) ||
       /assigned short call and trip/i.test(args.question)
     );
+  const pcsSwapScenario = detectPcsSwapScenario(args.question);
   const matchedTerms = Array.from(new Set([...questionTerms, ...answerTerms]));
   const termWeights: Record<string, number> = {
     "harmed pilot": 80,
@@ -2520,8 +2677,45 @@ function rerankSupportReferences(args: {
     actual: 45,
     qualified: 45,
     "open time": 55,
+    pcs: 90,
+    "carry-out": 80,
+    "black days": 70,
+    "max pickup": 85,
+    "drop/add": 75,
+    overlap: 70,
+    processing: 65,
+    "coverage works": 60,
   };
   const definitionStyle = isDefinitionStyleQuestion(args.question);
+  const pcsGeneralTerms = [
+    "pcs",
+    "swap with pot",
+    "bid period",
+    "carry-out",
+    "capped reserve days",
+    "black days",
+    "max pickup",
+    "drop/add",
+    "reserve coverage",
+    "open time",
+    "processing",
+    "coverage works",
+  ];
+  const pcsRequiredTerms = pcsSwapScenario
+    ? Array.from(
+        new Set(
+          [
+            ...(args.question.toLowerCase().includes("silver slip") ? ["silver slip", "carry-out", "bid period", "overlap", "drop/add"] : []),
+            ...(args.question.toLowerCase().includes("black days") || args.question.toLowerCase().includes("capped reserve")
+              ? ["capped reserve days", "black days", "swap with pot", "reserve coverage"]
+              : []),
+            ...((/\bpcs\b/i.test(args.question) || args.question.toLowerCase().includes("1200 pcs") || (args.question.toLowerCase().includes("april") && args.question.toLowerCase().includes("may")))
+              ? ["pcs", "bid period", "swap with pot"]
+              : []),
+          ].filter(Boolean)
+        )
+      )
+    : [];
 
   const scored = args.references.map((reference) => {
     const sectionText = normalizeSupportText(reference.section);
@@ -2536,6 +2730,11 @@ function rerankSupportReferences(args: {
       score += 25;
     } else if (reference.sourceId === "scheduler_manual") {
       score += 20;
+    }
+    if (pcsSwapScenario) {
+      if (reference.sourceId === "scheduler_manual") score += 90;
+      if (reference.sourceId === "pwa") score += 20;
+      if (reference.sourceId === "compensation_manual") score -= 10;
     }
 
     const sectionMatch = scoreSectionAnchorMatch({
@@ -2578,6 +2777,8 @@ function rerankSupportReferences(args: {
     }
     const silverHit = combined.includes("silver slip");
     const greenHit = combined.includes("green slip") || /\bgs\b/.test(combined);
+    const pcsSpecificHits = pcsGeneralTerms.filter((term) => combined.includes(term));
+    const pcsRequiredHits = pcsRequiredTerms.filter((term) => combined.includes(term));
     if (silverSlipQuery) {
       if (silverHit) score += 180;
       if (!comparisonSides.includes("green slip") && greenHit && !silverHit) score -= 120;
@@ -2608,6 +2809,19 @@ function rerankSupportReferences(args: {
       else if (shortCallHit) score += 45;
       if (combined.includes("promptly available") || combined.includes("report for a rotation")) score += 60;
     }
+    if (pcsSwapScenario) {
+      const pcsHit = pcsSpecificHits.length > 0;
+      if (pcsHit) score += 120;
+      score += pcsSpecificHits.length * 28;
+      score += pcsRequiredHits.length * 40;
+      if (reference.sourceId === "scheduler_manual" && pcsSpecificHits.length > 0) score += 130;
+      if (reference.sourceId === "pwa" && pcsSpecificHits.length > 0) score += 25;
+      if (reference.sourceId === "scheduler_manual" && pcsRequiredHits.length > 0) score += 80;
+      if (combined.includes("black days")) score += 50;
+      if (/\bsection 23\b/.test(combined) && !pcsHit && !exactSectionHit) score -= 180;
+      if (combined.includes("open time") && pcsSpecificHits.length === 1 && !combined.includes("processing")) score -= 35;
+      if ((combined.includes("definitions") || combined.includes("pilot-to-pilot swap board")) && pcsSpecificHits.length === 0) score -= 70;
+    }
 
     return {
       reference,
@@ -2619,6 +2833,8 @@ function rerankSupportReferences(args: {
           ? inferSupportSectionAnchor(reference)
           : silverSlipQuery && comparisonSides.includes("green slip") && greenHit && !silverHit
             ? inferSupportSectionAnchor(reference)
+            : pcsSwapScenario && pcsSpecificHits.length > 0
+              ? inferSupportSectionAnchor(reference)
             : sectionMatch.anchor,
     };
   });
@@ -2760,6 +2976,38 @@ function rerankSupportReferences(args: {
     }
     finalRanked.sort((left, right) => right.score - left.score);
   }
+  let pcsSwapSupportPromoted = false;
+  let pcsSwapSupportMissingAnchors: string[] = [];
+  if (pcsSwapScenario) {
+    const bestPcsCandidate = sorted.find((item) => {
+      const combined = normalizeSupportText(
+        `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""}`
+      );
+      const hits = pcsGeneralTerms.filter((term) => combined.includes(term));
+      const requiredHits = pcsRequiredTerms.filter((term) => combined.includes(term));
+      return (
+        item.reference.sourceId === "scheduler_manual" &&
+        (requiredHits.length > 0 || hits.length >= 2)
+      );
+    });
+    if (bestPcsCandidate) {
+      pcsSwapSupportPromoted = true;
+      const remaining = finalRanked.filter((item) => item.reference !== bestPcsCandidate.reference);
+      finalRanked.length = 0;
+      finalRanked.push(bestPcsCandidate, ...remaining);
+    }
+    const visiblePcsTerms = Array.from(
+      new Set(
+        finalRanked.flatMap((item) => {
+          const combined = normalizeSupportText(
+            `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""}`
+          );
+          return pcsGeneralTerms.filter((term) => combined.includes(term));
+        })
+      )
+    );
+    pcsSwapSupportMissingAnchors = pcsRequiredTerms.filter((term) => !visiblePcsTerms.includes(term));
+  }
   const bestSilverSlipCandidate = sorted.find((item) => {
     const combined = normalizeSupportText(
       `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""}`
@@ -2880,6 +3128,36 @@ function rerankSupportReferences(args: {
       combined.includes("report");
     return shortCallAnchor && dutyAnchor;
   });
+  const pcsSwapAnchorFound = finalRanked.some((item) => {
+    const combined = normalizeSupportText(
+      `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""}`
+    );
+    return (
+      combined.includes("pcs") ||
+      combined.includes("swap with pot") ||
+      combined.includes("bid period") ||
+      combined.includes("reserve coverage") ||
+      combined.includes("capped reserve") ||
+      combined.includes("max pickup") ||
+      combined.includes("carry-out") ||
+      combined.includes("carry out") ||
+      combined.includes("open time") ||
+      combined.includes("drop") ||
+      combined.includes("add")
+    );
+  });
+  const pcsSwapVisibleSupportTerms = pcsSwapScenario
+    ? Array.from(
+        new Set(
+          finalRanked.flatMap((item) => {
+            const combined = normalizeSupportText(
+              `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""}`
+            );
+            return pcsGeneralTerms.filter((term) => combined.includes(term));
+          })
+        )
+      )
+    : [];
   const retrievalSilverSlipAnchorsFound = sorted
     .filter((item) => {
       const combined = normalizeSupportText(
@@ -2906,7 +3184,8 @@ function rerankSupportReferences(args: {
     qualityGate.primaryAnchorMissing ||
     silverSlipSupportMissing ||
     (xDayScenario && !xDayAnchorFound) ||
-    (shortCallDutyScenario && !shortCallDutyAnchorFound);
+    (shortCallDutyScenario && !shortCallDutyAnchorFound) ||
+    (pcsSwapScenario && !pcsSwapAnchorFound);
 
   const visibleReferences = finalRanked.map((item) => ({
     ...item.reference,
@@ -2942,6 +3221,17 @@ function rerankSupportReferences(args: {
       primarySupportAnchorUsed,
       xDayScenario,
       xDayAnchorFound,
+      pcsSwapScenario,
+      pcsSwapAnchorFound,
+      pcsSwapVisibleSupportTerms,
+      pcsSwapSupportPromoted,
+      pcsSwapSupportMissingAnchors,
+      pcsSwapMissingSupportReason:
+        pcsSwapScenario && !pcsSwapAnchorFound
+          ? "I do not see the exact PCS/swap-with-pot processing rule in the attached support."
+          : pcsSwapScenario && pcsSwapSupportMissingAnchors.length > 0
+            ? `I do not see all of the expected PCS/swap processing anchors in the attached support: ${pcsSwapSupportMissingAnchors.join(", ")}.`
+          : undefined,
       shortCallDutyScenario,
       shortCallDutyAnchorFound,
       visibleSupportAnchorPromoted: finalRanked.some(
@@ -2975,6 +3265,7 @@ function buildSupportFocusedCandidates(args: {
   const comparisonSides = detectComparisonSupportSides(args.question);
   const silverSlipQuery =
     args.question.toLowerCase().includes("silver slip") || /\bss\b/.test(args.question.toLowerCase());
+  const pcsSwapScenario = detectPcsSwapScenario(args.question);
   const termWeights: Record<string, number> = {
     "harmed pilot": 100,
     "auto accept": 90,
@@ -3024,7 +3315,29 @@ function buildSupportFocusedCandidates(args: {
     actual: 45,
     qualified: 45,
     "open time": 55,
+    pcs: 90,
+    "carry-out": 80,
+    "black days": 70,
+    "max pickup": 85,
+    "drop/add": 75,
+    overlap: 70,
+    processing: 65,
+    "coverage works": 60,
   };
+  const pcsGeneralTerms = [
+    "pcs",
+    "swap with pot",
+    "bid period",
+    "carry-out",
+    "capped reserve days",
+    "black days",
+    "max pickup",
+    "drop/add",
+    "reserve coverage",
+    "open time",
+    "processing",
+    "coverage works",
+  ];
 
   const scored = args.chunks
     .map((chunk) => {
@@ -3045,8 +3358,17 @@ function buildSupportFocusedCandidates(args: {
         return null;
       }
 
-      const sourceBoost =
-        chunk.source === "pwa" ? 40 : chunk.source === "compensation_manual" ? 24 : 18;
+      const sourceBoost = pcsSwapScenario
+        ? chunk.source === "scheduler_manual"
+          ? 70
+          : chunk.source === "pwa"
+            ? 35
+            : 12
+        : chunk.source === "pwa"
+          ? 40
+          : chunk.source === "compensation_manual"
+            ? 24
+            : 18;
       const genericScopeOrGlossary = /\bsection 1\b|\bscope\b|\bdefinitions?\b/.test(chunkText);
       const genericPremiumWithoutSlip =
         chunkText.includes("premium pay") &&
@@ -3055,6 +3377,7 @@ function buildSupportFocusedCandidates(args: {
         !/\bgs\b/.test(chunkText);
       const silverHit = chunkText.includes("silver slip");
       const greenHit = chunkText.includes("green slip") || /\bgs\b/.test(chunkText);
+      const pcsSpecificHits = pcsGeneralTerms.filter((term) => chunkText.includes(term));
       const score =
         sourceBoost +
         sectionMatch.score +
@@ -3067,6 +3390,13 @@ function buildSupportFocusedCandidates(args: {
         (silverSlipQuery && !comparisonSides.includes("green slip") && greenHit && !silverHit ? -130 : 0) +
         (silverSlipQuery && comparisonSides.includes("green slip") && silverHit && greenHit ? 80 : 0) +
         (silverSlipQuery && comparisonSides.includes("green slip") && greenHit && !silverHit ? 30 : 0) +
+        (pcsSwapScenario &&
+        pcsSpecificHits.length > 0
+          ? 140
+          : 0) +
+        (pcsSwapScenario ? pcsSpecificHits.length * 30 : 0) +
+        (pcsSwapScenario && chunk.source === "scheduler_manual" && pcsSpecificHits.length > 0 ? 110 : 0) +
+        (pcsSwapScenario && /\bsection 23\b/.test(chunkText) && !chunkText.includes("swap") && !chunkText.includes("bid period") ? -120 : 0) +
         ((chunk.title ?? "").toLowerCase().includes("silver slip") ? 90 : 0);
 
       return {
@@ -3074,7 +3404,14 @@ function buildSupportFocusedCandidates(args: {
         score,
         termHits,
         exactSectionHit,
-        matchedSectionAnchor: sectionMatch.anchor,
+        matchedSectionAnchor:
+          (pcsSwapScenario && pcsSpecificHits.length > 0)
+            ? inferSupportSectionAnchor({
+                section: chunk.section,
+                label: [chunk.title ?? "", ...(chunk.sectionAnchors ?? [])].join(" "),
+                quoteSnippet: chunk.text,
+              })
+            : sectionMatch.anchor,
       };
     })
     .filter(
@@ -4089,6 +4426,10 @@ export async function handleContractCopilotRoute(request: Request): Promise<Resp
   const governingSectionIncludesXDay = governingSectionsSelected.some((item) =>
     /23 l\.9|x-day/i.test(item)
   );
+  const pcsSwapScenario = detectPcsSwapScenario(parsedRequest.question);
+  const governingSectionIncludesPcsSwap = governingSectionsSelected.some((item) =>
+    /pcs|swap|bid period|reserve coverage|capped reserve|max pickup|carry-out|open time/i.test(item)
+  );
   const shortCallDutyScenario =
     /short call/i.test(parsedRequest.question) &&
     (
@@ -4371,6 +4712,10 @@ export async function handleContractCopilotRoute(request: Request): Promise<Resp
               xDayScenario,
               xDayAnchorFound: finalizedMissingKeyScenarioAnswer.debug.xDayAnchorFound,
               governingSectionIncludesXDay,
+              pcsSwapScenario,
+              pcsSwapAnchorFound: finalizedMissingKeyScenarioAnswer.debug.pcsSwapAnchorFound,
+              pcsSwapMissingSupportReason: finalizedMissingKeyScenarioAnswer.debug.pcsSwapMissingSupportReason,
+              governingSectionIncludesPcsSwap,
               shortCallDutyScenario,
               shortCallDutyAnchorFound: finalizedMissingKeyScenarioAnswer.debug.shortCallDutyAnchorFound,
               governingSectionIncludesDutyLegality,
@@ -4844,11 +5189,15 @@ export async function handleContractCopilotRoute(request: Request): Promise<Resp
                   supportMissingForReferencedSection:
                     finalizedAIScenarioAnswer.debug.supportMissingForReferencedSection,
                   xDayScenario,
-              xDayAnchorFound: finalizedAIScenarioAnswer.debug.xDayAnchorFound,
-              governingSectionIncludesXDay,
-              shortCallDutyScenario,
-              shortCallDutyAnchorFound: finalizedAIScenarioAnswer.debug.shortCallDutyAnchorFound,
-              governingSectionIncludesDutyLegality,
+                  xDayAnchorFound: finalizedAIScenarioAnswer.debug.xDayAnchorFound,
+                  governingSectionIncludesXDay,
+                  pcsSwapScenario,
+                  pcsSwapAnchorFound: finalizedAIScenarioAnswer.debug.pcsSwapAnchorFound,
+                  pcsSwapMissingSupportReason: finalizedAIScenarioAnswer.debug.pcsSwapMissingSupportReason,
+                  governingSectionIncludesPcsSwap,
+                  shortCallDutyScenario,
+                  shortCallDutyAnchorFound: finalizedAIScenarioAnswer.debug.shortCallDutyAnchorFound,
+                  governingSectionIncludesDutyLegality,
               ...rerankedGroundedSupport.debug,
               ...groundedFinalVisibleSupportDebug,
               ...intentDebugBase,
@@ -5303,6 +5652,11 @@ export async function handleContractCopilotRoute(request: Request): Promise<Resp
                   xDayScenario,
                   xDayAnchorFound: finalizedAIUnverifiedScenarioAnswer.debug.xDayAnchorFound,
                   governingSectionIncludesXDay,
+                  pcsSwapScenario,
+                  pcsSwapAnchorFound: finalizedAIUnverifiedScenarioAnswer.debug.pcsSwapAnchorFound,
+                  pcsSwapMissingSupportReason:
+                    finalizedAIUnverifiedScenarioAnswer.debug.pcsSwapMissingSupportReason,
+                  governingSectionIncludesPcsSwap,
                   shortCallDutyScenario,
                   shortCallDutyAnchorFound: finalizedAIUnverifiedScenarioAnswer.debug.shortCallDutyAnchorFound,
                   governingSectionIncludesDutyLegality,
@@ -5525,6 +5879,10 @@ export async function handleContractCopilotRoute(request: Request): Promise<Resp
               xDayScenario,
               xDayAnchorFound: finalizedFallbackScenarioAnswer.debug.xDayAnchorFound,
               governingSectionIncludesXDay,
+              pcsSwapScenario,
+              pcsSwapAnchorFound: finalizedFallbackScenarioAnswer.debug.pcsSwapAnchorFound,
+              pcsSwapMissingSupportReason: finalizedFallbackScenarioAnswer.debug.pcsSwapMissingSupportReason,
+              governingSectionIncludesPcsSwap,
               shortCallDutyScenario,
               shortCallDutyAnchorFound: finalizedFallbackScenarioAnswer.debug.shortCallDutyAnchorFound,
               governingSectionIncludesDutyLegality,

@@ -608,6 +608,9 @@ function normalizeSearchValue(value: string) {
     .replace(/^§\s*/i, "")
     .replace(/\s*\(([a-z])\)/gi, " $1")
     .replace(/(\d{1,2})\.\s*([a-z])/g, "$1 $2")
+    .replace(/\s*\.\s*/g, ".")
+    .replace(/([a-z])\s*\.\s*(\d+)/g, "$1.$2")
+    .replace(/(\d)\s*\.\s*([a-z])/g, "$1 $2")
     .replace(/[^a-z0-9. ]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -634,6 +637,12 @@ function chunkSectionSearchText(chunk: ContractDocumentChunk) {
   );
 }
 
+function normalizeAnchorPool(chunk: ContractDocumentChunk) {
+  return [chunk.section, chunk.title ?? "", ...(chunk.sectionAnchors ?? []), ...chunk.crossRefs]
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
 function findExactSectionMatches(chunks: ContractDocumentChunk[], requestedSection: string) {
   const normalizedRequested = normalizeSearchValue(requestedSection);
   const normalizedWithoutSectionPrefix = normalizedRequested.replace(/^section\s+/i, "");
@@ -643,28 +652,44 @@ function findExactSectionMatches(chunks: ContractDocumentChunk[], requestedSecti
   const candidates = chunks
     .map((chunk) => {
       const searchable = chunkSectionSearchText(chunk);
-      const exactAnchorHit =
-        normalizeSearchValue(chunk.section) === normalizedRequested ||
-        normalizeSearchValue(chunk.title ?? "") === normalizedRequested ||
-        (chunk.sectionAnchors ?? []).some((anchor) => normalizeSearchValue(anchor) === normalizedRequested);
+      const anchorPool = normalizeAnchorPool(chunk);
+      const exactSectionHit = normalizeSearchValue(chunk.section) === normalizedRequested;
+      const exactTitleHit = normalizeSearchValue(chunk.title ?? "") === normalizedRequested;
+      const exactSectionAnchorHit = (chunk.sectionAnchors ?? []).some(
+        (anchor) => normalizeSearchValue(anchor) === normalizedRequested,
+      );
+      const exactCrossRefHit = chunk.crossRefs.some(
+        (crossRef) => normalizeSearchValue(crossRef) === normalizedRequested,
+      );
+      const exactAnchorHit = exactSectionHit || exactTitleHit || exactSectionAnchorHit || exactCrossRefHit;
       const exactRefCount =
         (searchable.match(new RegExp(normalizedWithoutSectionPrefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi")) ?? [])
           .length;
       const subsectionTextHit = subsectionPattern.test(searchable);
       const chunkParts = parseSectionParts(chunk.section);
       const topLevelMatch = requestedParts.topLevel != null && chunkParts.topLevel === requestedParts.topLevel;
+      const exactAnchorPoolHit = anchorPool.some((anchor) => normalizeSearchValue(anchor) === normalizedRequested);
       if (!exactAnchorHit && !subsectionTextHit) {
         return null;
       }
       return {
         chunk,
         exactAnchorHit,
+        exactSectionHit,
+        exactTitleHit,
+        exactSectionAnchorHit,
+        exactCrossRefHit,
+        exactAnchorPoolHit,
         exactRefCount,
         topLevelMatch,
         sourcePriority:
           chunk.source === "pwa" ? 3 : chunk.source === "compensation_manual" ? 2 : 1,
         score:
-          (exactAnchorHit ? 100 : 0) +
+          (exactSectionHit ? 240 : 0) +
+          (exactTitleHit ? 200 : 0) +
+          (exactSectionAnchorHit ? 180 : 0) +
+          (exactCrossRefHit ? 60 : 0) +
+          (exactAnchorPoolHit ? 25 : 0) +
           (requestedParts.subsection && subsectionTextHit ? 70 : 0) +
           (topLevelMatch ? 15 : 0) +
           exactRefCount * 8 +
@@ -677,6 +702,11 @@ function findExactSectionMatches(chunks: ContractDocumentChunk[], requestedSecti
       ): item is {
         chunk: ContractDocumentChunk;
         exactAnchorHit: boolean;
+        exactSectionHit: boolean;
+        exactTitleHit: boolean;
+        exactSectionAnchorHit: boolean;
+        exactCrossRefHit: boolean;
+        exactAnchorPoolHit: boolean;
         exactRefCount: number;
         topLevelMatch: boolean;
         sourcePriority: number;
@@ -692,8 +722,15 @@ function findExactSectionMatches(chunks: ContractDocumentChunk[], requestedSecti
   const highestSourcePriority = candidates[0].sourcePriority;
   let filtered = candidates.filter((candidate) => candidate.sourcePriority === highestSourcePriority);
 
-  if (filtered.some((candidate) => candidate.exactAnchorHit)) {
-    filtered = filtered.filter((candidate) => candidate.exactAnchorHit);
+  if (filtered.some((candidate) => candidate.exactSectionHit || candidate.exactTitleHit || candidate.exactSectionAnchorHit)) {
+    filtered = filtered.filter(
+      (candidate) => candidate.exactSectionHit || candidate.exactTitleHit || candidate.exactSectionAnchorHit,
+    );
+  } else if (filtered.some((candidate) => candidate.exactAnchorHit)) {
+    filtered = filtered.filter((candidate) => candidate.exactAnchorHit && !candidate.exactCrossRefHit);
+    if (filtered.length === 0) {
+      filtered = candidates.filter((candidate) => candidate.sourcePriority === highestSourcePriority && candidate.exactAnchorHit);
+    }
   } else if (requestedParts.subsection) {
     const best = filtered.find((candidate) => candidate.topLevelMatch) ?? filtered[0];
     filtered = filtered.filter(
@@ -845,7 +882,7 @@ function executeDocumentSectionExplanation(args: {
         scenarioLabel: "Document explanation",
         answerCompleteness: "provisional",
         shortAnswer: "I found the section reference, but that section text is not currently retrievable from the index.",
-        plainEnglishExplanation: `Searched ${searchedSources.join(", ")} for ${normalizedRequestedSection}, but none of the indexed chunks exposed that section as a retrievable anchor.`,
+        plainEnglishExplanation: `Searched ${searchedSources.join(", ")} for ${normalizedRequestedSection} using exact section anchors, direct chunk text, and nearest parent-section fallback, but no indexed chunk exposed that section as retrievable text.`,
         confidence: "low",
         supportLevel: "inference_heavy",
         assumptions: [],

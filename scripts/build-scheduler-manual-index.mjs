@@ -81,6 +81,65 @@ function extractCrossRefs(text) {
   return Array.from(new Set((text.match(/Section\s+\d{1,2}(?:\s+[A-Z](?:\.\d+)?)?/g) ?? []).map((item) => item.trim())));
 }
 
+function inferSectionAnchors(section, title, text) {
+  const searchable = `${section} ${title ?? ""} ${text}`.toLowerCase();
+  const anchors = new Set();
+
+  if (/\bpcs\b/.test(searchable) || searchable.includes("pilot change schedule")) {
+    anchors.add("PCS processing");
+  }
+  if (searchable.includes("swap with the pot") || searchable.includes("swap with pot")) {
+    anchors.add("swap with pot");
+  }
+  if (searchable.includes("capped reserve days") || searchable.includes("capped rsv")) {
+    anchors.add("capped reserve days");
+  }
+  if (searchable.includes("black days")) {
+    anchors.add("black days");
+  }
+  if (
+    searchable.includes("max pickup") ||
+    searchable.includes("pickup limit") ||
+    searchable.includes("maximum calendar days desired for pick-up per bid period") ||
+    searchable.includes("maximum total time for picked-up rotation")
+  ) {
+    anchors.add("max pickup");
+    anchors.add("pickup limit");
+  }
+  if (searchable.includes("carry-out") || searchable.includes("carry out")) {
+    anchors.add("carry-out");
+  }
+  if (searchable.includes("bid period")) {
+    anchors.add("bid period");
+    if (/\bpcs\b/.test(searchable) || searchable.includes("swap with the pot") || searchable.includes("carry-out")) {
+      anchors.add("bid-period crossover");
+    }
+  }
+  if (searchable.includes("open time") && (/\bpcs\b/.test(searchable) || searchable.includes("process") || searchable.includes("run"))) {
+    anchors.add("open time processing");
+  }
+  if (searchable.includes("drop")) {
+    anchors.add("drop");
+  }
+  if (searchable.includes("overlap")) {
+    anchors.add("overlap");
+  }
+  if (searchable.includes("silver slip") || searchable.includes("silver slips") || /\bss\b/.test(searchable)) {
+    anchors.add("Silver Slip");
+    if (searchable.includes("carry-out") || searchable.includes("carry out")) {
+      anchors.add("Silver Slip carry-out");
+    }
+  }
+  if (/\bpcs\b/.test(searchable) && searchable.includes("run")) {
+    anchors.add("PCS run timing");
+  }
+  if (searchable.includes("reserve coverage") || searchable.includes("rotation coverage")) {
+    anchors.add("reserve coverage");
+  }
+
+  return Array.from(anchors);
+}
+
 function inferTags(section, title, text) {
   const searchable = `${section} ${title ?? ""} ${text}`.toLowerCase();
   const tags = new Set();
@@ -106,6 +165,15 @@ function inferTags(section, title, text) {
   if (searchable.includes("conflict") || searchable.includes("except") || searchable.includes("unless")) tags.add("exception");
   if (searchable.includes("implementation") || searchable.includes("process") || searchable.includes("how to")) tags.add("implementation");
   if (searchable.includes("contact")) tags.add("contact");
+  if (/\bpcs\b/.test(searchable) || searchable.includes("pilot change schedule")) tags.add("pcs");
+  if (searchable.includes("swap with the pot") || searchable.includes("swap with pot")) tags.add("swap-with-pot");
+  if (searchable.includes("capped reserve days") || searchable.includes("capped rsv")) tags.add("capped-reserve-days");
+  if (searchable.includes("black days")) tags.add("black-days");
+  if (searchable.includes("max pickup") || searchable.includes("pickup limit")) tags.add("max-pickup");
+  if (searchable.includes("carry-out") || searchable.includes("carry out")) tags.add("carry-out");
+  if (searchable.includes("bid period")) tags.add("bid-period");
+  if (searchable.includes("open time") && (/\bpcs\b/.test(searchable) || searchable.includes("process") || searchable.includes("run"))) tags.add("open-time-processing");
+  if (searchable.includes("overlap")) tags.add("overlap");
 
   return Array.from(tags);
 }
@@ -371,6 +439,7 @@ async function buildSchedulerChunks() {
     chunks: chunks.map((chunk, index, allChunks) => ({
     ...chunk,
     crossRefs: extractCrossRefs(chunk.text),
+    sectionAnchors: inferSectionAnchors(chunk.section, chunk.title, chunk.text),
     tags: inferTags(chunk.section, chunk.title, chunk.text),
     nearbyIds: allChunks
       .filter((candidate) => Math.abs(candidate.page - chunk.page) <= 1 && candidate.source === "scheduler_manual")

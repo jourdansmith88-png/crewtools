@@ -15,6 +15,11 @@ import {
   View,
 } from "react-native";
 import { FliegerMarker } from "./src/components/FliegerMarker";
+import { BottomNavItem } from "./src/components/BottomNavItem";
+import { DecisionRow } from "./src/components/DecisionRow";
+import { InstrumentField } from "./src/components/InstrumentField";
+import { InstrumentButton, InstrumentChip } from "./src/components/InstrumentButton";
+import { InstrumentPanel } from "./src/components/InstrumentPanel";
 import { deltaCharts as embeddedDeltaCharts } from "./src/data/deltaCharts";
 import { deltaSnapshot } from "./src/data/deltaSnapshot";
 import { payAuditPriorityRules } from "./src/data/payAuditRules";
@@ -1756,13 +1761,14 @@ export default function App() {
           ]}
         >
           <View style={{ alignItems: "center", gap: 12 }}>
-            <FliegerMarker color={flieger.cream} dotSize={7} triangleWidth={14} triangleHeight={12} />
+            <FliegerMarker color={flieger.textPrimary} dotSize={7} triangleWidth={14} triangleHeight={12} />
             <Text
               style={[
                 styles.title,
                 {
-                  color: flieger.cream,
-                  fontFamily: fliegerTypography.family,
+                  color: flieger.textPrimary,
+                  fontFamily: fliegerTypography.familyDisplay,
+                  letterSpacing: fliegerTypography.letterSpacingWordmark,
                 },
               ]}
             >
@@ -1774,7 +1780,8 @@ export default function App() {
                 {
                   color: flieger.label,
                   textAlign: "center",
-                  fontFamily: fliegerTypography.familyBody,
+                  fontFamily: fliegerTypography.familyLabel,
+                  letterSpacing: fliegerTypography.letterSpacingWide,
                 },
               ]}
           >
@@ -2183,7 +2190,7 @@ export default function App() {
         {activeTab === "seniority" && (
           <SectionCard
             title="Seniority"
-            description="Green means you can hold it. Beige means it is close. Red means the category is still senior to you. White is the current category."
+            description="Green means you can hold it. Neutral means it is close. Red means the category is still senior to you. Current marks your present category."
           >
             <FormRow>
               <LabeledInput
@@ -2237,7 +2244,7 @@ export default function App() {
             <View style={styles.legendRow}>
               <LegendSwatch label="Can Hold" color="#D8EFD2" />
               <LegendSwatch label="Senior to You" color="#F8E1E5" />
-              <LegendSwatch label="Current" color="#FFFFFF" border />
+              <LegendSwatch label="Current" color="#D8CDB8" border />
             </View>
 
             {currentPilot ? (
@@ -2949,51 +2956,13 @@ export default function App() {
           <FliegerMarker color={flieger.cream} dotSize={5} triangleWidth={10} triangleHeight={9} />
         </View>
         {tabs.map((tab) => (
-          <TouchableOpacity
+          <BottomNavItem
             key={tab.key}
-            style={[
-              styles.tabButton,
-              {
-                backgroundColor: flieger.surfaceRaised,
-                borderColor: activeTab === tab.key ? flieger.accent : flieger.border,
-                borderWidth: 2,
-              },
-              activeTab === tab.key && styles.tabButtonActive,
-            ]}
+            icon={tab.icon}
+            label={tab.label}
+            active={activeTab === tab.key}
             onPress={() => setActiveTab(tab.key)}
-          >
-            <View
-              style={[
-                styles.tabIconCircle,
-                {
-                  backgroundColor: activeTab === tab.key ? flieger.accentSoft : flieger.inputBackground,
-                  borderWidth: 2,
-                  borderColor: activeTab === tab.key ? flieger.accent : flieger.borderStrong,
-                },
-                activeTab === tab.key && styles.tabIconCircleActive,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.tabIconText,
-                  tab.icon.length > 1 && styles.tabIconTextWide,
-                  { color: flieger.textSecondary, fontFamily: fliegerTypography.family },
-                  activeTab === tab.key && styles.tabIconTextActive,
-                ]}
-              >
-                {tab.icon}
-              </Text>
-            </View>
-            <Text
-              style={[
-                styles.tabLabel,
-                { color: flieger.textSecondary, fontFamily: fliegerTypography.familyBody },
-                activeTab === tab.key && styles.tabLabelActive,
-              ]}
-            >
-              {tab.label}
-            </Text>
-          </TouchableOpacity>
+          />
         ))}
       </View>
       <Modal
@@ -4262,18 +4231,8 @@ function SectionCard({
 }) {
   const palette = getFliegerPalette();
   return (
-    <View
-      style={[
-        styles.card,
-        {
-          backgroundColor: palette.surface,
-          borderColor: palette.borderStrong,
-          borderWidth: 1.5,
-          borderRadius: 14,
-        },
-      ]}
-    >
-      <Text style={[styles.cardTitle, { color: palette.label, fontFamily: fliegerTypography.family }]}>
+    <InstrumentPanel style={styles.card}>
+      <Text style={[styles.cardTitle, { color: palette.label, fontFamily: fliegerTypography.familyLabel }]}>
         {title}
       </Text>
       <Text
@@ -4285,7 +4244,7 @@ function SectionCard({
         {description}
       </Text>
       <View style={styles.cardBody}>{children}</View>
-    </View>
+    </InstrumentPanel>
   );
 }
 
@@ -4300,25 +4259,12 @@ function MetricCard({
 }) {
   const palette = getFliegerPalette();
   return (
-    <View
-      style={[
-        styles.metricCard,
-        tone === "gold" && styles.metricGold,
-        tone === "green" && styles.metricGreen,
-        {
-          backgroundColor:
-            tone === "gold"
-              ? palette.surface
-              : tone === "green"
-                ? palette.surface
-                : palette.surfaceRaised,
-          borderColor: tone === "gold" ? palette.redBorder : tone === "green" ? palette.greenBorder : palette.border,
-          borderWidth: 1.5,
-          borderRadius: 14,
-        },
-      ]}
+    <InstrumentPanel
+      variant="dataPlate"
+      tone={tone === "gold" ? "red" : tone === "green" ? "green" : "neutral"}
+      style={[styles.metricCard, tone === "gold" && styles.metricGold, tone === "green" && styles.metricGreen]}
     >
-      <Text style={[styles.metricLabel, { color: palette.label, fontFamily: fliegerTypography.familyBody }]}>
+      <Text style={[styles.metricLabel, { color: palette.label, fontFamily: fliegerTypography.familyLabel }]}>
         {label}
       </Text>
       <Text
@@ -4326,37 +4272,33 @@ function MetricCard({
           styles.metricValue,
           {
             color: tone === "gold" ? palette.red : tone === "green" ? palette.green : palette.textPrimary,
-            fontFamily: fliegerTypography.family,
+            fontFamily: fliegerTypography.familyValue,
+            fontVariant: ["tabular-nums"],
           },
         ]}
       >
         {value}
       </Text>
-    </View>
+    </InstrumentPanel>
   );
 }
 
 function SnapshotPill({ label, value }: { label: string; value: string }) {
   const palette = getFliegerPalette();
   return (
-    <View
-      style={[
-        styles.snapshotPill,
-        {
-          backgroundColor: palette.surfaceRaised,
-          borderColor: palette.border,
-          borderWidth: 2,
-          borderRadius: 16,
-        },
-      ]}
-    >
-      <Text style={[styles.snapshotLabel, { color: palette.textMuted, fontFamily: fliegerTypography.familyBody }]}>
+    <InstrumentPanel variant="dataPlate" style={styles.snapshotPill}>
+      <Text style={[styles.snapshotLabel, { color: palette.textMuted, fontFamily: fliegerTypography.familyLabel }]}>
         {label}
       </Text>
-      <Text style={[styles.snapshotValue, { color: palette.textPrimary, fontFamily: fliegerTypography.family }]}>
+      <Text
+        style={[
+          styles.snapshotValue,
+          { color: palette.textPrimary, fontFamily: fliegerTypography.familyValue, fontVariant: ["tabular-nums"] },
+        ]}
+      >
         {value}
       </Text>
-    </View>
+    </InstrumentPanel>
   );
 }
 
@@ -4375,21 +4317,16 @@ function SummaryCard({
 }) {
   const palette = getFliegerPalette();
   return (
-    <View
-      style={[
-        styles.summaryCard,
-        {
-          backgroundColor: palette.surfaceRaised,
-          borderWidth: 2,
-          borderColor: palette.borderStrong,
-          borderRadius: 14,
-        },
-      ]}
-    >
-      <Text style={[styles.summaryTitle, { color: palette.label, fontFamily: fliegerTypography.family }]}>
+    <InstrumentPanel variant="elevated" style={styles.summaryCard}>
+      <Text style={[styles.summaryTitle, { color: palette.label, fontFamily: fliegerTypography.familyLabel }]}>
         {title}
       </Text>
-      <Text style={[styles.summaryMain, { color: palette.cream, fontFamily: fliegerTypography.family }]}>
+      <Text
+        style={[
+          styles.summaryMain,
+          { color: palette.cream, fontFamily: fliegerTypography.familyValue, fontVariant: ["tabular-nums"] },
+        ]}
+      >
         {mainValue}
       </Text>
       <Text
@@ -4408,7 +4345,7 @@ function SummaryCard({
           ]}
         />
       </View>
-    </View>
+    </InstrumentPanel>
   );
 }
 
@@ -4448,30 +4385,16 @@ function LabeledInput({
   suffix?: string;
   keyboardType?: "default" | "numeric";
 }) {
-  const palette = getFliegerPalette();
   return (
     <View style={styles.inputGroup}>
-      <Text style={[styles.inputLabel, { color: palette.label, fontFamily: fliegerTypography.familyBody }]}>{label}</Text>
-      <View
-        style={[
-          styles.inputShell,
-          {
-            backgroundColor: palette.inputBackground,
-            borderColor: palette.borderStrong,
-            borderWidth: 1.5,
-          },
-        ]}
-      >
-        {prefix ? <Text style={[styles.inputAffix, { color: palette.textMuted }]}>{prefix}</Text> : null}
-        <TextInput
-          keyboardType={keyboardType ?? "numeric"}
-          value={value}
-          onChangeText={onChangeText}
-          style={[styles.input, { color: palette.textPrimary, fontFamily: fliegerTypography.familyBody }]}
-          placeholderTextColor={palette.textMuted}
-        />
-        {suffix ? <Text style={[styles.inputAffix, { color: palette.textMuted }]}>{suffix}</Text> : null}
-      </View>
+      <InstrumentField
+        label={label}
+        value={value}
+        onChangeText={onChangeText}
+        prefix={prefix}
+        suffix={suffix}
+        keyboardType={keyboardType ?? "numeric"}
+      />
     </View>
   );
 }
@@ -4487,31 +4410,17 @@ function TextAreaInput({
   onChangeText: (value: string) => void;
   placeholder?: string;
 }) {
-  const palette = getFliegerPalette();
   return (
     <View style={styles.inputGroup}>
-      <Text style={[styles.inputLabel, { color: palette.label, fontFamily: fliegerTypography.familyBody }]}>{label}</Text>
-      <View
-        style={[
-          styles.textAreaShell,
-          {
-            backgroundColor: palette.inputBackground,
-            borderColor: palette.borderStrong,
-            borderWidth: 1.5,
-          },
-        ]}
-      >
-        <TextInput
-          multiline
-          value={value}
-          onChangeText={onChangeText}
-          style={[styles.textAreaInput, { color: palette.textPrimary, fontFamily: fliegerTypography.familyBody }]}
-          placeholder={placeholder}
-          placeholderTextColor={palette.textMuted}
-          textAlignVertical="top"
-          autoCapitalize="characters"
-        />
-      </View>
+      <InstrumentField
+        label={label}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        multiline
+        minHeight={220}
+        autoCapitalize="characters"
+      />
     </View>
   );
 }
@@ -4656,146 +4565,18 @@ function InstrumentCategoryCard({
 }) {
   const palette = getFliegerPalette();
   const tonePalette = fliegerTonePalette(tone);
-  const content = (
-    <View
-      style={{
-        backgroundColor: palette.surface,
-        borderRadius: 16,
-        borderWidth: 2,
-        borderColor: tonePalette.borderColor,
-        padding: 16,
-        gap: 12,
-      }}
-    >
-      <View style={styles.instrumentCardHeader}>
-        <View style={styles.instrumentCardTitleWrap}>
-          <Text
-            style={{
-              fontSize: 30,
-              lineHeight: 30,
-              fontWeight: "900",
-              color: palette.textPrimary,
-              fontFamily: fliegerTypography.family,
-            }}
-          >
-            {title}
-          </Text>
-          <Text
-            style={{
-              fontSize: 13,
-              lineHeight: 16,
-              fontWeight: "800",
-              textTransform: "uppercase",
-              letterSpacing: 1.2,
-              color: tonePalette.statusColor,
-              fontFamily: fliegerTypography.family,
-            }}
-          >
-            {status}
-          </Text>
-        </View>
-        <View
-          style={{
-            minWidth: 94,
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 2,
-            backgroundColor: tonePalette.badgeBackground,
-            borderColor: tonePalette.badgeBorder,
-            borderWidth: 2,
-            borderRadius: 14,
-            paddingHorizontal: 10,
-            paddingVertical: 8,
-          }}
-        >
-          <Text
-            style={{
-              color: palette.textPrimary,
-              fontSize: 20,
-              lineHeight: 21,
-              fontWeight: "900",
-              fontFamily: fliegerTypography.family,
-            }}
-          >
-            {badgePrimary}
-          </Text>
-          <Text
-            style={{
-              color: palette.textSecondary,
-              fontSize: 10,
-              lineHeight: 12,
-              fontWeight: "800",
-              textTransform: "uppercase",
-              letterSpacing: 1.1,
-              textAlign: "center",
-              fontFamily: fliegerTypography.familyBody,
-            }}
-          >
-            {badgeLabel}
-          </Text>
-        </View>
-      </View>
-      <View style={{ height: 1, backgroundColor: palette.borderStrong, opacity: 0.8 }} />
-      <View style={styles.instrumentStatGrid}>
-        {statPairs.map((pair, index) => (
-          <View
-            key={`${title}-${pair.label}-${index}`}
-            style={[
-              styles.instrumentStatCell,
-              index % 2 === 0 ? styles.instrumentStatCellLeft : styles.instrumentStatCellRight,
-            ]}
-          >
-            <Text
-              style={{
-                fontSize: 10,
-                lineHeight: 12,
-                fontWeight: "800",
-                textTransform: "uppercase",
-                letterSpacing: 1.1,
-                color: palette.textMuted,
-                fontFamily: fliegerTypography.familyBody,
-              }}
-            >
-              {pair.label}
-            </Text>
-            <Text
-              style={{
-                fontSize: 19,
-                lineHeight: 20,
-                fontWeight: "900",
-                color: palette.textPrimary,
-                fontFamily: fliegerTypography.family,
-              }}
-            >
-              {pair.value}
-            </Text>
-          </View>
-        ))}
-      </View>
-      {footer ? (
-        <Text
-          style={{
-            fontSize: 12,
-            lineHeight: 16,
-            color: palette.textMuted,
-            fontFamily: fliegerTypography.familyBody,
-          }}
-        >
-          {footer}
-        </Text>
-      ) : null}
-    </View>
+  return (
+    <DecisionRow
+      title={title}
+      status={status}
+      variant={tone === "green" ? "canHold" : tone === "red" ? "notHoldable" : tone === "amber" ? "close" : "current"}
+      badgePrimary={badgePrimary}
+      badgeLabel={badgeLabel}
+      statPairs={statPairs}
+      footer={footer}
+      onPress={onPress}
+    />
   );
-
-  if (onPress) {
-    return (
-      <TouchableOpacity activeOpacity={0.9} onPress={onPress}>
-        {content}
-      </TouchableOpacity>
-    );
-  }
-
-  return content;
 }
 
 function MiniBarChart({
@@ -5133,37 +4914,31 @@ function MobilePreferencesEditor({
           Add the seats you want pinned on Home. You can remove saved seats from the list above.
         </Text>
         <View style={styles.mobileGoalRow}>
-          <View style={[styles.textChipShell, styles.mobileGoalInputWrap]}>
-            <TextInput
+          <View style={styles.mobileGoalInputWrap}>
+            <InstrumentField
               value={goalInput}
               onChangeText={onGoalInputChange}
               placeholder="ATL-320-CA or SLC220A"
-              placeholderTextColor="#7B7367"
               autoCapitalize="characters"
-              style={styles.textChipInput}
             />
           </View>
-          <TouchableOpacity style={styles.mobileAddGoalButton} onPress={onAddGoal}>
-            <Text style={styles.mobileAddGoalButtonText}>Add</Text>
-          </TouchableOpacity>
+          <InstrumentButton label="Add" variant="active" onPress={onAddGoal} style={styles.mobileAddGoalButton} />
         </View>
         {watchedCategories.length > 0 ? (
           <View style={styles.baseSelector}>
             {watchedCategories.map((goal) => (
-              <TouchableOpacity
+              <InstrumentChip
                 key={`goal-${goal}`}
                 style={[styles.baseChip, styles.goalChip]}
+                variant="active"
+                label={displayCategoryPreference(goal)}
                 onPress={() =>
                   onPreferencesChange((current) => ({
                     ...current,
                     goalCategories: current.goalCategories.filter((entry) => entry !== goal),
                   }))
                 }
-              >
-                <Text style={[styles.baseChipLabel, styles.goalChipLabel]}>
-                  {displayCategoryPreference(goal)}
-                </Text>
-              </TouchableOpacity>
+              />
             ))}
           </View>
         ) : (
@@ -5172,9 +4947,7 @@ function MobilePreferencesEditor({
           </Text>
         )}
       </View>
-      <TouchableOpacity style={styles.mobileSavePrefsButton} onPress={onDone}>
-        <Text style={styles.mobileSavePrefsButtonText}>Save</Text>
-      </TouchableOpacity>
+      <InstrumentButton label="Save" variant="active" onPress={onDone} style={styles.mobileSavePrefsButton} />
     </View>
   );
 }
@@ -5208,6 +4981,7 @@ function MobilePreferencesPanel({
   onOpenCurrentCategory: (entry: CategoryEntry) => void;
   onOpenTrackedCategory: (entry: CategoryEntry) => void;
 }) {
+  const palette = getFliegerPalette();
   const watchedRows = [
     ...(currentCategoryEntry
       ? [
@@ -5257,14 +5031,13 @@ function MobilePreferencesPanel({
               : "Load your pilot first, then add the categories you want pinned on Home."}
           </Text>
         </View>
-        <TouchableOpacity
-          style={styles.mobileEditPrefsButton}
+        <InstrumentButton
+          label={preferencesEditing ? "Close" : "Edit"}
+          variant={preferencesEditing ? "danger" : "active"}
+          compact
           onPress={() => onPreferencesEditingChange(!preferencesEditing)}
-        >
-          <Text style={styles.mobileEditPrefsButtonText}>
-            {preferencesEditing ? "Close" : "Edit"}
-          </Text>
-        </TouchableOpacity>
+          style={styles.mobileEditPrefsButton}
+        />
       </View>
       {watchedRows.length > 0 ? (
         <View style={styles.mobileTrackedCategoryList}>
@@ -5278,16 +5051,24 @@ function MobilePreferencesPanel({
                 activeOpacity={0.85}
                 onPress={row.onPress}
               >
+                <View
+                  pointerEvents="none"
+                  style={styles.mobileTrackedCategoryInnerEdge}
+                />
                 <View style={styles.mobileTrackedCategoryCopy}>
-                  <Text style={styles.mobileTrackedCategoryTitle}>{row.title}</Text>
-                  <Text style={styles.mobileTrackedCategorySubtitle}>{row.subtitle}</Text>
+                  <Text style={[styles.mobileTrackedCategoryTitle, { color: palette.textPrimary }]}>{row.title}</Text>
+                  <Text style={[styles.mobileTrackedCategorySubtitle, { color: palette.textMuted }]}>{row.subtitle}</Text>
                 </View>
                 <MobileStatusBadge label={row.badge} tone={row.tone} />
               </TouchableOpacity>
               {row.deletable && row.onDelete ? (
-                <TouchableOpacity style={styles.mobileTrackedDeleteButton} onPress={row.onDelete}>
-                  <Text style={styles.mobileTrackedDeleteButtonText}>Delete</Text>
-                </TouchableOpacity>
+                <InstrumentButton
+                  label="Delete"
+                  variant="danger"
+                  compact
+                  onPress={row.onDelete}
+                  style={styles.mobileTrackedDeleteButton}
+                />
               ) : null}
             </View>
           ))}
@@ -5363,15 +5144,13 @@ function MobileCategoriesView({
       </View>
       <View style={styles.baseSelector}>
         {mobileCategoryFilters.map((chip) => (
-          <TouchableOpacity
+          <InstrumentChip
             key={chip.key}
             style={[styles.baseChip, filter === chip.key && styles.baseChipActive]}
+            variant={filter === chip.key ? "active" : "neutral"}
+            label={chip.label}
             onPress={() => onFilterChange(chip.key)}
-          >
-            <Text style={[styles.baseChipLabel, filter === chip.key && styles.baseChipLabelActive]}>
-              {chip.label}
-            </Text>
-          </TouchableOpacity>
+          />
         ))}
       </View>
       <View style={styles.mobileCardStack}>
@@ -5923,25 +5702,15 @@ function MobileDashboardCard({
 }) {
   const palette = getFliegerPalette();
   return (
-    <View
-      style={[
-        styles.mobileDashboardCard,
-        {
-          backgroundColor: palette.surface,
-          borderColor: palette.borderStrong,
-          borderWidth: 1.5,
-          shadowColor: "transparent",
-        },
-      ]}
-    >
-      <Text style={[styles.mobileDashboardEyebrow, { color: palette.label, fontFamily: fliegerTypography.familyBody }]}>
+    <InstrumentPanel style={styles.mobileDashboardCard}>
+      <Text style={[styles.mobileDashboardEyebrow, { color: palette.label, fontFamily: fliegerTypography.familyLabel }]}>
         {eyebrow}
       </Text>
-      <Text style={[styles.mobileDashboardTitle, { color: palette.textPrimary, fontFamily: fliegerTypography.family }]}>
+      <Text style={[styles.mobileDashboardTitle, { color: palette.textPrimary, fontFamily: fliegerTypography.familyDisplay }]}>
         {title}
       </Text>
       {children}
-    </View>
+    </InstrumentPanel>
   );
 }
 
@@ -5978,6 +5747,16 @@ function MobileStatusBadge({
                   : palette.badgeNeutralBorder,
           borderWidth: 2,
           borderRadius: 14,
+          shadowColor:
+            tone === "green"
+              ? palette.green
+              : tone === "red"
+                ? palette.red
+                : palette.borderStrong,
+          shadowOpacity: tone === "neutral" ? 0.14 : 0.18,
+          shadowRadius: 4,
+          shadowOffset: { width: 0, height: 0 },
+          elevation: 2,
         },
         tone === "green" && styles.mobileStatusBadgeGreen,
         tone === "amber" && styles.mobileStatusBadgeAmber,
@@ -5997,7 +5776,7 @@ function MobileStatusBadge({
                   : tone === "amber"
                     ? palette.label
                     : palette.textPrimary,
-            fontFamily: fliegerTypography.family,
+            fontFamily: fliegerTypography.familyLabel,
           },
         ]}
       >
@@ -6022,12 +5801,15 @@ function InfoChip({ label, value }: { label: string; value: string }) {
       ]}
     >
       <Text
-        style={[styles.mobileInfoChipLabel, { color: palette.textMuted, fontFamily: fliegerTypography.familyBody }]}
+        style={[styles.mobileInfoChipLabel, { color: palette.textMuted, fontFamily: fliegerTypography.familyLabel }]}
       >
         {label}
       </Text>
       <Text
-        style={[styles.mobileInfoChipValue, { color: palette.textPrimary, fontFamily: fliegerTypography.family }]}
+        style={[
+          styles.mobileInfoChipValue,
+          { color: palette.textPrimary, fontFamily: fliegerTypography.familyValue, fontVariant: ["tabular-nums"] },
+        ]}
       >
         {value}
       </Text>
@@ -6131,29 +5913,49 @@ function statusBackgroundStyle(tone: "green" | "amber" | "red" | "neutral") {
   const palette = getFliegerPalette();
   if (tone === "green") {
     return {
-      backgroundColor: palette.surface,
-      borderColor: palette.greenBorder,
-      borderWidth: 2,
+      backgroundColor: palette.surfaceRaised,
+      borderColor: palette.green,
+      borderWidth: 2.8,
+      shadowColor: "rgba(0,255,102,0.25)",
+      shadowOpacity: 0.22,
+      shadowRadius: 6,
+      shadowOffset: { width: 0, height: 0 },
+      elevation: 4,
     };
   }
   if (tone === "amber") {
     return {
-      backgroundColor: palette.surface,
+      backgroundColor: palette.surfaceRaised,
       borderColor: palette.borderStrong,
-      borderWidth: 2,
+      borderWidth: 2.8,
+      shadowColor: "rgba(17,24,32,0.08)",
+      shadowOpacity: 0.12,
+      shadowRadius: 4,
+      shadowOffset: { width: 0, height: 0 },
+      elevation: 2,
     };
   }
   if (tone === "red") {
     return {
-      backgroundColor: palette.surface,
-      borderColor: palette.redBorder,
-      borderWidth: 2,
+      backgroundColor: palette.surfaceRaised,
+      borderColor: palette.red,
+      borderWidth: 2.8,
+      shadowColor: "rgba(255,48,48,0.25)",
+      shadowOpacity: 0.22,
+      shadowRadius: 6,
+      shadowOffset: { width: 0, height: 0 },
+      elevation: 4,
     };
   }
   return {
-    backgroundColor: palette.surface,
+    backgroundColor: palette.surfaceRaised,
     borderColor: palette.borderStrong,
-    borderWidth: 2,
+    borderWidth: 2.8,
+    shadowColor: "rgba(17,24,32,0.08)",
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 2,
   };
 }
 
@@ -6536,7 +6338,7 @@ function payPriorityScore(entry: CategoryEntry) {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#D7DCE0",
+    backgroundColor: "#B8C0C8",
   },
   container: {
     padding: 20,
@@ -6544,7 +6346,7 @@ const styles = StyleSheet.create({
     gap: 18,
   },
   hero: {
-    backgroundColor: "#15181C",
+    backgroundColor: "#2B3239",
     borderRadius: 16,
     padding: 22,
     gap: 12,
@@ -6552,22 +6354,24 @@ const styles = StyleSheet.create({
   eyebrow: {
     fontSize: 12,
     textTransform: "uppercase",
-    letterSpacing: 2,
-    color: "#74D2E7",
+    letterSpacing: fliegerTypography.letterSpacingWide,
+    color: "#66D9F2",
     textAlign: "center",
   },
   title: {
     fontSize: 34,
-    fontWeight: "800",
+    fontWeight: "700",
     color: "#F2E9DC",
     textAlign: "center",
-    letterSpacing: 2.4,
+    letterSpacing: fliegerTypography.letterSpacingWordmark,
+    textTransform: "uppercase",
   },
   subtitle: {
     fontSize: 15,
     lineHeight: 22,
-    color: "#A8B0B8",
-    letterSpacing: 0.9,
+    color: "#C3CBD2",
+    letterSpacing: fliegerTypography.letterSpacingWide,
+    textTransform: "uppercase",
   },
   heroMetrics: {
     flexDirection: "row",
@@ -6591,11 +6395,14 @@ const styles = StyleSheet.create({
   metricLabel: {
     color: "#D7E2EE",
     fontSize: 12,
+    textTransform: "uppercase",
+    letterSpacing: fliegerTypography.letterSpacingLabel,
   },
   metricValue: {
     color: "#FFFFFF",
     fontSize: 18,
-    fontWeight: "700",
+    fontWeight: "800",
+    fontVariant: ["tabular-nums"],
   },
   tabRow: {
     flexDirection: "row",
@@ -6608,32 +6415,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingTop: 18,
     paddingBottom: 20,
-    backgroundColor: "#0B0D10",
+    backgroundColor: "#242A30",
     borderTopWidth: 1,
-    borderTopColor: "#2A2F36",
+    borderTopColor: "#46515C",
   },
   tabButton: {
     flex: 1,
     paddingHorizontal: 10,
     paddingVertical: 10,
     borderRadius: 14,
-    backgroundColor: "#15181C",
+    backgroundColor: "#2B3239",
     alignItems: "center",
     gap: 8,
   },
   tabButtonActive: {
-    backgroundColor: "rgba(116,210,231,0.10)",
+    backgroundColor: "rgba(102,217,242,0.10)",
   },
   tabIconCircle: {
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: "#0B0D10",
+    backgroundColor: "#151A1F",
     alignItems: "center",
     justifyContent: "center",
   },
   tabIconCircleActive: {
-    backgroundColor: "rgba(116,210,231,0.14)",
+    backgroundColor: "rgba(102,217,242,0.14)",
   },
   tabIconText: {
     color: "#F2E9DC",
@@ -6647,40 +6454,40 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
   },
   tabIconTextActive: {
-    color: "#74D2E7",
+    color: "#66D9F2",
   },
   tabLabel: {
-    color: "#A8B0B8",
+    color: "#C3CBD2",
     fontWeight: "700",
     fontSize: 11,
     textTransform: "uppercase",
     letterSpacing: 1.1,
   },
   tabLabelActive: {
-    color: "#74D2E7",
+    color: "#66D9F2",
   },
   sectionStack: {
     gap: 14,
   },
   card: {
-    backgroundColor: "#C3CAD1",
+    backgroundColor: "#C6CDD4",
     borderRadius: 14,
     padding: 18,
     gap: 10,
     borderWidth: 1.5,
-    borderColor: "#68737D",
+    borderColor: "#5F6B76",
   },
   cardTitle: {
     fontSize: 22,
     fontWeight: "800",
-    color: "#2F8EA6",
+    color: "#007FA3",
     letterSpacing: 1.1,
     textTransform: "uppercase",
   },
   cardDescription: {
     fontSize: 14,
     lineHeight: 21,
-    color: "#41505C",
+    color: "#344552",
   },
   cardBody: {
     gap: 14,
@@ -6698,35 +6505,36 @@ const styles = StyleSheet.create({
   summaryCard: {
     flex: 1,
     minWidth: 220,
-    backgroundColor: "#C3CAD1",
+    backgroundColor: "#C6CDD4",
     borderRadius: 14,
     padding: 18,
     gap: 10,
     borderWidth: 1.5,
-    borderColor: "#68737D",
+    borderColor: "#5F6B76",
   },
   summaryTitle: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#2F8EA6",
+    color: "#007FA3",
     textTransform: "uppercase",
-    letterSpacing: 1,
+    letterSpacing: fliegerTypography.letterSpacingLabel,
   },
   summaryMain: {
     fontSize: 42,
     fontWeight: "800",
-    color: "#0B0D10",
+    color: "#111820",
     lineHeight: 44,
+    fontVariant: ["tabular-nums"],
   },
   summaryDetail: {
     fontSize: 14,
-    color: "#41505C",
+    color: "#344552",
     fontWeight: "600",
   },
   summarySub: {
-    fontSize: 13,
-    lineHeight: 19,
-    color: "#41505C",
+    fontSize: 14,
+    lineHeight: 20,
+    color: "#344552",
   },
   summaryTrack: {
     height: 18,
@@ -6737,25 +6545,26 @@ const styles = StyleSheet.create({
   summaryFill: {
     height: "100%",
     borderRadius: 999,
-    backgroundColor: "#74D2E7",
+    backgroundColor: "#007FA3",
   },
   snapshotPill: {
-    backgroundColor: "#15181C",
+    backgroundColor: "#2B3239",
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 12,
     gap: 4,
   },
   snapshotLabel: {
-    fontSize: 11,
-    color: "#74D2E7",
+    fontSize: 12,
+    color: "#66D9F2",
     textTransform: "uppercase",
-    letterSpacing: 1,
+    letterSpacing: fliegerTypography.letterSpacingLabel,
   },
   snapshotValue: {
     fontSize: 18,
     fontWeight: "800",
     color: "#F2E9DC",
+    fontVariant: ["tabular-nums"],
   },
   formRow: {
     flexDirection: "row",
@@ -6769,7 +6578,7 @@ const styles = StyleSheet.create({
   },
   inputLabel: {
     fontSize: 13,
-    color: "#2F8EA6",
+    color: "#007FA3",
     fontWeight: "700",
     textTransform: "uppercase",
     letterSpacing: 1.1,
@@ -6777,72 +6586,72 @@ const styles = StyleSheet.create({
   inputShell: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#DDE2E6",
+    backgroundColor: "#D8DDE2",
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: "#68737D",
+    borderColor: "#5F6B76",
     paddingHorizontal: 14,
     minHeight: 52,
   },
   inputAffix: {
-    color: "#41505C",
+    color: "#344552",
     fontSize: 16,
     fontWeight: "700",
   },
   input: {
     flex: 1,
     fontSize: 18,
-    color: "#0B0D10",
+    color: "#111820",
     paddingVertical: 12,
   },
   textAreaShell: {
-    backgroundColor: "#DDE2E6",
+    backgroundColor: "#D8DDE2",
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: "#68737D",
+    borderColor: "#5F6B76",
     paddingHorizontal: 14,
     paddingVertical: 12,
     minHeight: 220,
   },
   textAreaInput: {
     minHeight: 192,
-    fontSize: 15,
+    fontSize: 14,
     lineHeight: 21,
-    color: "#0B0D10",
+    color: "#111820",
   },
   resultPanel: {
-    backgroundColor: "#C3CAD1",
+    backgroundColor: "#C6CDD4",
     borderRadius: 14,
     padding: 16,
     gap: 12,
     borderWidth: 1.5,
-    borderColor: "#68737D",
+    borderColor: "#5F6B76",
   },
   quickLinkButton: {
     alignSelf: "flex-start",
-    backgroundColor: "#15181C",
+    backgroundColor: "#2B3239",
     borderRadius: 999,
     borderWidth: 1.5,
-    borderColor: "#74D2E7",
+    borderColor: "#66D9F2",
     paddingHorizontal: 16,
     paddingVertical: 10,
   },
   quickLinkButtonText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "800",
-    color: "#74D2E7",
+    color: "#66D9F2",
   },
   whatIfScenarioPanel: {
     flex: 1,
     minWidth: 260,
   },
   paySummaryCard: {
-    backgroundColor: "#C3CAD1",
+    backgroundColor: "#C6CDD4",
     borderRadius: 14,
     padding: 16,
     gap: 12,
     borderWidth: 1.5,
-    borderColor: "#68737D",
+    borderColor: "#5F6B76",
   },
   payToolGrid: {
     flexDirection: "row",
@@ -6853,14 +6662,14 @@ const styles = StyleSheet.create({
   payToolCard: {
     flex: 1,
     minWidth: 240,
-    backgroundColor: "#C3CAD1",
+    backgroundColor: "#C6CDD4",
     borderRadius: 14,
     overflow: "hidden",
     borderWidth: 1.5,
-    borderColor: "#68737D",
+    borderColor: "#5F6B76",
   },
   payToolCardActive: {
-    borderColor: "#74D2E7",
+    borderColor: "#007FA3",
   },
   payToolHero: {
     minHeight: 104,
@@ -6872,13 +6681,13 @@ const styles = StyleSheet.create({
   payToolGlyph: {
     fontSize: 28,
     fontWeight: "900",
-    color: "#74D2E7",
+    color: "#007FA3",
   },
   payToolBadge: {
     alignSelf: "flex-start",
-    backgroundColor: "#DDE2E6",
-    color: "#0B0D10",
-    fontSize: 11,
+    backgroundColor: "#D8DDE2",
+    color: "#111820",
+    fontSize: 12,
     fontWeight: "800",
     paddingHorizontal: 10,
     paddingVertical: 6,
@@ -6894,17 +6703,17 @@ const styles = StyleSheet.create({
   payToolTitle: {
     fontSize: 22,
     fontWeight: "800",
-    color: "#0B0D10",
+    color: "#111820",
   },
   payToolSubtitle: {
     fontSize: 14,
     lineHeight: 21,
-    color: "#46515C",
+    color: "#344552",
   },
   payToolButton: {
     marginHorizontal: 18,
     marginBottom: 18,
-    backgroundColor: "#15181C",
+    backgroundColor: "#2B3239",
     color: "#F2E9DC",
     textAlign: "center",
     fontSize: 14,
@@ -6913,34 +6722,34 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     paddingVertical: 12,
     borderWidth: 1.5,
-    borderColor: "#74D2E7",
+    borderColor: "#66D9F2",
   },
   payToolPlaceholder: {
-    backgroundColor: "#C3CAD1",
+    backgroundColor: "#C6CDD4",
     borderRadius: 14,
     padding: 18,
     gap: 10,
     borderWidth: 1.5,
-    borderColor: "#68737D",
+    borderColor: "#5F6B76",
   },
   payToolPlaceholderTitle: {
     fontSize: 20,
     fontWeight: "800",
-    color: "#0B0D10",
+    color: "#111820",
   },
   payToolPlaceholderText: {
     fontSize: 14,
     lineHeight: 22,
-    color: "#46515C",
+    color: "#344552",
   },
   auditButton: {
     alignSelf: "flex-start",
-    backgroundColor: "#15181C",
+    backgroundColor: "#2B3239",
     borderRadius: 14,
     paddingHorizontal: 18,
     paddingVertical: 12,
     borderWidth: 1.5,
-    borderColor: "#74D2E7",
+    borderColor: "#66D9F2",
   },
   auditButtonDisabled: {
     backgroundColor: "#AEB7C0",
@@ -6951,12 +6760,12 @@ const styles = StyleSheet.create({
     color: "#F2E9DC",
   },
   auditSummaryHero: {
-    backgroundColor: "#C3CAD1",
+    backgroundColor: "#C6CDD4",
     borderRadius: 14,
     padding: 18,
     gap: 14,
     borderWidth: 1.5,
-    borderColor: "#74D2E7",
+    borderColor: "#007FA3",
   },
   auditSummaryHeader: {
     gap: 4,
@@ -6964,11 +6773,11 @@ const styles = StyleSheet.create({
   auditSummaryTitle: {
     fontSize: 28,
     fontWeight: "900",
-    color: "#0C2340",
+    color: "#111820",
   },
   auditSummaryMeta: {
     fontSize: 13,
-    color: "#46515C",
+    color: "#344552",
     fontWeight: "700",
   },
   auditSummaryMetrics: {
@@ -6978,7 +6787,7 @@ const styles = StyleSheet.create({
   },
   auditSummaryFormula: {
     fontSize: 13,
-    color: "#52606D",
+    color: "#41505C",
     fontWeight: "700",
   },
   payControlsRow: {
@@ -6994,15 +6803,15 @@ const styles = StyleSheet.create({
   },
   resultLabel: {
     fontSize: 14,
-    color: "#52606D",
+    color: "#41505C",
   },
   resultValue: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#0B0D10",
+    color: "#111820",
   },
   resultValueEmphasis: {
-    color: "#74D2E7",
+    color: "#007FA3",
   },
   baseSelector: {
     flexDirection: "row",
@@ -7013,22 +6822,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 14,
-    backgroundColor: "#15181C",
+    backgroundColor: "#2B3239",
     borderWidth: 1.5,
-    borderColor: "#2A2F36",
+    borderColor: "#46515C",
   },
   baseChipActive: {
-    backgroundColor: "rgba(116,210,231,0.12)",
-    borderColor: "#74D2E7",
+    backgroundColor: "rgba(102,217,242,0.12)",
+    borderColor: "#66D9F2",
   },
   baseChipLabel: {
-    color: "#A8B0B8",
+    color: "#C3CBD2",
     fontWeight: "700",
     textTransform: "uppercase",
     letterSpacing: 0.9,
   },
   baseChipLabelActive: {
-    color: "#74D2E7",
+    color: "#66D9F2",
   },
   legendRow: {
     flexDirection: "row",
@@ -7051,33 +6860,33 @@ const styles = StyleSheet.create({
   },
   legendText: {
     fontSize: 13,
-    color: "#46515C",
+    color: "#344552",
     fontWeight: "600",
   },
   identityCard: {
-    backgroundColor: "#C3CAD1",
+    backgroundColor: "#C6CDD4",
     borderRadius: 14,
     padding: 16,
     borderWidth: 1.5,
-    borderColor: "#68737D",
+    borderColor: "#5F6B76",
     gap: 6,
   },
   identityName: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#0B0D10",
+    color: "#111820",
   },
   identityMeta: {
     fontSize: 14,
-    color: "#46515C",
+    color: "#344552",
   },
   tableCard: {
-    backgroundColor: "#101418",
+    backgroundColor: "#2B3239",
     borderRadius: 16,
     padding: 16,
     gap: 10,
     borderWidth: 2,
-    borderColor: "#59616a",
+    borderColor: "#46515C",
   },
   tableTitle: {
     fontSize: 18,
@@ -7087,7 +6896,7 @@ const styles = StyleSheet.create({
   },
   tableMeta: {
     fontSize: 12,
-    color: "#aeb6c2",
+    color: "#C3CBD2",
     fontWeight: "600",
   },
   tableHeader: {
@@ -7095,14 +6904,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingBottom: 4,
     borderBottomWidth: 1,
-    borderBottomColor: "#59616a",
+    borderBottomColor: "#46515C",
   },
   tableHeaderCell: {
     flex: 1,
     textAlign: "center",
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "800",
-    color: "#7d8794",
+    color: "#C3CBD2",
     textTransform: "uppercase",
     letterSpacing: 1,
   },
@@ -7148,12 +6957,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: "rgba(12,35,64,0.08)",
+    backgroundColor: "rgba(0,155,194,0.10)",
   },
   mobileCategoryBadgeText: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#0C2340",
+    color: "#111820",
   },
   mobileMetricGrid: {
     flexDirection: "row",
@@ -7164,10 +6973,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     borderWidth: 1,
-    borderColor: "#3a4148",
+    borderColor: "#46515C",
     borderRadius: 12,
     overflow: "hidden",
-    backgroundColor: "#141a20",
+    backgroundColor: "#343C44",
   },
   instrumentStatCell: {
     width: "50%",
@@ -7177,41 +6986,41 @@ const styles = StyleSheet.create({
     gap: 4,
     justifyContent: "center",
     borderBottomWidth: 1,
-    borderBottomColor: "#3a4148",
+    borderBottomColor: "#46515C",
   },
   instrumentStatCellLeft: {
     borderRightWidth: 1,
-    borderRightColor: "#3a4148",
+    borderRightColor: "#46515C",
   },
   instrumentStatCellRight: {},
   mobileMetricCard: {
     flexGrow: 1,
     flexBasis: "47%",
     minWidth: 120,
-    backgroundColor: "#1A1F24",
+    backgroundColor: "#2B3239",
     borderRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 10,
     gap: 3,
     borderWidth: 1,
-    borderColor: "#2A2F36",
+    borderColor: "#46515C",
   },
   mobileMetricLabel: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: "800",
     textTransform: "uppercase",
     letterSpacing: 0.8,
-    color: "#74D2E7",
+    color: "#66D9F2",
   },
   mobileMetricValue: {
-    fontSize: 17,
+    fontSize: 24,
     fontWeight: "800",
     color: "#F2E9DC",
   },
   mobileMetricDetail: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: "700",
-    color: "#A8B0B8",
+    color: "#C3CBD2",
   },
   mobileDashboardStack: {
     gap: 12,
@@ -7234,10 +7043,10 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     flexBasis: 180,
     minWidth: 160,
-    backgroundColor: "#15181C",
+    backgroundColor: "#2B3239",
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: "#2A2F36",
+    borderColor: "#46515C",
     padding: 14,
     gap: 6,
   },
@@ -7245,18 +7054,19 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "800",
     textTransform: "uppercase",
-    letterSpacing: 1,
-    color: "#74D2E7",
+    letterSpacing: fliegerTypography.letterSpacingLabel,
+    color: "#66D9F2",
   },
   mobileKeyMetricValue: {
     fontSize: 28,
     fontWeight: "900",
     color: "#F2E9DC",
+    fontVariant: ["tabular-nums"],
   },
   mobileKeyMetricDetail: {
     fontSize: 12,
     lineHeight: 18,
-    color: "#A8B0B8",
+    color: "#C3CBD2",
     fontWeight: "600",
   },
   mobileKeyMetricSubdetail: {
@@ -7266,10 +7076,10 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   mobileDashboardCard: {
-    backgroundColor: "#15181C",
+    backgroundColor: "#2B3239",
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: "#2A2F36",
+    borderColor: "#46515C",
     padding: 16,
     gap: 10,
   },
@@ -7277,13 +7087,15 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "800",
     textTransform: "uppercase",
-    letterSpacing: 1.2,
-    color: "#74D2E7",
+    letterSpacing: fliegerTypography.letterSpacingLabel,
+    color: "#66D9F2",
   },
   mobileDashboardTitle: {
     fontSize: 22,
-    fontWeight: "800",
+    fontWeight: "700",
     color: "#F2E9DC",
+    textTransform: "uppercase",
+    letterSpacing: 1.6,
   },
   mobileDashboardHeaderRow: {
     flexDirection: "row",
@@ -7294,18 +7106,18 @@ const styles = StyleSheet.create({
   mobileDashboardMeta: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#A8B0B8",
+    color: "#C3CBD2",
   },
   mobileDashboardBodyText: {
     fontSize: 14,
     lineHeight: 21,
-    color: "#A8B0B8",
+    color: "#C3CBD2",
   },
   mobilePreferencesCard: {
-    backgroundColor: "#15181C",
+    backgroundColor: "#2B3239",
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: "#2A2F36",
+    borderColor: "#46515C",
     padding: 16,
     gap: 12,
   },
@@ -7313,7 +7125,7 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingTop: 4,
     borderTopWidth: 1,
-    borderTopColor: "#2A2F36",
+    borderTopColor: "#323A42",
   },
   mobileSectionTitle: {
     fontSize: 18,
@@ -7321,15 +7133,15 @@ const styles = StyleSheet.create({
     color: "#F2E9DC",
   },
   mobileSectionText: {
-    fontSize: 13,
-    lineHeight: 20,
-    color: "#A8B0B8",
+    fontSize: 14,
+    lineHeight: 21,
+    color: "#C3CBD2",
   },
   mobilePrefsSummaryCard: {
-    backgroundColor: "#15181C",
+    backgroundColor: "#2B3239",
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: "#2A2F36",
+    borderColor: "#46515C",
     padding: 16,
     gap: 12,
   },
@@ -7340,8 +7152,8 @@ const styles = StyleSheet.create({
     minHeight: 48,
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: "#2A2F36",
-    backgroundColor: "#0B0D10",
+    borderColor: "#46515C",
+    backgroundColor: "#343C44",
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 18,
@@ -7358,15 +7170,15 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   mobileEditPrefsButton: {
-    backgroundColor: "rgba(116,210,231,0.12)",
+    backgroundColor: "rgba(102,217,242,0.12)",
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: "#74D2E7",
+    borderColor: "#66D9F2",
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
   mobileEditPrefsButtonText: {
-    color: "#74D2E7",
+    color: "#66D9F2",
     fontSize: 12,
     fontWeight: "800",
   },
@@ -7385,11 +7197,23 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
     borderRadius: 16,
-    borderWidth: 2,
-    borderColor: "#59616a",
-    backgroundColor: "#101418",
+    borderWidth: 2.8,
+    borderColor: "#46515C",
+    backgroundColor: "#2B3239",
     paddingHorizontal: 14,
     paddingVertical: 13,
+    position: "relative",
+    overflow: "visible",
+  },
+  mobileTrackedCategoryInnerEdge: {
+    position: "absolute",
+    top: 2,
+    right: 2,
+    bottom: 2,
+    left: 2,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.35)",
   },
   mobileTrackedCategoryCopy: {
     flex: 1,
@@ -7401,9 +7225,9 @@ const styles = StyleSheet.create({
     color: "#f3ead7",
   },
   mobileTrackedCategorySubtitle: {
-    fontSize: 13,
-    lineHeight: 19,
-    color: "#aeb6c2",
+    fontSize: 14,
+    lineHeight: 20,
+    color: "#C3CBD2",
   },
   mobileTrackedDeleteButton: {
     alignSelf: "flex-start",
@@ -7423,8 +7247,8 @@ const styles = StyleSheet.create({
     minHeight: 48,
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: "#2A2F36",
-    backgroundColor: "#0B0D10",
+    borderColor: "#46515C",
+    backgroundColor: "#343C44",
     justifyContent: "center",
     paddingHorizontal: 14,
   },
@@ -7442,7 +7266,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   mobileAddGoalButton: {
-    backgroundColor: "#15181C",
+    backgroundColor: "#2B3239",
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 14,
@@ -7454,12 +7278,12 @@ const styles = StyleSheet.create({
   },
   mobileSavePrefsButton: {
     alignSelf: "flex-start",
-    backgroundColor: "#15181C",
+    backgroundColor: "#2B3239",
     borderRadius: 14,
     paddingHorizontal: 16,
     paddingVertical: 11,
     borderWidth: 1.5,
-    borderColor: "#74D2E7",
+    borderColor: "#66D9F2",
   },
   mobileSavePrefsButtonText: {
     color: "#F2E9DC",
@@ -7470,15 +7294,15 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   goalChip: {
-    backgroundColor: "rgba(116,210,231,0.12)",
+    backgroundColor: "rgba(102,217,242,0.12)",
     borderWidth: 1.5,
-    borderColor: "#74D2E7",
+    borderColor: "#66D9F2",
   },
   goalChipRemovable: {
     paddingRight: 14,
   },
   goalChipLabel: {
-    color: "#74D2E7",
+    color: "#66D9F2",
   },
   mobileCardStack: {
     gap: 12,
@@ -7490,20 +7314,20 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   mobileGreenCard: {
-    backgroundColor: "#101418",
-    borderColor: "#6f874d",
+    backgroundColor: "#2B3239",
+    borderColor: "#00FF66",
   },
   mobileAmberCard: {
-    backgroundColor: "#101418",
-    borderColor: "#59616a",
+    backgroundColor: "#2B3239",
+    borderColor: "#5F6B76",
   },
   mobileRedCard: {
-    backgroundColor: "#101418",
-    borderColor: "#9f2d34",
+    backgroundColor: "#2B3239",
+    borderColor: "#FF3030",
   },
   mobileNeutralCard: {
-    backgroundColor: "#101418",
-    borderColor: "#59616a",
+    backgroundColor: "#2B3239",
+    borderColor: "#5F6B76",
   },
   mobileDecisionHeader: {
     flexDirection: "row",
@@ -7522,24 +7346,24 @@ const styles = StyleSheet.create({
     letterSpacing: 1.1,
   },
   mobileDecisionSubtitle: {
-    fontSize: 13,
-    lineHeight: 19,
-    color: "#A8B0B8",
+    fontSize: 14,
+    lineHeight: 20,
+    color: "#C3CBD2",
   },
   mobileDecisionFooter: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: "700",
-    color: "#A8B0B8",
+    color: "#C3CBD2",
   },
   plannerModeHint: {
     fontSize: 12,
     lineHeight: 18,
-    color: "#A8B0B8",
+    color: "#C3CBD2",
   },
   plannerSectionLabel: {
     fontSize: 12,
     fontWeight: "800",
-    color: "#74D2E7",
+    color: "#66D9F2",
     textTransform: "uppercase",
     letterSpacing: 1,
   },
@@ -7547,32 +7371,32 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   mobileEvidenceText: {
-    fontSize: 13,
-    lineHeight: 19,
+    fontSize: 14,
+    lineHeight: 20,
     color: "#F2E9DC",
   },
   mobileEvidenceTextMuted: {
-    fontSize: 12,
-    lineHeight: 18,
-    color: "#A8B0B8",
+    fontSize: 13,
+    lineHeight: 19,
+    color: "#C3CBD2",
   },
   mobilePlannerCallout: {
-    backgroundColor: "#1A1F24",
+    backgroundColor: "#343C44",
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: "#74D2E7",
+    borderColor: "#66D9F2",
     padding: 12,
     gap: 4,
   },
   mobilePlannerCalloutTitle: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "800",
-    color: "#74D2E7",
+    color: "#66D9F2",
   },
   mobilePlannerCalloutText: {
-    fontSize: 12,
-    lineHeight: 18,
-    color: "#A8B0B8",
+    fontSize: 13,
+    lineHeight: 19,
+    color: "#C3CBD2",
   },
   mobileStatusBadge: {
     paddingHorizontal: 12,
@@ -7608,23 +7432,24 @@ const styles = StyleSheet.create({
   mobileInfoChip: {
     minWidth: 88,
     flexGrow: 1,
-    backgroundColor: "#1A1F24",
+    backgroundColor: "#343C44",
     borderRadius: 14,
     paddingHorizontal: 10,
     paddingVertical: 8,
     gap: 2,
   },
   mobileInfoChipLabel: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: "800",
     textTransform: "uppercase",
-    letterSpacing: 0.8,
-    color: "#74D2E7",
+    letterSpacing: fliegerTypography.letterSpacingLabel,
+    color: "#66D9F2",
   },
   mobileInfoChipValue: {
     fontSize: 15,
     fontWeight: "800",
     color: "#F2E9DC",
+    fontVariant: ["tabular-nums"],
   },
   mobileListStack: {
     gap: 10,
@@ -7649,12 +7474,12 @@ const styles = StyleSheet.create({
   mobileListTitle: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#0C2340",
+    color: "#111820",
   },
   mobileListText: {
-    fontSize: 13,
-    lineHeight: 19,
-    color: "#52606D",
+    fontSize: 14,
+    lineHeight: 20,
+    color: "#41505C",
   },
   mobileDeleteMiniButton: {
     backgroundColor: "#F8E1E5",
@@ -7670,27 +7495,27 @@ const styles = StyleSheet.create({
     color: "#A6192E",
   },
   tableRowHold: {
-    backgroundColor: "#101418",
-    borderColor: "#6f874d",
+    backgroundColor: "#2B3239",
+    borderColor: "#00FF66",
   },
   tableRowNoHold: {
-    backgroundColor: "#101418",
-    borderColor: "#9f2d34",
+    backgroundColor: "#2B3239",
+    borderColor: "#FF3030",
   },
   tableRowCurrent: {
-    backgroundColor: "#141a20",
-    borderColor: "#6f874d",
+    backgroundColor: "#343C44",
+    borderColor: "#00FF66",
   },
   tableRowNeutral: {
-    backgroundColor: "#141a20",
-    borderColor: "#59616a",
+    backgroundColor: "#343C44",
+    borderColor: "#5F6B76",
   },
   seatSectionLabel: {
     fontSize: 11,
     fontWeight: "800",
     textTransform: "uppercase",
     letterSpacing: 1,
-    color: "#7d8794",
+    color: "#C3CBD2",
     marginTop: 4,
   },
   modalBackdrop: {
@@ -7705,10 +7530,10 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     maxHeight: "88%",
-    backgroundColor: "#C3CAD1",
+    backgroundColor: "#C6CDD4",
     borderRadius: 24,
     borderWidth: 1.5,
-    borderColor: "#68737D",
+    borderColor: "#5F6B76",
     padding: 18,
     position: "relative",
   },
@@ -7733,9 +7558,9 @@ const styles = StyleSheet.create({
     color: "#111820",
   },
   modalSubtitle: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: "#41505C",
+    fontSize: 14,
+    lineHeight: 20,
+    color: "#344552",
   },
   modalFloatingCloseButton: {
     position: "absolute",
@@ -7744,12 +7569,12 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: "#DDE2E6",
+    backgroundColor: "#D8DDE2",
     alignItems: "center",
     justifyContent: "center",
     zIndex: 10,
     borderWidth: 1,
-    borderColor: "#68737D",
+    borderColor: "#5F6B76",
     shadowColor: "transparent",
     shadowOpacity: 0,
     shadowRadius: 0,
@@ -7766,7 +7591,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     borderBottomWidth: 1,
-    borderBottomColor: "#68737D",
+    borderBottomColor: "#5F6B76",
     paddingBottom: 8,
     gap: 10,
   },
@@ -7793,7 +7618,7 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#68737D",
+    borderBottomColor: "#5F6B76",
   },
   modalNameCell: {
     flex: 1.6,
@@ -7815,12 +7640,12 @@ const styles = StyleSheet.create({
   listCompareCard: {
     flex: 1,
     minWidth: 320,
-    backgroundColor: "#DDE2E6",
+    backgroundColor: "#D8DDE2",
     borderRadius: 16,
     padding: 14,
     gap: 8,
     borderWidth: 1.5,
-    borderColor: "#68737D",
+    borderColor: "#5F6B76",
   },
   listCompareCardCompact: {
     minWidth: 0,
@@ -7835,7 +7660,7 @@ const styles = StyleSheet.create({
   listCompareMeta: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#41505C",
+    color: "#344552",
   },
   listCompareRow: {
     flexDirection: "row",
@@ -7846,7 +7671,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     borderRadius: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#68737D",
+    borderBottomColor: "#5F6B76",
   },
   listCompareRowCompact: {
     alignItems: "flex-start",
@@ -7858,7 +7683,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,43,43,0.10)",
   },
   listCompareRowYou: {
-    backgroundColor: "rgba(116,210,231,0.12)",
+    backgroundColor: "rgba(0,155,194,0.12)",
   },
   listCompareRowRetiring: {
     backgroundColor: "#F6D6D6",
@@ -7878,12 +7703,12 @@ const styles = StyleSheet.create({
   listCompareStatus: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#41505C",
+    color: "#344552",
   },
   listCompareContext: {
     fontSize: 11,
     fontWeight: "600",
-    color: "#41505C",
+    color: "#344552",
   },
   listCompareNumber: {
     fontSize: 12,
@@ -7898,33 +7723,33 @@ const styles = StyleSheet.create({
     marginTop: 10,
     paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: "#59616a",
+    borderTopColor: "#46515C",
   },
   baseNetText: {
     fontSize: 13,
     fontWeight: "800",
-    color: "#74D2E7",
+    color: "#007FA3",
     textAlign: "center",
   },
   baseNetSubtext: {
     marginTop: 4,
     fontSize: 12,
     fontWeight: "600",
-    color: "#41505C",
+    color: "#344552",
     textAlign: "center",
   },
   seatDivider: {
     marginVertical: 6,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: "#68737D",
+    borderTopColor: "#5F6B76",
   },
   seatDividerText: {
     fontSize: 11,
     fontWeight: "800",
     textTransform: "uppercase",
     letterSpacing: 1,
-    color: "#7d8794",
+    color: "#C3CBD2",
   },
   tableCategoryCell: {
     flex: 1.7,
@@ -7936,18 +7761,20 @@ const styles = StyleSheet.create({
     minHeight: 48,
     justifyContent: "center",
     borderLeftWidth: 1,
-    borderLeftColor: "#3a4148",
+    borderLeftColor: "#46515C",
   },
   tableCell: {
     textAlign: "center",
     fontSize: 14,
     fontWeight: "900",
     color: "#f3ead7",
+    fontVariant: ["tabular-nums"],
   },
   tableDelta: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#7d8794",
+    color: "#C3CBD2",
+    fontVariant: ["tabular-nums"],
   },
   tableDeltaPositive: {
     color: "#8fa36a",
@@ -7962,20 +7789,20 @@ const styles = StyleSheet.create({
   },
   tableSubtext: {
     fontSize: 11,
-    color: "#aeb6c2",
+    color: "#C3CBD2",
   },
   insightText: {
     fontSize: 14,
     lineHeight: 21,
-    color: "#52606D",
+    color: "#41505C",
   },
   projectionCard: {
-    backgroundColor: "#C3CAD1",
+    backgroundColor: "#C6CDD4",
     borderRadius: 18,
     padding: 16,
     gap: 12,
     borderWidth: 1.5,
-    borderColor: "#68737D",
+    borderColor: "#5F6B76",
   },
   projectionTitle: {
     fontSize: 18,
@@ -7985,7 +7812,7 @@ const styles = StyleSheet.create({
   projectionMeta: {
     fontSize: 13,
     lineHeight: 20,
-    color: "#41505C",
+    color: "#344552",
   },
   forecastControlRow: {
     flexDirection: "row",
@@ -8015,7 +7842,7 @@ const styles = StyleSheet.create({
   projectionLabel: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#41505C",
+    color: "#344552",
   },
   projectionValue: {
     fontSize: 14,
@@ -8040,16 +7867,16 @@ const styles = StyleSheet.create({
   },
   projectionStat: {
     fontSize: 12,
-    color: "#41505C",
+    color: "#344552",
   },
   chartCard: {
     gap: 10,
   },
   chartCardCompact: {
-    backgroundColor: "#C3CAD1",
+    backgroundColor: "#C6CDD4",
     borderRadius: 18,
     borderWidth: 1.5,
-    borderColor: "#68737D",
+    borderColor: "#5F6B76",
     padding: 14,
   },
   chartLegendRow: {
@@ -8077,9 +7904,9 @@ const styles = StyleSheet.create({
   dropdownButton: {
     minHeight: 46,
     borderRadius: 14,
-    backgroundColor: "#DDE2E6",
+    backgroundColor: "#D8DDE2",
     borderWidth: 1.5,
-    borderColor: "#68737D",
+    borderColor: "#5F6B76",
     justifyContent: "center",
     paddingHorizontal: 14,
   },
@@ -8089,24 +7916,24 @@ const styles = StyleSheet.create({
     color: "#111820",
   },
   dropdownMenu: {
-    backgroundColor: "#DDE2E6",
+    backgroundColor: "#D8DDE2",
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: "#68737D",
+    borderColor: "#5F6B76",
     overflow: "hidden",
   },
   dropdownMenuTall: {
     maxHeight: 240,
-    backgroundColor: "#DDE2E6",
+    backgroundColor: "#D8DDE2",
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: "#68737D",
+    borderColor: "#5F6B76",
   },
   dropdownItem: {
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#68737D",
+    borderBottomColor: "#5F6B76",
   },
   dropdownItemText: {
     fontSize: 15,
@@ -8114,10 +7941,10 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   sliderCard: {
-    backgroundColor: "#DDE2E6",
+    backgroundColor: "#D8DDE2",
     borderRadius: 16,
     borderWidth: 1.5,
-    borderColor: "#68737D",
+    borderColor: "#5F6B76",
     paddingHorizontal: 12,
     paddingVertical: 8,
     gap: 2,
@@ -8143,7 +7970,7 @@ const styles = StyleSheet.create({
     color: "#111820",
   },
   sliderMeta: {
-    fontSize: 10,
+    fontSize: 13,
     color: "#41505C",
     fontWeight: "600",
   },
@@ -8179,7 +8006,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   chartValue: {
-    fontSize: 10,
+    fontSize: 12,
     color: "#111820",
     fontWeight: "700",
     textAlign: "center",
@@ -8227,13 +8054,13 @@ const styles = StyleSheet.create({
     opacity: 0.95,
   },
   chartReferenceOne: {
-    backgroundColor: "#74D2E7",
+    backgroundColor: "#007FA3",
   },
   chartReferenceTwo: {
     backgroundColor: "#68737D",
   },
   chartLabel: {
-    fontSize: 10,
+    fontSize: 12,
     color: "#41505C",
     textAlign: "center",
   },
@@ -8242,12 +8069,12 @@ const styles = StyleSheet.create({
     lineHeight: 14,
   },
   seniorityCard: {
-    backgroundColor: "#F4EFE4",
+    backgroundColor: "#C6CDD4",
     borderRadius: 20,
     padding: 16,
     gap: 8,
     borderWidth: 1,
-    borderColor: "#E1D7C7",
+    borderColor: "#5F6B76",
   },
   seniorityHeader: {
     flexDirection: "row",
@@ -8257,15 +8084,15 @@ const styles = StyleSheet.create({
   seniorityTitle: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#1D3A45",
+    color: "#111820",
   },
   seniorityRole: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#7A5A27",
+    color: "#344552",
   },
   seniorityMeta: {
     fontSize: 13,
-    color: "#655D53",
+    color: "#41505C",
   },
 });

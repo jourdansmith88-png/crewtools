@@ -384,12 +384,37 @@ export function scoreSearchableAgainstInteractionRules(searchable: string, match
 
 export function determineSourcePriorityForQuestion(question: string) {
   const lower = question.toLowerCase();
+  const isPcsSwapQuestion =
+    lower.includes("swap with pot") ||
+    lower.includes("swap with the pot") ||
+    lower.includes("swap pot") ||
+    /\bpcs\b/.test(lower) ||
+    lower.includes("1200 pcs") ||
+    lower.includes("bid period") ||
+    lower.includes("carry-out") ||
+    lower.includes("carry out") ||
+    lower.includes("capped reserve days") ||
+    lower.includes("capped rsv") ||
+    lower.includes("black days") ||
+    lower.includes("max pickup") ||
+    lower.includes("pickup limit") ||
+    lower.includes("drop trip for pickup") ||
+    lower.includes("coverage works");
   const isPayQuestion =
     lower.includes("pay") ||
     lower.includes("paid") ||
     lower.includes("credit") ||
     lower.includes("compensation") ||
     lower.includes("how will it pay");
+
+  if (isPcsSwapQuestion) {
+    return [
+      { sourceLabel: "Scheduler Manual" as const, tier: "scheduler_manual" as const },
+      { sourceLabel: "PWA" as const, tier: "pwa" as const },
+      { sourceLabel: "Compensation Manual" as const, tier: "compensation_manual" as const },
+      { sourceLabel: "CrewTools Logic" as const, tier: "crewtools_logic" as const },
+    ];
+  }
 
   return isPayQuestion
     ? [

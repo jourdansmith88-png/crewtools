@@ -127,6 +127,22 @@ function buildHeuristicCandidates(args: {
       questionLower.includes("both remain on schedule") ||
       questionLower.includes("assigned short call and trip")
     );
+  const mentionsPcsSwapScenario =
+    questionLower.includes("swap with pot") ||
+    questionLower.includes("swap with the pot") ||
+    questionLower.includes("swap pot") ||
+    /\bpcs\b/.test(questionLower) ||
+    questionLower.includes("1200 pcs") ||
+    questionLower.includes("bid period") ||
+    questionLower.includes("carry-out") ||
+    questionLower.includes("carry out") ||
+    questionLower.includes("capped reserve days") ||
+    questionLower.includes("capped rsv") ||
+    questionLower.includes("black days") ||
+    questionLower.includes("max pickup") ||
+    questionLower.includes("pickup limit") ||
+    questionLower.includes("drop trip for pickup") ||
+    questionLower.includes("coverage works");
   const mentionsSick = questionLower.includes("sick") || questionLower.includes("called in sick");
   const mentionsGreenslip =
     questionLower.includes("green slip") ||
@@ -378,6 +394,66 @@ function buildHeuristicCandidates(args: {
         "flight duty period",
       ],
       crossRefTargets: ["Section 23 S.9", "Section 12"],
+    });
+  }
+
+  if (mentionsPcsSwapScenario) {
+    pushCandidate(candidates, {
+      id: "heuristic-pcs-swap-scheduler",
+      source: "scheduler_manual",
+      section: "PCS / Swap With Pot Processing",
+      title: "PCS and swap-with-pot processing",
+      reason: "PCS run timing / swap-with-pot / bid-period processing scenario",
+      priority: 155,
+      searchTerms: [
+        "pcs",
+        "1200 pcs",
+        "swap with pot",
+        "bid period",
+        "carry-out",
+        "capped reserve days",
+        "max pickup",
+        "black days",
+        "reserve coverage",
+        "drop",
+        "add",
+      ],
+      crossRefTargets: ["Section 23", "Open Time"],
+    });
+    pushCandidate(candidates, {
+      id: "heuristic-pcs-swap-pwa",
+      source: "pwa",
+      section: "Section 23",
+      title: "Open time / reserve processing",
+      reason: "PWA support for swap / open-time / reserve constraints when directly applicable",
+      priority: 118,
+      searchTerms: [
+        "open time",
+        "swap",
+        "pickup",
+        "drop",
+        "reserve coverage",
+        "carry-out",
+      ],
+      crossRefTargets: ["Section 23"],
+    });
+    pushCandidate(candidates, {
+      id: "heuristic-pcs-swap-scheduler-secondary",
+      source: "scheduler_manual",
+      section: "Bid Period / Reserve Coverage Processing",
+      title: "Bid-period crossover processing",
+      reason: "Reserve coverage / capped reserve days / crossover timing support",
+      priority: 145,
+      searchTerms: [
+        "bid period",
+        "reserve coverage",
+        "capped reserve days",
+        "actual",
+        "qualified",
+        "carry-out",
+        "max pickup",
+      ],
+      crossRefTargets: ["Section 23"],
     });
   }
 

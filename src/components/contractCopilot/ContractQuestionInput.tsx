@@ -1,5 +1,7 @@
 import React from "react";
-import { Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Text, View } from "react-native";
+import { InstrumentField } from "../InstrumentField";
+import { InstrumentButton } from "../InstrumentButton";
 import { fliegerTypography, getFliegerPalette } from "../../theme/flieger";
 
 type ContractQuestionInputProps = {
@@ -32,68 +34,26 @@ export function ContractQuestionInput({
         style={{
           fontSize: 13,
           fontWeight: "800",
-          color: palette.textSecondary,
+          color: palette.label,
           textTransform: "uppercase",
-          letterSpacing: 1.1,
-          fontFamily: fliegerTypography.familyBody,
+          letterSpacing: fliegerTypography.letterSpacingLabel,
+          fontFamily: fliegerTypography.familyLabel,
         }}
       >
         Ask a contract question in plain English
       </Text>
-      <TextInput
+      <InstrumentField
         value={value}
         onChangeText={onChangeText}
         placeholder="If I'm reserve and get inverse assigned, what should happen?"
-        placeholderTextColor={palette.textMuted}
         multiline
-        style={{
-          minHeight: 112,
-          borderRadius: 14,
-          borderWidth: 1.5,
-          borderColor: palette.borderStrong,
-          backgroundColor: palette.inputBackground,
-          paddingHorizontal: 14,
-          paddingVertical: 12,
-          fontSize: 16,
-          color: palette.textPrimary,
-          fontFamily: fliegerTypography.familyBody,
-          textAlignVertical: "top",
-        }}
+        minHeight={112}
+        autoCapitalize="sentences"
       />
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-        <TouchableOpacity
-          style={{
-            alignSelf: "flex-start",
-            backgroundColor: palette.surface,
-            borderRadius: 14,
-            borderWidth: 1.5,
-            borderColor: palette.accent,
-            paddingHorizontal: 18,
-            paddingVertical: 12,
-          }}
-          onPress={onSubmit}
-        >
-          <Text style={{ color: palette.cream, fontSize: 14, fontWeight: "800", fontFamily: fliegerTypography.family }}>
-            {primaryActionLabel}
-          </Text>
-        </TouchableOpacity>
+        <InstrumentButton label={primaryActionLabel} variant="active" onPress={onSubmit} />
         {showContinueThreadAction && onContinueThread ? (
-          <TouchableOpacity
-            style={{
-              alignSelf: "flex-start",
-              backgroundColor: palette.surfaceRaised,
-              borderRadius: 999,
-              borderWidth: 2,
-              borderColor: palette.borderStrong,
-              paddingHorizontal: 18,
-              paddingVertical: 12,
-            }}
-            onPress={onContinueThread}
-          >
-            <Text style={{ color: palette.textPrimary, fontSize: 14, fontWeight: "800", fontFamily: fliegerTypography.family }}>
-              Reply in this thread
-            </Text>
-          </TouchableOpacity>
+          <InstrumentButton label="Reply in this thread" variant="neutral" onPress={onContinueThread} />
         ) : null}
         {onImageSelected ? (
           <>

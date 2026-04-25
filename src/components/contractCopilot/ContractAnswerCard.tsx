@@ -35,8 +35,8 @@ export function ContractAnswerCard({ answer }: ContractAnswerCardProps) {
           fontWeight: "800",
           color: palette.label,
           textTransform: "uppercase",
-          fontFamily: fliegerTypography.familyBody,
-          letterSpacing: 1,
+          fontFamily: fliegerTypography.familyLabel,
+          letterSpacing: fliegerTypography.letterSpacingLabel,
         }}
       >
         Bottom line
@@ -55,7 +55,8 @@ export function ContractAnswerCard({ answer }: ContractAnswerCardProps) {
             fontWeight: "800",
             borderWidth: 1.5,
             borderColor: palette.borderStrong,
-            fontFamily: fliegerTypography.family,
+            fontFamily: fliegerTypography.familyLabel,
+            letterSpacing: fliegerTypography.letterSpacingLabel,
           }}
         >
           AI (unverified)
@@ -75,7 +76,8 @@ export function ContractAnswerCard({ answer }: ContractAnswerCardProps) {
             fontWeight: "800",
             borderWidth: 1.5,
             borderColor: answer.answerCompleteness === "resolved" ? palette.greenBorder : palette.borderStrong,
-            fontFamily: fliegerTypography.family,
+            fontFamily: fliegerTypography.familyLabel,
+            letterSpacing: fliegerTypography.letterSpacingLabel,
           }}
         >
           {answer.answerCompleteness === "resolved" ? "Resolved" : "Provisional"}
@@ -95,7 +97,8 @@ export function ContractAnswerCard({ answer }: ContractAnswerCardProps) {
           textTransform: "uppercase",
           borderWidth: 1.5,
           borderColor: isCaution ? palette.borderStrong : palette.greenBorder,
-          fontFamily: fliegerTypography.family,
+          fontFamily: fliegerTypography.familyLabel,
+          letterSpacing: fliegerTypography.letterSpacingLabel,
         }}
       >
         {trustLabel}
@@ -106,7 +109,7 @@ export function ContractAnswerCard({ answer }: ContractAnswerCardProps) {
           lineHeight: 31,
           fontWeight: "900",
           color: palette.textPrimary,
-          fontFamily: fliegerTypography.family,
+          fontFamily: fliegerTypography.familyDisplay,
         }}
       >
         {answer.shortAnswer}
