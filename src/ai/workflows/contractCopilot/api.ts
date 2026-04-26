@@ -280,6 +280,18 @@ export type ContractCopilotApiSuccessResponse = {
     payCreditConsistencyScenario?: boolean;
     payCreditAnchorFound?: boolean;
     payCreditMissingSupportReason?: string;
+    silverSlipStatusScenario?: boolean;
+    gsTimeOffScenario?: boolean;
+    restLegalityScenario?: boolean;
+    restLegalityAnchorFound?: boolean;
+    restLegalityMissingSupportReason?: string;
+    farVsPwaIssueDetected?: boolean;
+    deadheadRerouteConsequenceScenario?: boolean;
+    deadheadRerouteAnchorFound?: boolean;
+    deadheadRerouteMissingSupportReason?: string;
+    processLookupScenario?: boolean;
+    twentyThreeM7LogLookupScenario?: boolean;
+    friendSwapUndoScenario?: boolean;
     rerouteConsistencyScenario?: boolean;
     rerouteAnchorFound?: boolean;
     rerouteMissingSupportReason?: string;
@@ -291,6 +303,9 @@ export type ContractCopilotApiSuccessResponse = {
     oeNotificationMissingSupportReason?: string;
     oeNotificationSupportRejectedReasons?: string[];
     oeNotificationVisibleSupportTerms?: string[];
+    contactabilityScenario?: boolean;
+    contactabilityAnchorFound?: boolean;
+    contactabilityMissingSupportReason?: string;
     inferredPilotStatus?: string;
     shortCallNotificationScenario?: boolean;
     shortCallNotificationAnchorFound?: boolean;

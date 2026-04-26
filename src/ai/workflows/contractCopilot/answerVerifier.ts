@@ -20,6 +20,7 @@ export type ContractCopilotAnswerVerifierResult = {
   verifierPassed: boolean;
   verifierWarnings: string[];
   verifierFailureReasons: string[];
+  selectedVerifierBranch?: string;
   verifierAdjustedAnswer: boolean;
   truthGuardRan: boolean;
   strongClaimsDetected: string[];
@@ -191,6 +192,106 @@ function detectOeNotificationScenarioFromHaystack(haystack: string) {
   );
 }
 
+function detectContactabilityScenarioFromHaystack(haystack: string) {
+  return (
+    /\bcontactable\b/.test(haystack) ||
+    /\banswer the phone\b/.test(haystack) ||
+    /\bphone call\b/.test(haystack) ||
+    /\bacars\b/.test(haystack) ||
+    /\bairport sit\b/.test(haystack) ||
+    /\bbetween flights\b/.test(haystack) ||
+    /\bon duty\b/.test(haystack) ||
+    /\boff duty\b/.test(haystack) ||
+    /\bobligation to respond\b/.test(haystack) ||
+    /\backnowledge\b/.test(haystack) ||
+    /\bcheck your schedule\b/.test(haystack) ||
+    /\bend of short call\b/.test(haystack)
+  );
+}
+
+function detectDeadheadRerouteConsequenceScenarioFromHaystack(haystack: string) {
+  return (
+    /\bdeadhead deviation\b/.test(haystack) ||
+    (/\bdeviat(?:e|ion)\b/.test(haystack) && /\bdeadhead\b/.test(haystack)) ||
+    /\broute home\b/.test(haystack) ||
+    /\bvicinity of home\b/.test(haystack) ||
+    /\bpass through base\b/.test(haystack) ||
+    (/\breroute\b/.test(haystack) && /\bslv\b/.test(haystack)) ||
+    /\bjoin on day 2\b/.test(haystack) ||
+    (/\bqs\b/.test(haystack) && /\bdelayed overnight\b/.test(haystack)) ||
+    /\bdelayed until next day\b/.test(haystack) ||
+    /\bduty time missing\b/.test(haystack) ||
+    /\bpb day not given\b/.test(haystack)
+  );
+}
+
+function detectPayCreditConsistencyScenarioFromQuestion(questionText: string) {
+  return (
+    /\bsick bank\b/.test(questionText) ||
+    /\bcalled well\b/.test(questionText) ||
+    /\bbank deposit\b/.test(questionText) ||
+    /\bdeposit\b/.test(questionText) ||
+    /\bss credit\b/.test(questionText) ||
+    /\bsilver slip credit\b/.test(questionText) ||
+    /\btimecard\b/.test(questionText) ||
+    /\bmicrew\b/.test(questionText) ||
+    /\bprojected credit\b/.test(questionText) ||
+    /\bfinal credit\b/.test(questionText) ||
+    /\bcredit recalculation\b/.test(questionText) ||
+    /\bdeadhead deviation\b/.test(questionText) ||
+    /\blayover less than 13 hours\b/.test(questionText) ||
+    /\breverted to\b/.test(questionText)
+  );
+}
+
+function detectSilverSlipStatusScenarioFromQuestion(questionText: string) {
+  return (
+    /\bsilver slip\b/.test(questionText) &&
+    (/\bwhat does\b/.test(questionText) || /\bstatus\b/.test(questionText)) &&
+    (/\b['"]?[a-z]['"]?\b/.test(questionText) || /\bmean\b/.test(questionText))
+  );
+}
+
+function detectGsTimeOffScenarioFromQuestion(questionText: string) {
+  const hasGsContext =
+    /\bgreen slip\b/.test(questionText) ||
+    /\bgreenslip\b/.test(questionText) ||
+    /\bgs\b/.test(questionText);
+  const hasTimeOffQuestion =
+    /\b24-hour\b/.test(questionText) ||
+    /\b24 hour\b/.test(questionText) ||
+    /\bperiods off\b/.test(questionText) ||
+    /\bgenerate two\b/.test(questionText) ||
+    /\bone-day\b/.test(questionText) ||
+    /\bone day\b/.test(questionText);
+  return hasGsContext && hasTimeOffQuestion;
+}
+
+function detectTwentyThreeM7LogLookupScenarioFromQuestion(questionText: string) {
+  return (
+    /\b23m7\b/.test(questionText) &&
+    (
+      /\baffected pilots\b/.test(questionText) ||
+      /\blogs\b/.test(questionText) ||
+      /\bicrew\b/.test(questionText) ||
+      /\bopen time menu\b/.test(questionText) ||
+      /\bdisplay 23m7 logs\b/.test(questionText)
+    )
+  );
+}
+
+function detectFriendSwapUndoScenarioFromQuestion(questionText: string) {
+  return (
+    /\bfriend swap\b/.test(questionText) ||
+    /\bswapped with a friend\b/.test(questionText) ||
+    /\bswap it back\b/.test(questionText) ||
+    /\bwhite slip\b/.test(questionText) ||
+    /\bpersonal drop\b/.test(questionText) ||
+    /\bblind slip\b/.test(questionText) ||
+    (/\bmicrew\b/.test(questionText) && /\bpickup\b/.test(questionText))
+  );
+}
+
 function detectShortCallDutyScenarioFromHaystack(haystack: string) {
   const hasShortCallContext =
     /\bshort call\b/.test(haystack) ||
@@ -222,7 +323,18 @@ function detectPbRerouteXdayScenarioFromHaystack(haystack: string) {
     /\bpr\b/.test(haystack) ||
     /\bpr remainder\b/.test(haystack) ||
     /\binterrupted x-days?\b/.test(haystack) ||
-    /\bpb day\b/.test(haystack);
+    /\bpb day\b/.test(haystack) ||
+    /\bpb converted to lc\b/.test(haystack) ||
+    ((/\blc\b/.test(haystack) || /\blong call\b/.test(haystack)) && (/\bpb\b/.test(haystack) || /\bpr\b/.test(haystack)));
+  const hasPbProcessingSpecifics =
+    /\binterrupted x-days?\b/.test(haystack) ||
+    /\bx-days?\b/.test(haystack) ||
+    /\bpr remainder\b/.test(haystack) ||
+    /\bpb converted to lc\b/.test(haystack) ||
+    /\bdart\b/.test(haystack) ||
+    /\bnotification\b/.test(haystack) ||
+    /\barcos\b/.test(haystack) ||
+    /\brobot\b/.test(haystack);
   const hasRerouteSequenceContext =
     /\bqs\b/.test(haystack) ||
     /\bquick slip\b/.test(haystack) ||
@@ -237,7 +349,7 @@ function detectPbRerouteXdayScenarioFromHaystack(haystack: string) {
     /\b2-day\b/.test(haystack) ||
     /\b3-day\b/.test(haystack);
 
-  return hasPbProcessingContext && hasRerouteSequenceContext;
+  return hasPbProcessingContext && hasPbProcessingSpecifics && hasRerouteSequenceContext;
 }
 
 function detectFutureRotationChangeScenarioFromHaystack(haystack: string) {
@@ -254,6 +366,25 @@ function detectFutureRotationChangeScenarioFromHaystack(haystack: string) {
       /\bknown absence\b/.test(haystack) ||
       /\breserve coverage\b/.test(haystack))
   );
+}
+
+function detectRestLegalityScenarioFromHaystack(haystack: string) {
+  const farVsPwaRest =
+    /\b30-hour rest\b/.test(haystack) ||
+    /\b30 hour rest\b/.test(haystack) ||
+    /\bfar legal\b/.test(haystack) ||
+    /\bpwa requirement\b/.test(haystack) ||
+    /\brelease with pay\b/.test(haystack);
+  const shortCallDhRest =
+    (/\b9:45 rest\b/.test(haystack) || /\b10 hours required\b/.test(haystack) || /\b9:15\b/.test(haystack)) &&
+    (/\bdh-only\b/.test(haystack) || /\bdh only\b/.test(haystack) || /\bfdp\b/.test(haystack) || /\bshort call\b/.test(haystack));
+  const legalityTimingReview =
+    /\billegal rotation\b/.test(haystack) ||
+    /\brotation illegal\b/.test(haystack) ||
+    /\brest legality\b/.test(haystack) ||
+    /\bduty\/rest\b/.test(haystack) ||
+    (/\brotation\b/.test(haystack) && /\btiming shown\b/.test(haystack) && /\blegal\b/.test(haystack));
+  return farVsPwaRest || shortCallDhRest || legalityTimingReview;
 }
 
 function detectKnownAbsenceScenarioFromHaystack(haystack: string) {
@@ -445,6 +576,12 @@ function collectDecisionDependencies(question: string, answer: ContractAnswerCar
   if (/\blc\b|\blong call\b/.test(haystack)) {
     push("whether this is a new Long Call period or a continuation of an earlier status");
   }
+  if (detectRestLegalityScenarioFromHaystack(haystack)) {
+    push("whether the sequence is still FAR legal but may still violate a stricter PWA duty/rest rule");
+    push("whether the issue is a planned 30-hour rest loss, a 9:45 or 9:15 rest problem, or another Section 12 legality threshold");
+    push("whether the affected day is DH-only / no-FDP or a day with actual FDP or duty consequences");
+    push("whether the packet actually supports release, operate, or release with pay for this rest failure");
+  }
   if (/\bpb\b|\bpayback\b|\bpr remainder\b|\binterrupted x-days\b|\bdart\b/.test(haystack)) {
     push("whether the PB to LC conversion and PR remainder were recalculated after the reroute extension");
     push("whether the interrupted X-days were coded as used, interrupted, restored, or held for later reapplication");
@@ -566,6 +703,11 @@ function collectLikelyPaths(question: string, answer: ContractAnswerCard, hasOpe
     push("If Long Call starts as a new operational period, the Long Call / reserve rule set may control timing more than the definition alone.");
     push("If the company is treating this as a continuation that touches the Golden Day itself, the hard non-fly-day definition may matter more.");
   }
+  if (detectRestLegalityScenarioFromHaystack(haystack)) {
+    push("If the sequence is still FAR legal but the PWA rest rule is stricter, FAR legality alone does not settle whether the company can operate or must release.");
+    push("If the support only proves the day is DH-only without FDP, the 10-hour versus 9:15 or 9:45 analysis may differ from a normal flying-duty sequence.");
+    push("If the packet does not attach release-with-pay language, keep the release/pay result cautious rather than promising it.");
+  }
   if (/\bshort call\b/.test(haystack) && /\breport\b/.test(haystack)) {
     push("If the short-call block and the trip report create one continuous duty problem, the legality analysis may change.");
     push("If the company treats them as separate legal events, the scheduling answer may be different.");
@@ -682,6 +824,11 @@ function collectWhatToCheck(question: string, answer: ContractAnswerCard) {
   if (/\breport\b|\brelease\b|\bafter report\b|\bbefore report\b|\bwocl\b|\b8d3\b/.test(haystack)) {
     push("the exact report, release, and change-notification timestamps");
   }
+  if (detectRestLegalityScenarioFromHaystack(haystack)) {
+    push("the exact scheduled rest versus actual rest, including any planned 30-hour rest that was lost");
+    push("whether the affected day is DH-only or includes FDP/report/duty obligations");
+    push("whether the system treated the outcome as FAR-legal only, contract-legal, released, or released with pay");
+  }
   if (/\bpb\b|\bpr\b|\blc\b|\bx-?day\b/.test(haystack)) {
     push("the reserve or payback status shown on the affected calendar days");
   }
@@ -782,12 +929,23 @@ function buildDecisionPathExplanation(args: {
     [args.question, args.answer.shortAnswer, args.answer.plainEnglishExplanation, ...(args.answer.scenarioBreakdown ?? [])].join(" ")
   );
   const apdDiagnostic = /\bapd\b|\bauthorized personal drop\b/.test(questionText);
+  const silverSlipStatusScenario = detectSilverSlipStatusScenarioFromQuestion(questionText);
+  const gsTimeOffScenario = detectGsTimeOffScenarioFromQuestion(questionText);
+  const twentyThreeM7LogLookupScenario = detectTwentyThreeM7LogLookupScenarioFromQuestion(questionText);
+  const friendSwapUndoScenario = detectFriendSwapUndoScenarioFromQuestion(questionText);
   const oeNotificationScenario = detectOeNotificationScenarioFromHaystack(questionText);
+  const contactabilityScenario = detectContactabilityScenarioFromHaystack(questionText);
+  const pbRerouteXdayScenario = detectPbRerouteXdayScenarioFromHaystack(questionText);
+  const payCreditConsistencyScenario = detectPayCreditConsistencyScenarioFromQuestion(questionText);
+  const deadheadRerouteConsequenceScenario =
+    detectDeadheadRerouteConsequenceScenarioFromHaystack(questionText) &&
+    !pbRerouteXdayScenario &&
+    !payCreditConsistencyScenario;
   const shortCallDutyScenario = detectShortCallDutyScenarioFromHaystack(questionText);
   const shortCallNotificationScenario = detectShortCallNotificationScenarioFromHaystack(questionText);
-  const pbRerouteXdayScenario = detectPbRerouteXdayScenarioFromHaystack(haystack);
   const futureRotationChangeScenario = detectFutureRotationChangeScenarioFromHaystack(haystack);
   const knownAbsenceScenario = detectKnownAbsenceScenarioFromHaystack(haystack);
+  const restLegalityScenario = detectRestLegalityScenarioFromHaystack(haystack);
   const goldenDayLcScenario =
     /\bgolden day\b/.test(questionText) &&
     (/\bhard non-fly day\b/.test(questionText) || /\bsection 2 a\.129\b/.test(questionText) || /\bpwa section 2 a\.129\b/.test(questionText)) &&
@@ -823,6 +981,231 @@ function buildDecisionPathExplanation(args: {
       "- The exact required and available reserve counts at the time APD processed.",
       "- Whether the available pool you saw matches the APD-eligible reserve pool the system used.",
       "- Whether the request was coded for the correct day and APD/drop type.",
+      `Source limitation: ${limitation}`,
+      `Sources used: ${sourceSummary}.`,
+    ].join("\n");
+  }
+  if (pbRerouteXdayScenario) {
+    const limitation =
+      args.failureReasons[0] ??
+      args.warnings[0] ??
+      "I do not have the full governing packet for the PB / PR / LC reapplication step in this reroute sequence.";
+    return [
+      "Issue breakdown:",
+      "- PB day disappeared after a QS pickup was rerouted and the rotation extended from a 2-day trip to a 3-day trip.",
+      "- The reroute and deadhead change may have changed how the interrupted X-day sequence was coded.",
+      "- PB converting to LC and the PR remainder display may be a separate PB / PR / LC processing issue rather than a clean entitlement answer by itself.",
+      "- The missing robot / human / ACARS / ARCOS notification trail is its own dispute path and can matter if the award sequence was not communicated correctly.",
+      "",
+      "What this depends on:",
+      "- Whether the reroute qualifies under Section 23 L and whether Section 23 L.9 controls the interrupted X-day treatment.",
+      "- Whether the interrupted X-days were coded as used, interrupted, restored, or held for later PB reapplication after the QS pickup changed shape.",
+      "- When the PB converted to LC, how the PR remainder was recalculated, and whether the system treated the extension as continuation, reroute, or re-award processing.",
+      "- Whether the missing notification record reflects a separate award/notice problem or just a lag in the system history.",
+      "",
+      "Likely paths:",
+      "- If this was a true X-day interruption, the interrupted X-days may need to be restored, and the PB / PR / LC values may need to be recalculated after the reroute extension.",
+      "- If the system treated the sequence as continuation or a reflow, the PB day can disappear from the display without automatically proving PB must be restored later.",
+      "- If the values are lagging behind the reroute processing, DART or manual review may be needed before the PB day, LC status, and PR remainder settle correctly.",
+      "",
+      "What to check:",
+      "- The original QS pickup award, the reroute history, and the deadhead replacement that turned the 2-day into a 3-day sequence.",
+      "- The X-day coding on the affected days and whether the system shows them as interrupted, used, restored, or converted.",
+      "- The PB to LC conversion timing, the PR remainder calculation, and any DART or scheduler note explaining why the PB day disappeared.",
+      "- The ACARS, ARCOS, robot, or manual notification logs tied to the award and reroute sequence.",
+      `Source limitation: ${limitation}`,
+      `Sources used: ${sourceSummary}.`,
+    ].join("\n");
+  }
+  if (twentyThreeM7LogLookupScenario) {
+    const limitation =
+      args.failureReasons[0] ??
+      args.warnings[0] ??
+      "I do not have the exact iCrew UI-path source attached for the 23M7 log screen.";
+    return [
+      "What this depends on:",
+      "- Whether your iCrew build still uses the same Schedules and Open Time menu labels for the 23M7 tool path.",
+      "- Whether the affected-pilot display is exposed as a direct 23M7 log screen rather than a contract section explanation.",
+      "- Whether the visible support actually attaches the UI path, or only the 23M7 concept itself.",
+      "Likely paths:",
+      "- In practice, this is an iCrew process lookup question, not a contract-interpretation question.",
+      "- The path people usually mean is iCrew -> Schedules -> Open Time -> Display 23M7 logs or the equivalent 23M7 affected-pilot display in that Open Time area.",
+      "- If the attached packet does not explicitly show that UI path, keep the answer cautious and verify the exact menu label in your current build.",
+      "What to check:",
+      "- In iCrew, start with Schedules.",
+      "- Then open the Open Time menu.",
+      "- Look for Display 23M7 logs or the affected-pilot log/display in that same area.",
+      "- If the label differs in your build, confirm with the current iCrew help/process reference.",
+      `Source limitation: ${limitation}`,
+      `Sources used: ${sourceSummary}.`,
+    ].join("\n");
+  }
+  if (friendSwapUndoScenario) {
+    const limitation =
+      args.failureReasons[0] ??
+      args.warnings[0] ??
+      "I do not have the exact MiCrew reverse-friend-swap process rule attached for this question.";
+    return [
+      "What this depends on:",
+      "- Whether the friend swap already fully processed in MiCrew, because once it does, a simple reverse swap or drop may be blocked.",
+      "- Whether the system still allows a process workaround such as a white slip by name paired with the other pilot's personal drop.",
+      "- Whether timing restrictions like today, tomorrow, next day, blind-slip conflicts, and normal rest or legality screens block the cleanup.",
+      "Likely paths:",
+      "- Once a friend swap is processed, MiCrew may not let you simply swap it back with a normal reverse transaction.",
+      "- A possible process path is a white slip by name plus the other pilot's personal drop, if the timing window allows it and there is no blind-slip conflict.",
+      "- Even if that process path exists, it is system/process guidance rather than guaranteed approval, and normal rest and legality still matter.",
+      "What to check:",
+      "- Whether the swap is already finalized in MiCrew or still in a state that can be reversed directly.",
+      "- Whether a white slip by name and the other pilot's personal drop are still allowed for that date range.",
+      "- Whether the trips touch today, tomorrow, or next day, and whether any blind-slip or same-day processing block applies.",
+      "- Whether both pilots still clear rest, legality, and any pickup/drop screening after the workaround.",
+      `Source limitation: ${limitation}`,
+      `Sources used: ${sourceSummary}.`,
+    ].join("\n");
+  }
+  if (silverSlipStatusScenario) {
+    const limitation =
+      args.failureReasons[0] ??
+      args.warnings[0] ??
+      "I do not have the exact Silver Slip status-code definition attached for this question.";
+    return [
+      "What this depends on:",
+      "- Whether the attached source actually defines what the 'N' status means on a Silver Slip display.",
+      "- Whether the status is describing availability, soak state, or another internal pickup/status code rather than a pay rule by itself.",
+      "- Whether the visible support ties the code to a specific operational meaning, or only to Silver Slip generally.",
+      "Likely paths:",
+      "- Do not assume 'N' simply means 'no' unless the source actually says that.",
+      "- If the support or tool context ties 'N' to a not-soaked or not-yet-available-to-pick-up state, that is the safer practical explanation, but it should still stay source-limited.",
+      "- If the packet never defines the code directly, the right answer is that it is a Silver Slip status indicator whose exact meaning still needs a cleaner source.",
+      "What to check:",
+      "- The Silver Slip screen, legend, or manual note that actually defines the status code.",
+      "- Whether iCrew or the scheduler source shows 'N' as not soaked, not yet available, or another specific availability status.",
+      "- Any attached reference that defines the code separately from the broader Silver Slip premium rules.",
+      `Source limitation: ${limitation}`,
+      `Sources used: ${sourceSummary}.`,
+    ].join("\n");
+  }
+  if (payCreditConsistencyScenario) {
+    const limitation =
+      args.failureReasons[0] ??
+      args.warnings[0] ??
+      "I do not have the exact pay/credit/bank-eligibility rule attached for this question.";
+    const sickBankCase =
+      /\bsick bank\b/.test(questionText) || /\bcalled well\b/.test(questionText) || /\bpicked up flying\b/.test(questionText);
+    const bankDepositCase =
+      /\bbank deposit\b/.test(questionText) ||
+      /\bdeposit\b/.test(questionText) ||
+      /\bss credit\b/.test(questionText) ||
+      /\bsilver slip credit\b/.test(questionText);
+    const recalculationCase =
+      /\bmicrew\b/.test(questionText) ||
+      /\bprojected credit\b/.test(questionText) ||
+      /\bfinal credit\b/.test(questionText) ||
+      /\bcredit recalculation\b/.test(questionText) ||
+      /\btimecard\b/.test(questionText) ||
+      /\bdeadhead deviation\b/.test(questionText) ||
+      /\blayover less than 13 hours\b/.test(questionText) ||
+      /\breverted to\b/.test(questionText);
+
+    if (bankDepositCase) {
+      return [
+        "What this depends on:",
+        "- Whether the 2 hours iCrew is showing are pay, credit, or bank-eligible credit.",
+        "- Whether the Silver Slip generated a credit type that is treated differently from regular or replacement credit for bank posting.",
+        "- Whether the rejection is really a credit-type eligibility issue rather than a balance or timing issue.",
+        "Likely paths:",
+        "- A Silver Slip can generate pay or displayed credit without that value being bank-eligible in the same way as regular line or replacement credit.",
+        "- If iCrew says 2:00 could not be deposited, the system may be rejecting the credit type rather than saying no value was created at all.",
+        "- If the attached packet never says Silver Slip credit counts for bank deposit, keep the answer cautious instead of assuming the system is wrong.",
+        "What to check:",
+        "- Whether iCrew labels the 2 hours as bank-eligible credit, premium pay only, straight credit, or a Silver Slip-specific code.",
+        "- Any Compensation Manual or PWA bank rule that says whether Silver Slip credit can be deposited.",
+        "- The exact rejection message and whether it points to bank eligibility, posting order, or a credit-type restriction.",
+        `Source limitation: ${limitation}`,
+        `Sources used: ${sourceSummary}.`,
+      ].join("\n");
+    }
+
+    if (sickBankCase) {
+      return [
+        "What this depends on:",
+        "- Whether the picked-up flying started only after the sick trip ended or overlapped the original sick period.",
+        "- Whether the called-well timing changed your availability going forward but did not erase the original sick-bank charge.",
+        "- Whether the packet actually attaches a sick-bank restoration or offset rule for later flying after the sick trip ends.",
+        "Likely paths:",
+        "- Later picked-up flying after the sick trip ends does not automatically mean the original sick-bank hit disappears.",
+        "- Called well timing can matter for what you can pick up next without necessarily restoring the earlier sick-bank charge.",
+        "- If the packet never attaches a restoration or offset rule, keep the answer cautious rather than promising a correction.",
+        "What to check:",
+        "- The sick-trip end time, the called-well timestamp, and the later pickup award time.",
+        "- Whether the timecard shows the original sick-bank deduction separately from the later flying.",
+        "- Any attached Section 14 or compensation support that actually addresses restoration, offset, or replenishment.",
+        `Source limitation: ${limitation}`,
+        `Sources used: ${sourceSummary}.`,
+      ].join("\n");
+    }
+
+    if (recalculationCase) {
+      return [
+        "What this depends on:",
+        "- Whether MiCrew was showing projected credit before final closeout rather than the final posted credit.",
+        "- Whether a deadhead deviation, not deviating, or a short-layover/rest assumption temporarily changed the projected value.",
+        "- Whether the final closeout removed that assumption once the actual flown sequence and layover were known.",
+        "Likely paths:",
+        "- Projected credit does not always survive to final closeout if MiCrew was temporarily assuming a deviation, short layover, or another trigger that never actually finalized.",
+        "- If the deadhead deviation never happened or the final layover did not trip the required threshold, the final posted credit can legitimately revert to the original lower value.",
+        "- FAR or rest-sensitive assumptions can affect projected credit without guaranteeing the same result on the final timecard.",
+        "What to check:",
+        "- The MiCrew projected-credit display versus the final timecard closeout.",
+        "- Whether the deadhead deviation field stayed active, whether you actually deviated, and whether the layover ultimately dropped below the controlling threshold.",
+        "- The original sign-out, actual report/release history, and any note explaining why the projected value reverted at final closeout.",
+        `Source limitation: ${limitation}`,
+        `Sources used: ${sourceSummary}.`,
+      ].join("\n");
+    }
+  }
+  if (gsTimeOffScenario) {
+    const limitation =
+      args.failureReasons[0] ??
+      args.warnings[0] ??
+      "I do not have the exact Green Slip Section 23 Q time-off language attached for this question.";
+    return [
+      "What this depends on:",
+      "- Whether the one-day Green Slip changes one or more non-fly or reserve days in a way that creates additional 24-hour periods off.",
+      "- Whether release timing and the surrounding reserve/non-fly-day structure are what drive the extra 24-hour periods, rather than the one-day GS label by itself.",
+      "- Whether the visible support actually states the Section 23 Q time-off consequence for this exact one-day GS setup.",
+      "Likely paths:",
+      "- A one-day GS does not automatically mean you always get two extra 24-hour periods off just because the trip is one day long.",
+      "- Whether two 24-hour periods are created depends on how the Green Slip affects the surrounding non-fly or reserve days and the actual release timing.",
+      "- If the packet only gives general GS language without the exact time-off consequence, keep the answer cautious instead of promising two 24-hour periods off.",
+      "What to check:",
+      "- The exact Green Slip day, the release time, and the surrounding reserve or non-fly-day structure.",
+      "- Whether Section 23 Q or another attached source explicitly says how many 24-hour periods off are generated in this one-day GS setup.",
+      "- Whether the system coded the surrounding days as preserved, moved, or consumed after the GS assignment.",
+      `Source limitation: ${limitation}`,
+      `Sources used: ${sourceSummary}.`,
+    ].join("\n");
+  }
+  if (restLegalityScenario) {
+    const limitation =
+      args.failureReasons[0] ??
+      args.warnings[0] ??
+      "I do not have the exact Section 12 rest-legality and release/pay language attached for this question.";
+    return [
+      "What this depends on:",
+      "- Whether the issue is a planned 30-hour rest that was lost, a 9:45 or 9:15 rest question, or another Section 12 duty/rest legality problem.",
+      "- Whether the sequence remains FAR legal but still may not satisfy a stricter PWA contractual rest requirement.",
+      "- Whether the affected day is DH-only / no-FDP or a day with actual FDP, report, or duty consequences.",
+      "- Whether the packet actually attaches release-with-pay or operate/release treatment for this rest failure.",
+      "Likely paths:",
+      "- FAR legality does not automatically answer the PWA question if the contract imposes a stricter rest requirement.",
+      "- If the controlling support is a Section 12 contractual rest rule, the company may need to release, operate, or release with pay depending on the exact language and coding of the day.",
+      "- If the day is DH-only without FDP, the 10-hour versus 9:15 or 9:45 analysis may differ from a normal flying-duty sequence.",
+      "What to check:",
+      "- The exact scheduled rest versus actual rest, including any planned 30-hour rest that was lost due to delay or reroute.",
+      "- Whether the affected day is DH-only or includes FDP/report/duty obligations.",
+      "- The exact report, release, block, and rest timestamps for the sequence you think is illegal.",
+      "- Whether any release or pay treatment is coded as contract-driven or only as a FAR legality outcome.",
       `Source limitation: ${limitation}`,
       `Sources used: ${sourceSummary}.`,
     ].join("\n");
@@ -869,6 +1252,62 @@ function buildDecisionPathExplanation(args: {
       "- The SRH and TRH pages that actually mention OE notification, phone contact, CNO, or electronic notice.",
       "- Whether the current source is OE-specific or only a general contact/notification rule.",
       "- Any current company or training-process note that explicitly replaced the older phone-call requirement.",
+      `Source limitation: ${limitation}`,
+      `Sources used: ${sourceSummary}.`,
+    ].join("\n");
+  }
+  if (contactabilityScenario && !pbRerouteXdayScenario) {
+    const limitation =
+      args.failureReasons[0] ??
+      args.warnings[0] ??
+      "I do not have the exact contactability / notification-obligation source attached for this question.";
+    return [
+      "What this depends on:",
+      "- Whether the source requires response to an official company contact method such as ACARS, company call, notice placement, or another documented notification channel.",
+      "- Whether being on duty, in airport sit, or between flights changes what you must monitor versus whether you must answer a personal phone.",
+      "- Whether the question is about acknowledgment or schedule-check obligations, especially at the end of short call.",
+      "Likely paths:",
+      "- If the source requires monitoring or acknowledgment of official company channels, ignoring those channels can still be risky even if the source does not clearly require answering a personal phone.",
+      "- If the packet does not explicitly require personal-phone contact, I would not say you must answer your cell phone just because you are on duty or between flights.",
+      "- If the issue is the end of short call, the key question is whether the source requires a schedule check, acknowledgment, or another notice step before the short-call period ends.",
+      "What to check:",
+      "- The exact contact method used or attempted: ACARS, scheduler phone contact, CNO, schedule placement, or another official channel.",
+      "- Whether the timing was on duty, between flights, in airport sit, or at the end of short call.",
+      "- Any logs, screenshots, ACARS history, missed-call records, or schedule snapshots showing when notice was sent and how it was delivered.",
+      "- Preserve timestamps and method history, and do not ignore official company channels even if the personal-phone obligation is unclear.",
+      `Source limitation: ${limitation}`,
+      `Sources used: ${sourceSummary}.`,
+    ].join("\n");
+  }
+  if (deadheadRerouteConsequenceScenario) {
+    const limitation =
+      args.failureReasons[0] ??
+      args.warnings[0] ??
+      "I do not have the exact deadhead deviation / SLV / QS consequence rule attached for this question.";
+    return [
+      "What this depends on:",
+      "- Whether the issue is a deadhead deviation routing question, a reroute that bleeds into a scheduled event like SLV, or a QS delay that changed duty-history and PB/X-day consequences.",
+      "- Whether the company treated the sequence as continuation, reroute, or a new assignment consequence after the original report and duty start.",
+      "- Whether the system display matches the actual report, deadhead, reroute, and duty history.",
+      "Likely paths:",
+      /\bdeviat(?:e|ion)\b/.test(questionText)
+        ? "- A deadhead deviation can turn on specific routing limits such as whether the route home, ATL/CVG/DTW option, or another vicinity-of-home route must pass through base or otherwise satisfy the source rule."
+        : "- A deadhead deviation can turn on specific routing limits such as whether the route passes through base or qualifies as a permitted home-vicinity routing, not just on whether the request seems reasonable.",
+      /\bslv\b/.test(questionText)
+        ? "- If the reroute bleeds into SLV, the controlling question becomes what the source lets the company do with the SLV itself, including whether it can be joined on day 2 or otherwise adjusted."
+        : "- If the reroute bleeds into SLV or another scheduled event, the controlling question becomes what the source lets the company do with that event, including whether a join-on-day-2 or another adjustment is allowed.",
+      (/\bqs\b/.test(questionText) || /\bquick slip\b/.test(questionText))
+        ? "- If the QS was delayed overnight after original sign-in, the actual duty start, missing duty-time display, and any PB/X-day consequence may diverge until iCrew history, CPO review, or DART review catches up."
+        : "- If a QS or reroute delayed overnight after report, the actual sign-in, duty start, PB/X-day treatment, and displayed duty time may diverge until the system history or DART review catches up.",
+      "What to check:",
+      /\bdeviat(?:e|ion)\b/.test(questionText)
+        ? "- The exact deadhead deviation and routing rule, including whether the route home or ATL/CVG/DTW-style vicinity routing must pass through base."
+        : "- The original versus modified rotation history, including the delayed deadhead, reroute extension, and any scheduled event like SLV that was overlapped.",
+      (/\bqs\b/.test(questionText) || /\bquick slip\b/.test(questionText))
+        ? "- The original sign-in, actual duty start, missing duty-time display, and whether PB, PR, or interrupted X-day coding changed after the overnight delay."
+        : "- The actual sign-in, duty start, missing duty-time display, and whether PB, PR, or interrupted X-day coding changed after the delay.",
+      "- Any DART, CPO, or scheduler note explaining a mismatch between the visible display and the actual report/duty history.",
+      "- For deviation questions, the exact routing rule on whether the deadhead path must pass through base or another qualifying waypoint.",
       `Source limitation: ${limitation}`,
       `Sources used: ${sourceSummary}.`,
     ].join("\n");
@@ -983,38 +1422,6 @@ function buildDecisionPathExplanation(args: {
       "Safety note: Do not rely on a sick-leave workaround or any informal absence workaround as a substitute for an actual known-absence or protected-absence rule.",
     ].join("\n");
   }
-  if (pbRerouteXdayScenario) {
-    const limitation =
-      args.failureReasons[0] ??
-      args.warnings[0] ??
-      "I do not have the full governing packet for the PB / PR / LC reapplication step in this reroute sequence.";
-    return [
-      "Issue breakdown:",
-      "- PB day disappeared after a QS pickup was rerouted and the rotation extended from a 2-day trip to a 3-day trip.",
-      "- The reroute and deadhead change may have changed how the interrupted X-day sequence was coded.",
-      "- PB converting to LC and the PR remainder display may be a separate PB / PR / LC processing issue rather than a clean entitlement answer by itself.",
-      "- The missing robot / human / ACARS / ARCOS notification trail is its own dispute path and can matter if the award sequence was not communicated correctly.",
-      "",
-      "What this depends on:",
-      "- Whether the reroute qualifies under Section 23 L and whether Section 23 L.9 controls the interrupted X-day treatment.",
-      "- Whether the interrupted X-days were coded as used, interrupted, restored, or held for later PB reapplication after the QS pickup changed shape.",
-      "- When the PB converted to LC, how the PR remainder was recalculated, and whether the system treated the extension as continuation, reroute, or re-award processing.",
-      "- Whether the missing notification record reflects a separate award/notice problem or just a lag in the system history.",
-      "",
-      "Likely paths:",
-      "- If this was a true X-day interruption, the interrupted X-days may need to be restored, and the PB / PR / LC values may need to be recalculated after the reroute extension.",
-      "- If the system treated the sequence as continuation or a reflow, the PB day can disappear from the display without automatically proving PB must be restored later.",
-      "- If the values are lagging behind the reroute processing, DART or manual review may be needed before the PB day, LC status, and PR remainder settle correctly.",
-      "",
-      "What to check:",
-      "- The original QS pickup award, the reroute history, and the deadhead replacement that turned the 2-day into a 3-day sequence.",
-      "- The X-day coding on the affected days and whether the system shows them as interrupted, used, restored, or converted.",
-      "- The PB to LC conversion timing, the PR remainder calculation, and any DART or scheduler note explaining why the PB day disappeared.",
-      "- The ACARS, ARCOS, robot, or manual notification logs tied to the award and reroute sequence.",
-      `Source limitation: ${limitation}`,
-      `Sources used: ${sourceSummary}.`,
-    ].join("\n");
-  }
   const dependencies = collectDecisionDependencies(args.question, args.answer);
   const likelyPaths = collectLikelyPaths(args.question, args.answer, args.hasOperationalSupport);
   const whatToCheck = collectWhatToCheck(args.question, args.answer);
@@ -1042,9 +1449,28 @@ function buildSaferFallbackAnswer(args: ContractCopilotAnswerVerifierInput & {
   const scenarioHaystack = normalizeText(
     [args.question, args.answer.shortAnswer, args.answer.plainEnglishExplanation, ...(args.answer.scenarioBreakdown ?? [])].join(" ")
   );
-  const pbRerouteXdayScenario = detectPbRerouteXdayScenarioFromHaystack(scenarioHaystack);
-  const futureRotationChangeScenario = detectFutureRotationChangeScenarioFromHaystack(scenarioHaystack);
-  const knownAbsenceScenario = detectKnownAbsenceScenarioFromHaystack(scenarioHaystack);
+  const questionText = normalizeText(args.question);
+  const pbRerouteXdayScenario = detectPbRerouteXdayScenarioFromHaystack(questionText);
+  const payCreditConsistencyScenario = detectPayCreditConsistencyScenarioFromQuestion(questionText);
+  const silverSlipStatusScenario = detectSilverSlipStatusScenarioFromQuestion(questionText);
+  const gsTimeOffScenario = detectGsTimeOffScenarioFromQuestion(questionText);
+  const twentyThreeM7LogLookupScenario = detectTwentyThreeM7LogLookupScenarioFromQuestion(questionText);
+  const friendSwapUndoScenario = detectFriendSwapUndoScenarioFromQuestion(questionText);
+  const deadheadRerouteConsequenceScenario =
+    detectDeadheadRerouteConsequenceScenarioFromHaystack(questionText) &&
+    !pbRerouteXdayScenario &&
+    !payCreditConsistencyScenario;
+  const futureRotationChangeScenario = detectFutureRotationChangeScenarioFromHaystack(questionText);
+  const knownAbsenceScenario = detectKnownAbsenceScenarioFromHaystack(questionText);
+  const payCreditBankDepositCase =
+    payCreditConsistencyScenario &&
+    (/\bbank deposit\b/.test(questionText) ||
+      /\bdeposit\b/.test(questionText) ||
+      /\bss credit\b/.test(questionText) ||
+      /\bsilver slip credit\b/.test(questionText));
+  const payCreditSickBankCase =
+    payCreditConsistencyScenario &&
+    (/\bsick bank\b/.test(questionText) || /\bcalled well\b/.test(questionText) || /\bpicked up flying\b/.test(questionText));
   return {
     ...args.answer,
     status: "insufficient_support" as const,
@@ -1052,6 +1478,22 @@ function buildSaferFallbackAnswer(args: ContractCopilotAnswerVerifierInput & {
     confidence: "low" as const,
     shortAnswer: pbRerouteXdayScenario
       ? "Based on the source support I found, this is a PB / QS / reroute / interrupted X-day processing question, not a single-rule answer."
+      : twentyThreeM7LogLookupScenario
+        ? "Based on the source support I found, this is an iCrew process lookup question about where 23M7 affected-pilot logs are displayed."
+      : friendSwapUndoScenario
+        ? "Based on the source support I found, this is a MiCrew process question about unwinding a friend swap, not a simple guaranteed reverse transaction."
+      : silverSlipStatusScenario
+        ? "Based on the source support I found, this is a Silver Slip status-code question, and I would not treat the 'N' code as self-defining unless the attached source actually defines it."
+      : payCreditConsistencyScenario
+        ? payCreditBankDepositCase
+          ? "Based on the source support I found, this is a bank-deposit and Silver Slip credit-eligibility question, not just a question about whether 2 hours showed up in iCrew."
+          : payCreditSickBankCase
+            ? "Based on the source support I found, this is a sick-bank timing question, not just a question about whether later flying was picked up."
+            : "Based on the source support I found, this is a projected-versus-final credit and timecard recalculation question, not a simple deadhead or rest answer."
+      : gsTimeOffScenario
+        ? "Based on the source support I found, a one-day Green Slip does not automatically prove you get two 24-hour periods off; that turns on the exact time-off and surrounding-day rules."
+      : deadheadRerouteConsequenceScenario
+        ? "Based on the source support I found, this looks like a deadhead or reroute consequence question, so the answer turns on what the reroute changed operationally, not just on one generic reroute rule."
       : knownAbsenceScenario
         ? "Based on the source support I found, this looks like a legal-obligation and possible known-absence question, not something I would answer with a simple yes/no protection claim."
       : futureRotationChangeScenario
@@ -1084,6 +1526,55 @@ export function verifyContractScenarioAnswer(
   const strongClaimsDetected = strongClaims.map((claim) => claim.text);
   const strongClaimsSupported: string[] = [];
   const strongClaimsDowngraded: string[] = [];
+  const verifierQuestionText = normalizeText(input.question);
+  const verifierHaystack = normalizeText(
+    [input.question, input.answer.shortAnswer, input.answer.plainEnglishExplanation, ...(input.answer.scenarioBreakdown ?? [])].join(" ")
+  );
+  const verifierPbRerouteXdayScenario = detectPbRerouteXdayScenarioFromHaystack(verifierQuestionText);
+  const verifierPayCreditConsistencyScenario = detectPayCreditConsistencyScenarioFromQuestion(verifierQuestionText);
+  const verifierSilverSlipStatusScenario = detectSilverSlipStatusScenarioFromQuestion(verifierQuestionText);
+  const verifierGsTimeOffScenario = detectGsTimeOffScenarioFromQuestion(verifierQuestionText);
+  const verifierTwentyThreeM7LogLookupScenario = detectTwentyThreeM7LogLookupScenarioFromQuestion(verifierQuestionText);
+  const verifierFriendSwapUndoScenario = detectFriendSwapUndoScenarioFromQuestion(verifierQuestionText);
+  const verifierDeadheadRerouteConsequenceScenario =
+    detectDeadheadRerouteConsequenceScenarioFromHaystack(verifierQuestionText) &&
+    !verifierPbRerouteXdayScenario &&
+    !verifierPayCreditConsistencyScenario;
+  const verifierPayCreditBankDepositCase =
+    verifierPayCreditConsistencyScenario &&
+    (/\bbank deposit\b/.test(verifierQuestionText) ||
+      /\bdeposit\b/.test(verifierQuestionText) ||
+      /\bss credit\b/.test(verifierQuestionText) ||
+      /\bsilver slip credit\b/.test(verifierQuestionText));
+  const verifierPayCreditSickBankCase =
+    verifierPayCreditConsistencyScenario &&
+    (/\bsick bank\b/.test(verifierQuestionText) || /\bcalled well\b/.test(verifierQuestionText) || /\bpicked up flying\b/.test(verifierQuestionText));
+  const selectedVerifierBranch =
+    verifierPbRerouteXdayScenario
+      ? "pbRerouteXdayScenario"
+      : verifierTwentyThreeM7LogLookupScenario
+        ? "twentyThreeM7LogLookupScenario"
+      : verifierFriendSwapUndoScenario
+        ? "friendSwapUndoScenario"
+      : verifierSilverSlipStatusScenario
+        ? "silverSlipStatusScenario"
+      : verifierPayCreditConsistencyScenario
+        ? "payCreditConsistencyScenario"
+        : verifierGsTimeOffScenario
+          ? "gsTimeOffScenario"
+        : verifierDeadheadRerouteConsequenceScenario
+          ? "deadheadRerouteConsequenceScenario"
+          : detectContactabilityScenarioFromHaystack(verifierQuestionText)
+            ? "contactabilityScenario"
+            : detectOeNotificationScenarioFromHaystack(verifierQuestionText)
+              ? "oeNotificationScenario"
+              : detectShortCallNotificationScenarioFromHaystack(verifierQuestionText)
+                ? "shortCallNotificationScenario"
+                : detectShortCallDutyScenarioFromHaystack(verifierQuestionText)
+                  ? "shortCallDutyScenario"
+                  : detectRestLegalityScenarioFromHaystack(verifierHaystack)
+                    ? "restLegalityScenario"
+                    : "default";
   const questionSignals = buildQuestionFamilySignals(input.question);
   const answerSignals = buildAnswerFamilySignals(input.answer);
   const definitionSectionUsed = input.answer.references.some(isDefinitionReference);
@@ -1235,6 +1726,7 @@ export function verifyContractScenarioAnswer(
         verifierPassed: warnings.length === 0 && failureReasons.length === 0,
         verifierWarnings: warnings,
         verifierFailureReasons: failureReasons,
+        selectedVerifierBranch,
         verifierAdjustedAnswer,
         answer: adjustedAnswer,
         truthGuardRan: true,
@@ -1259,7 +1751,27 @@ export function verifyContractScenarioAnswer(
       dutyCoverageWeak;
     adjustedAnswer = {
       ...input.answer,
-      shortAnswer: makeCautiousShortAnswer(input.answer.shortAnswer),
+      shortAnswer: makeCautiousShortAnswer(
+        verifierPbRerouteXdayScenario
+          ? "Based on the source support I found, this is a PB / QS / reroute / interrupted X-day processing question, not a single-rule answer."
+          : verifierTwentyThreeM7LogLookupScenario
+            ? "Based on the source support I found, this is an iCrew process lookup question about where 23M7 affected-pilot logs are displayed."
+          : verifierFriendSwapUndoScenario
+            ? "Based on the source support I found, this is a MiCrew process question about unwinding a friend swap, not a simple guaranteed reverse transaction."
+          : verifierSilverSlipStatusScenario
+            ? "Based on the source support I found, this is a Silver Slip status-code question, and I would not treat the 'N' code as self-defining unless the attached source actually defines it."
+          : verifierPayCreditConsistencyScenario
+            ? verifierPayCreditBankDepositCase
+              ? "Based on the source support I found, this is a bank-deposit and Silver Slip credit-eligibility question, not just a question about whether 2 hours showed up in iCrew."
+              : verifierPayCreditSickBankCase
+                ? "Based on the source support I found, this is a sick-bank timing question, not just a question about whether later flying was picked up."
+                : "Based on the source support I found, this is a projected-versus-final credit and timecard recalculation question, not a simple deadhead or rest answer."
+            : verifierGsTimeOffScenario
+              ? "Based on the source support I found, a one-day Green Slip does not automatically prove you get two 24-hour periods off; that turns on the exact time-off and surrounding-day rules."
+            : verifierDeadheadRerouteConsequenceScenario
+              ? "Based on the source support I found, this looks like a deadhead or reroute consequence question, so the answer turns on what the reroute changed operationally, not just on one generic reroute rule."
+              : input.answer.shortAnswer
+      ),
       plainEnglishExplanation:
         !shouldRewriteToDecisionPath
           ? input.answer.plainEnglishExplanation
@@ -1313,6 +1825,7 @@ export function verifyContractScenarioAnswer(
     verifierPassed: failureReasons.length === 0,
     verifierWarnings: Array.from(new Set(warnings)),
     verifierFailureReasons: Array.from(new Set(failureReasons)),
+    selectedVerifierBranch,
     verifierAdjustedAnswer,
     truthGuardRan: true,
     strongClaimsDetected,

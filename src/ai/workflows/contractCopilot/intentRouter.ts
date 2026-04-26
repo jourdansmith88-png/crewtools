@@ -155,6 +155,7 @@ export function parsePayRateQuestion(question: string): ParsedPayRateQuestion {
 
 function parseRequestedSection(question: string) {
   const sectionMatch =
+    question.match(/\b(\d{1,2}[A-Z]\d+)\b/i) ??
     question.match(/\bsection\s+(\d{1,2}\s+[A-Z]\.?\d+)\b/i) ??
     question.match(/\bpwa\s+(\d{1,2}\s+[A-Z]\.?\d+)\b/i) ??
     question.match(/§\s*(\d{1,2}\s+[A-Z]\.?\d+)\b/i) ??
@@ -168,6 +169,7 @@ function parseRequestedSection(question: string) {
   }
 
   const normalized = sectionMatch[1]
+    .replace(/^(\d{1,2})([A-Z])(\d+)$/i, "$1 $2.$3")
     .replace(/\s*\(([A-Z])\)/i, " $1")
     .replace(/(\d{1,2})\.\s*([A-Z])/i, "$1 $2")
     .replace(/([A-Z])(\d+)/i, "$1.$2")
@@ -258,12 +260,38 @@ function isDocumentExplanationQuestion(question: string) {
     Boolean(parseRequestedSection(question)) ||
     /\b(section|pwa)\s+\d{1,2}/i.test(question) ||
     /§\s*\d{1,2}/i.test(question);
-  return asksAboutSection && hasSectionReference && !operationalApplicationCue;
+  const compactSectionProcessLookup =
+    /\b23m7\b/i.test(question) &&
+    (
+      lower.includes("where are") ||
+      lower.includes("affected pilots") ||
+      lower.includes("logs") ||
+      lower.includes("shown") ||
+      lower.includes("icrew")
+    );
+  return (asksAboutSection && hasSectionReference && !operationalApplicationCue) || compactSectionProcessLookup;
 }
 
 function isPureTermLookup(question: string) {
   const lower = question.toLowerCase();
+  const silverSlipStatusLookup =
+    lower.includes("silver slip") &&
+    (lower.includes("what does") || lower.includes("status")) &&
+    (/\b['"]?[a-z]['"]?\b/.test(lower) || lower.includes("mean"));
   const comparisonApplicationCue = hasComparisonApplicationCue(question) && hasRecognizableContractTerm(question);
+  const contactabilityScenarioCue =
+    lower.includes("contactable") ||
+    lower.includes("answer the phone") ||
+    lower.includes("phone call") ||
+    lower.includes("acars") ||
+    lower.includes("airport sit") ||
+    lower.includes("between flights") ||
+    lower.includes("on duty") ||
+    lower.includes("off duty") ||
+    lower.includes("obligation to respond") ||
+    lower.includes("acknowledge") ||
+    lower.includes("check your schedule") ||
+    lower.includes("end of short call");
   const generalHypotheticalTermCue =
     lower.includes("if i never fly") ||
     lower.includes("if i do not get used") ||
@@ -275,6 +303,9 @@ function isPureTermLookup(question: string) {
     (lower.includes("if i") && !generalHypotheticalTermCue) ||
     lower.includes("can i") ||
     lower.includes("can they") ||
+    lower.includes("must they") ||
+    lower.includes("is it legal") ||
+    lower.includes("do you need 10 hours") ||
     lower.includes("how should") ||
     lower.includes("how does this apply") ||
     lower.includes("does that mean") ||
@@ -296,12 +327,24 @@ function isPureTermLookup(question: string) {
     lower.includes("replaced") ||
     lower.includes("specific timing") ||
     lower.includes("duration") ||
+    lower.includes("far legal") ||
+    lower.includes("release with pay") ||
+    lower.includes("30-hour rest") ||
+    lower.includes("30 hour rest") ||
+    lower.includes("24-hour") ||
+    lower.includes("24 hour") ||
+    lower.includes("periods off") ||
+    lower.includes("generate two") ||
+    lower.includes("one-day gs") ||
+    lower.includes("one day gs") ||
+    lower.includes("illegal rotation") ||
+    lower.includes("rotation illegal") ||
     /\b\d+\s*-\s*day\b/.test(lower) ||
     /\b\d+\s*day\b/.test(lower) ||
     /\b\d+\s*-\s*day\b/.test(lower) ||
     /\breserve\b/.test(lower) ||
     /\btrip\b/.test(lower);
-  return !comparisonApplicationCue && (
+  return silverSlipStatusLookup || (!comparisonApplicationCue && !contactabilityScenarioCue && (
     lower.includes("what is alv") ||
     lower.includes("average line value") ||
     lower.includes("how do i determine alv") ||
@@ -311,8 +354,6 @@ function isPureTermLookup(question: string) {
     lower.includes("what is the minimum guarantee") ||
     lower.includes("reserve guarantee") ||
     lower.includes("line guarantee") ||
-    lower.includes("short call") ||
-    lower.includes("long call") ||
     lower.includes("airport standby") ||
     lower.includes("yellow slip") ||
     lower.includes("yellowslip") ||
@@ -326,7 +367,7 @@ function isPureTermLookup(question: string) {
         lower.includes("airport standby") ||
         lower.includes("reserve guarantee") ||
         lower.includes("reserve")))
-  );
+  ));
 }
 
 function extractApdCounts(question: string) {
@@ -419,6 +460,15 @@ function isContractScenarioQuestion(question: string, facts: ParsedScenarioFacts
     lower.includes("removed") ||
     lower.includes("replaced") ||
     lower.includes("driving in") ||
+    lower.includes("contactable") ||
+    lower.includes("answer the phone") ||
+    lower.includes("between flights") ||
+    lower.includes("airport sit") ||
+    lower.includes("check your schedule") ||
+    lower.includes("end of short call") ||
+    lower.includes("where are") ||
+    lower.includes("where can i find") ||
+    lower.includes("swap it back") ||
     lower.includes("while i'm driving in") ||
     lower.includes("while i am driving in") ||
     lower.includes("before report") ||
@@ -456,12 +506,40 @@ function isContractScenarioQuestion(question: string, facts: ParsedScenarioFacts
     lower.includes("asterisk rotation") ||
     lower.includes("bid period crossover") ||
     lower.includes("bid period") ||
+    lower.includes("far legal") ||
+    lower.includes("release with pay") ||
+    lower.includes("30-hour rest") ||
+    lower.includes("30 hour rest") ||
+    lower.includes("illegal rotation") ||
+    lower.includes("rotation illegal") ||
+    lower.includes("dh-only") ||
+    lower.includes("dh only") ||
+    lower.includes("fdp") ||
     lower.includes("rotation guarantee") ||
+    lower.includes("acars") ||
+    lower.includes("phone call") ||
+    lower.includes("on duty") ||
+    lower.includes("off duty") ||
+    lower.includes("acknowledge") ||
+    lower.includes("contactable") ||
     lower.includes("golden day") ||
     lower.includes("hard non-fly day") ||
     lower.includes("line check");
+  const processToolTopic =
+    lower.includes("23m7") ||
+    lower.includes("affected pilots") ||
+    (lower.includes("logs") && lower.includes("icrew")) ||
+    lower.includes("open time menu") ||
+    lower.includes("display 23m7 logs") ||
+    lower.includes("friend swap") ||
+    lower.includes("swapped with a friend") ||
+    lower.includes("micrew") ||
+    lower.includes("white slip") ||
+    lower.includes("personal drop") ||
+    lower.includes("blind slip");
   return (
     comparisonApplicationCue ||
+    (processToolTopic && scenarioWording) ||
     (recognizableTopic && scenarioWording) ||
     lower.includes("called in sick") ||
     facts.rerouteOccurred === true ||

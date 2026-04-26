@@ -829,6 +829,16 @@ function executeDocumentSectionExplanation(args: {
   }
 
   const normalizedRequestedSection = normalizeSectionReference(requestedSection);
+  const lowerQuestion = args.question.toLowerCase();
+  const twentyThreeM7LogLookup =
+    normalizeSearchValue(normalizedRequestedSection).includes(normalizeSearchValue("Section 23 M.7")) &&
+    (
+      lowerQuestion.includes("where are") ||
+      lowerQuestion.includes("affected pilots") ||
+      lowerQuestion.includes("logs") ||
+      lowerQuestion.includes("shown") ||
+      lowerQuestion.includes("icrew")
+    );
 
   const parent = parentSection(normalizedRequestedSection);
   const containsNeedle = normalizeSearchValue(normalizedRequestedSection).replace(/^section\s+/i, "");
@@ -920,6 +930,19 @@ function executeDocumentSectionExplanation(args: {
     .join(" ")
     .replace(/\s+/g, " ")
     .slice(0, 650);
+  const twentyThreeM7ShortAnswer = "23M7 affected pilots are typically shown in iCrew under Schedules -> Open Time -> Display 23M7 logs.";
+  const twentyThreeM7Explanation = [
+    "What this controls:",
+    "- PWA Section 23 M.7 is the controlling section for the affected-pilot / reporting concept here.",
+    "",
+    "iCrew location:",
+    "- In iCrew, start with Schedules.",
+    "- Then open the Open Time menu.",
+    "- Look for Display 23M7 logs or the affected-pilot display in that same area.",
+    "",
+    "Source limitation:",
+    "- I do not have a cleaner UI help page attached, so verify the exact menu label if your current iCrew build uses slightly different wording.",
+  ].join("\n");
   return {
     ok: true,
     mode: "fallback",
@@ -927,8 +950,12 @@ function executeDocumentSectionExplanation(args: {
       status: "answered",
       scenarioLabel: "Document explanation",
       answerCompleteness: "resolved",
-      shortAnswer: summary.length > 0 ? summary : `${normalizedRequestedSection} was found, but the indexed text is very thin.`,
-      plainEnglishExplanation: `This is a direct explanation of ${normalizedRequestedSection} from the indexed section text.`,
+      shortAnswer: twentyThreeM7LogLookup
+        ? twentyThreeM7ShortAnswer
+        : summary.length > 0 ? summary : `${normalizedRequestedSection} was found, but the indexed text is very thin.`,
+      plainEnglishExplanation: twentyThreeM7LogLookup
+        ? twentyThreeM7Explanation
+        : `This is a direct explanation of ${normalizedRequestedSection} from the indexed section text.`,
       confidence: "high",
       supportLevel: "contract_backed",
       assumptions: [],
@@ -1000,7 +1027,9 @@ function executeDirectTermLookup(args: {
   });
   const lower = args.question.toLowerCase();
   const termType =
-    lower.includes("short call")
+    lower.includes("silver slip") && (lower.includes("what does") || lower.includes("status")) && (/\b['"]?[a-z]['"]?\b/.test(lower) || lower.includes("mean"))
+      ? "silver_slip_status"
+      : lower.includes("short call")
       ? "short_call"
       : lower.includes("airport standby")
         ? "airport_standby"
@@ -1015,7 +1044,9 @@ function executeDirectTermLookup(args: {
                 : "general";
 
   const sourceSpecificQuestion =
-    termType === "short_call"
+    termType === "silver_slip_status"
+      ? `${args.question} silver slip status code N meaning soaked available pickup status`
+      : termType === "short_call"
       ? `${args.question} short call pay no credit reserve scheduler compensation`
       : termType === "airport_standby"
         ? `${args.question} airport standby voluntary airport standby pay credit scheduler compensation`
@@ -1096,6 +1127,14 @@ function executeDirectTermLookup(args: {
       "How it works:",
       "- Short call no-fly treatment is handled separately from flying pay and credit.",
       "- If you complete the short call period without flying, the support here points to pay/no-credit treatment instead of normal trip credit.",
+    ];
+  } else if (termType === "silver_slip_status") {
+    shortAnswer = "Silver Slip status code: I would not assume the 'N' code simply means 'no' unless the attached source actually defines it.";
+    explanationLines = [
+      "How it works:",
+      "- Treat the 'N' on a Silver Slip as a status indicator, not as self-defining pay or availability logic.",
+      "- If the visible support or tool context ties 'N' to a not-soaked or not-yet-available-to-pick-up state, that is the safer working explanation.",
+      "- If the attached source never defines the code directly, keep the answer cautious and verify the actual legend or scheduler note.",
     ];
   } else if (termType === "airport_standby") {
     shortAnswer = "Airport standby: if you are not used, it is handled as standby time, not the same as being paid for a flown trip.";

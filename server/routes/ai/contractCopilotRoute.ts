@@ -534,6 +534,45 @@ function detectScenarioIssueFamilies(question: string) {
     families.add("domicile_layover");
   }
   if (
+    lower.includes("30-hour rest") ||
+    lower.includes("30 hour rest") ||
+    lower.includes("far legal") ||
+    lower.includes("pwa requirement") ||
+    lower.includes("release with pay") ||
+    lower.includes("9:45 rest") ||
+    lower.includes("10 hours required") ||
+    lower.includes("9:15") ||
+    lower.includes("dh-only") ||
+    lower.includes("dh only") ||
+    lower.includes("fdp") ||
+    lower.includes("illegal rotation") ||
+    lower.includes("rotation illegal") ||
+    (lower.includes("rotation") && lower.includes("timing shown") && lower.includes("legal")) ||
+    lower.includes("rest legality") ||
+    lower.includes("duty/rest")
+  ) {
+    families.add("rest_legality");
+  }
+  if (
+    lower.includes("23m7") ||
+    (lower.includes("affected pilots") && lower.includes("logs")) ||
+    lower.includes("display 23m7 logs") ||
+    (lower.includes("icrew") && lower.includes("open time"))
+  ) {
+    families.add("twenty_threem7_logs");
+  }
+  if (
+    lower.includes("friend swap") ||
+    lower.includes("swapped with a friend") ||
+    lower.includes("swap it back") ||
+    (lower.includes("pickup") && lower.includes("friend schedule")) ||
+    lower.includes("white slip") ||
+    lower.includes("personal drop") ||
+    lower.includes("blind slip")
+  ) {
+    families.add("friend_swap_undo");
+  }
+  if (
     lower.includes("sick lookback") ||
     lower.includes("medical procedure") ||
     lower.includes("approval process") ||
@@ -695,6 +734,47 @@ function detectDomicileLayoverScenario(question: string) {
   );
 }
 
+function detectRestLegalityScenario(question: string) {
+  const lower = question.toLowerCase();
+  return (
+    lower.includes("30-hour rest") ||
+    lower.includes("30 hour rest") ||
+    lower.includes("far legal") ||
+    lower.includes("pwa requirement") ||
+    lower.includes("release with pay") ||
+    lower.includes("9:45 rest") ||
+    lower.includes("10 hours required") ||
+    lower.includes("9:15") ||
+    lower.includes("dh-only") ||
+    lower.includes("dh only") ||
+    lower.includes("fdp") ||
+    lower.includes("illegal rotation") ||
+    lower.includes("rotation illegal") ||
+    (lower.includes("rotation") && lower.includes("timing shown") && lower.includes("legal")) ||
+    lower.includes("rest legality") ||
+    lower.includes("duty/rest")
+  );
+}
+
+function detectDeadheadRerouteConsequenceScenario(question: string) {
+  const lower = question.toLowerCase();
+  return (
+    lower.includes("deadhead deviation") ||
+    (lower.includes("deviate") && lower.includes("deadhead")) ||
+    lower.includes("routing doesn’t pass through base") ||
+    lower.includes("routing doesn't pass through base") ||
+    lower.includes("airport in vicinity of home") ||
+    (lower.includes("reroute") && lower.includes("slv")) ||
+    lower.includes("reroute bleeds into slv") ||
+    lower.includes("join on day 2") ||
+    (lower.includes("qs") && lower.includes("delayed overnight")) ||
+    lower.includes("delayed until next day") ||
+    lower.includes("sign in") ||
+    lower.includes("duty time missing") ||
+    lower.includes("pb day not given")
+  );
+}
+
 function detectSickLookbackScenario(question: string) {
   const lower = question.toLowerCase();
   return (
@@ -776,6 +856,24 @@ function detectOeNotificationScenario(question: string) {
   );
 }
 
+function detectContactabilityScenario(question: string) {
+  const lower = question.toLowerCase();
+  return (
+    lower.includes("contactable") ||
+    lower.includes("answer the phone") ||
+    lower.includes("phone call") ||
+    lower.includes("acars") ||
+    lower.includes("airport sit") ||
+    lower.includes("between flights") ||
+    lower.includes("on duty") ||
+    lower.includes("off duty") ||
+    lower.includes("obligation to respond") ||
+    lower.includes("acknowledge") ||
+    lower.includes("check your schedule") ||
+    lower.includes("end of short call")
+  );
+}
+
 function getOeNotificationSupportHits(text: string) {
   const hits: string[] = [];
   if (/\boe\b/.test(text) || text.includes("operational event")) hits.push("oe");
@@ -836,8 +934,16 @@ function detectShortCallNotificationScenario(question: string) {
     lower.includes("legality") ||
     lower.includes("both remain on schedule") ||
     lower.includes("short call window");
+  const hasContactabilitySignals =
+    lower.includes("acars") ||
+    lower.includes("airport sit") ||
+    lower.includes("between flights") ||
+    lower.includes("on duty") ||
+    lower.includes("off duty") ||
+    lower.includes("check your schedule") ||
+    lower.includes("end of short call");
 
-  if (hasDutyLegalitySignals) {
+  if (hasDutyLegalitySignals || hasContactabilitySignals) {
     return false;
   }
 
@@ -1204,21 +1310,30 @@ function buildSafeScenarioFallbackAnswer(args: {
   const issueFamilies = detectScenarioIssueFamilies(args.question);
   const issueTags = detectScenarioIssueTags(args.question);
   const payCreditConsistencyScenario = detectPayCreditConsistencyScenario(args.question);
+  const restLegalityScenario = detectRestLegalityScenario(args.question);
+  const pbRerouteXdayScenario = detectPbRerouteXdayScenario(args.question);
+  const deadheadRerouteConsequenceScenario =
+    detectDeadheadRerouteConsequenceScenario(args.question) &&
+    !pbRerouteXdayScenario &&
+    !payCreditConsistencyScenario;
   const rerouteConsistencyScenario = detectRerouteConsistencyScenario(args.question);
   const qsCallOrderScenario = detectQsCallOrderScenario(args.question);
   const oeNotificationScenario = detectOeNotificationScenario(args.question);
+  const contactabilityScenario = detectContactabilityScenario(args.question);
   const shortCallDutyScenario = detectShortCallDutyScenario(args.question);
   const shortCallNotificationScenario = detectShortCallNotificationScenario(args.question);
   const futureRotationChangeScenario = detectFutureRotationChangeScenario(args.question);
   const apdDiagnosticScenario = detectApdDiagnosticScenario(args.question);
   const xDayGroupingScenario = detectXDayGroupingScenario(args.question);
-  const pbRerouteXdayScenario = detectPbRerouteXdayScenario(args.question);
   const isComplexScenario =
     issueFamilies.length >= 3 &&
     !payCreditConsistencyScenario &&
     !rerouteConsistencyScenario &&
+    !deadheadRerouteConsequenceScenario &&
     !qsCallOrderScenario &&
     !oeNotificationScenario &&
+    !contactabilityScenario &&
+    !restLegalityScenario &&
     !shortCallNotificationScenario &&
     !apdDiagnosticScenario &&
     !xDayGroupingScenario &&
@@ -1311,6 +1426,54 @@ function buildSafeScenarioFallbackAnswer(args: {
       "Sources used:",
       "- Use PWA Section 23 I.10 first for the required-versus-available reserve threshold, then use any scheduler/process support only to explain timing or pool differences.",
     ];
+  } else if (deadheadRerouteConsequenceScenario) {
+    shortAnswer =
+      "This looks like a deadhead or reroute consequence question, so the answer turns on what the reroute changed operationally, not just on one generic reroute rule.";
+    likelyApplication =
+      "The safer read is to separate deadhead deviation rules, reroute extension into a scheduled event like SLV, and system-display consequences such as missing duty start, PB day loss, or X-day interruption before making any hard pay or protection conclusion.";
+    issueThreadLines = [
+      "What this appears to be:",
+      lower.includes("deviat")
+        ? "- A deadhead deviation and routing question about whether the route home can be changed if it does not pass through base."
+        : lower.includes("slv")
+          ? "- A reroute-extension question where the reroute bleeds into a scheduled SLV and changes what happens to the SLV assignment."
+          : "- A Quick Slip / reroute consequence question where an overnight delay or extension may have changed duty-time, PB-day, or X-day consequences.",
+      "",
+      "What this depends on:",
+      lower.includes("deviat")
+        ? "- Whether the deadhead deviation rule allows the route home or airport-in-the-vicinity option when the routing does not actually pass through base."
+        : "- Whether the event was treated as a reroute continuation, a bleed into a scheduled event, or a new assignment consequence after the original report and duty start.",
+      lower.includes("slv")
+        ? "- Whether the scheduled SLV remains protected, can be joined on day 2, or is displaced by the reroute depending on the controlling source."
+        : "- Whether the reroute or delay changed a scheduled event such as SLV, PB, PR, or an interrupted X-day.",
+      (lower.includes("qs") || lower.includes("pb"))
+        ? "- Whether iCrew is showing the original sign-in, actual duty start, and PB / X-day treatment correctly after the overnight delay."
+        : "- Whether the system display matches the actual report, release, deadhead, and modified routing history.",
+      "",
+      "Likely paths:",
+      lower.includes("deviat")
+        ? "- If the deadhead deviation source requires the route to pass through base or another specific routing condition, a home-vicinity deviation may fail even if it seems operationally sensible."
+        : "- If the reroute is treated as a continuation into the scheduled event, the original assignment and pay protections may carry differently than if the company treats it as a new event.",
+      lower.includes("slv")
+        ? "- If the reroute bleeds into the SLV, the controlling question is what the source lets the company do with the SLV itself, including whether a day-2 join or another adjustment is allowed."
+        : "- If the QS or reroute delayed overnight after original report, the actual duty record, PB day, and X-day effects may differ from what a temporary display suggests.",
+      "- If the system display is lagging or missing the actual duty history, DART or CPO follow-up may be needed before you treat the displayed result as final.",
+      "",
+      "What to check in iCrew/DBMS:",
+      lower.includes("deviat")
+        ? "- The exact deadhead deviation and routing rule, including whether the route must pass through base and how ATL/CVG/DTW or another home-vicinity routing is treated."
+        : "- The original versus modified rotation history, including the reroute extension, delayed deadhead, and any scheduled event it overlapped.",
+      lower.includes("slv")
+        ? "- The SLV assignment record itself, whether the system allows a join on day 2, and whether any pay or protection code was applied to the SLV after the reroute."
+        : "- The original sign-in, actual duty start, missing duty-time display, PB day / PR / X-day coding, and whether the overnight delay changed how the system treated those items.",
+      "- Any DART, CPO, or scheduler note explaining a mismatch between the system display and the actual report/duty history.",
+      "",
+      "Source limitation:",
+      "- I do not have the exact deadhead deviation / SLV / QS consequence rule attached for this question.",
+      "",
+      "Sources used:",
+      "- Start with PWA Section 23 L and Section 23 L.9 where reroute or interrupted X-day logic is involved, then use Scheduler Manual deadhead deviation / SLV / QS processing support, and use Compensation Manual only if the attached source directly addresses the pay or credit consequence.",
+    ];
   } else if (qsCallOrderScenario) {
     shortAnswer =
       "This looks like a Quick Slip eligibility and missed-notification question, and I would separate being QS-eligible from proving the company should definitely have called you under the exact call-order rule.";
@@ -1375,6 +1538,70 @@ function buildSafeScenarioFallbackAnswer(args: {
       "",
       "Sources used:",
       "- Start with OE-specific SRH/TRH or scheduler/process support. Do not rely on unrelated Green Slip, pay, deadhead, or generic Section 2 definition language for this question.",
+    ];
+  } else if (contactabilityScenario) {
+    shortAnswer =
+      "This looks like a contactability and notification-obligation question, and being on duty does not automatically answer whether you were contractually required to answer a personal phone or keep rechecking the schedule.";
+    likelyApplication =
+      "The safer read is to separate official company contact channels from personal-phone expectations, then ask what the attached source actually requires for acknowledgment, schedule checks, or notice at the end of short call.";
+    issueThreadLines = [
+      "What this appears to be:",
+      "- A contactability and notification-obligation question, not just a generic short-call or reserve definition issue.",
+      "",
+      "What this depends on:",
+      "- Whether the source requires you to respond to an official company contact method such as ACARS, company notice, scheduler call, or another documented channel.",
+      "- Whether being on duty, in airport sit, or between flights changes the obligation to monitor official communications versus answer a personal phone.",
+      "- Whether the question is really about notification/acknowledgment timing or about a required schedule check at the end of short call.",
+      "- Whether the packet actually attaches a short-call end-of-period schedule-check rule or a broader contactability rule.",
+      "",
+      "Likely paths:",
+      "- If the source requires you to monitor or acknowledge official company channels, ignoring those channels can be risky even if the rule does not clearly require answering a personal phone.",
+      "- If the source does not explicitly require personal-phone contact, I would not say you must answer your cell phone just because you are on duty or between flights.",
+      "- If an assignment can appear at the end of short call, the key issue is whether the source requires a schedule check, an acknowledgment, or another notice step before the period ends.",
+      "",
+      "What to check:",
+      "- The exact contact method used or attempted: ACARS, company phone contact, CNO, schedule placement, or another official notification channel.",
+      "- Whether the timing was while you were on duty, in airport sit, between flights, or at the end of short call.",
+      "- Any logs, screenshots, missed-call records, ACARS history, or schedule snapshots that show when notice was sent and how it was delivered.",
+      "- Preserve the timestamps and method history, and do not ignore official channels even if the personal-phone obligation is unclear.",
+      "",
+      "Source limitation:",
+      "- I do not have the exact contactability / notification-obligation source attached for this question.",
+      "",
+      "Sources used:",
+      "- Start with Scheduler Manual or SRH contactability examples, then use any direct PWA notification/contact language that actually addresses on-duty contact, end-of-short-call checks, acknowledgment, or notice method.",
+    ];
+  } else if (restLegalityScenario) {
+    shortAnswer =
+      "This looks like a rest-legality question, and FAR legality by itself does not automatically answer the PWA release or operate decision.";
+    likelyApplication =
+      "The safe read is to separate FAR legality from any stricter contractual rest rule, then ask whether the attached packet actually supports operating, releasing, or releasing with pay for this exact sequence.";
+    issueThreadLines = [
+      "What this appears to be:",
+      "- A rest-legality question that turns on FAR legality versus PWA duty/rest requirements.",
+      "",
+      "What this depends on:",
+      "- Whether the issue is a planned 30-hour rest that was lost, a 9:45 or 9:15 rest issue, or another Section 12 rest/timing problem.",
+      "- Whether the sequence is still FAR legal but potentially not compliant with a stricter contractual rest requirement.",
+      "- Whether the day in question is DH-only / no-FDP or a day with actual FDP or duty consequences.",
+      "- Whether the packet actually attaches release-with-pay or operate/release language for this rest failure.",
+      "",
+      "Likely paths:",
+      "- If the packet shows only FAR legality, that does not automatically settle the PWA question.",
+      "- If Section 12 or scheduler examples impose a stricter contractual rest requirement, the answer may be release, operate, or release with pay depending on the exact rule and how the day is coded.",
+      "- If this is a DH-only day without FDP, the 10-hour versus 9:15 or 9:45 analysis may differ from a normal flying-duty sequence.",
+      "",
+      "What to check in iCrew/DBMS/timecard:",
+      "- Check the exact scheduled rest versus actual rest, including any 30-hour planned rest that was lost due to delay or reroute.",
+      "- Check whether the affected day is DH-only or includes FDP/report/duty obligations.",
+      "- Check the exact report, release, block, and rest timestamps for the sequence you think is illegal.",
+      "- Check whether any release or pay treatment is coded as contract-driven or only as a FAR legality outcome.",
+      "",
+      "Source limitation:",
+      "- I do not have the exact Section 12 rest-legality and release/pay language attached for this question.",
+      "",
+      "Sources used:",
+      "- Start with PWA Section 12 duty/rest support, then use SRH/Scheduler Manual rest-legality examples, and use Compensation Manual only if the attached support directly addresses release-with-pay treatment.",
     ];
   } else if (shortCallDutyScenario) {
     shortAnswer =
@@ -2311,6 +2538,19 @@ function finalizeScenarioSafetyPipeline(args: {
     typeof args.supportDebug?.payCreditMissingSupportReason === "string"
       ? args.supportDebug.payCreditMissingSupportReason
       : undefined;
+  const restLegalityScenario = args.supportDebug?.restLegalityScenario === true;
+  const restLegalityAnchorFound = args.supportDebug?.restLegalityAnchorFound === true;
+  const restLegalityMissingSupportReason =
+    typeof args.supportDebug?.restLegalityMissingSupportReason === "string"
+      ? args.supportDebug.restLegalityMissingSupportReason
+      : undefined;
+  const farVsPwaIssueDetected = args.supportDebug?.farVsPwaIssueDetected === true;
+  const deadheadRerouteConsequenceScenario = args.supportDebug?.deadheadRerouteConsequenceScenario === true;
+  const deadheadRerouteAnchorFound = args.supportDebug?.deadheadRerouteAnchorFound === true;
+  const deadheadRerouteMissingSupportReason =
+    typeof args.supportDebug?.deadheadRerouteMissingSupportReason === "string"
+      ? args.supportDebug.deadheadRerouteMissingSupportReason
+      : undefined;
   const apdDiagnosticScenario = args.supportDebug?.apdDiagnosticScenario === true;
   const apdThresholdExplained = args.supportDebug?.apdThresholdExplained === true;
   const apdDriftDetected = args.supportDebug?.apdDriftDetected === true;
@@ -2325,6 +2565,12 @@ function finalizeScenarioSafetyPipeline(args: {
   const oeNotificationMissingSupportReason =
     typeof args.supportDebug?.oeNotificationMissingSupportReason === "string"
       ? args.supportDebug.oeNotificationMissingSupportReason
+      : undefined;
+  const contactabilityScenario = args.supportDebug?.contactabilityScenario === true;
+  const contactabilityAnchorFound = args.supportDebug?.contactabilityAnchorFound === true;
+  const contactabilityMissingSupportReason =
+    typeof args.supportDebug?.contactabilityMissingSupportReason === "string"
+      ? args.supportDebug.contactabilityMissingSupportReason
       : undefined;
   const oeNotificationSupportRejectedReasons = Array.isArray(args.supportDebug?.oeNotificationSupportRejectedReasons)
     ? args.supportDebug.oeNotificationSupportRejectedReasons.filter((item): item is string => typeof item === "string")
@@ -2417,6 +2663,12 @@ function finalizeScenarioSafetyPipeline(args: {
   if (payCreditConsistencyScenario && (!payCreditAnchorFound || Boolean(payCreditMissingSupportReason))) {
     downgradeReasons.push("pay_credit_support_incomplete");
   }
+  if (restLegalityScenario && (!restLegalityAnchorFound || Boolean(restLegalityMissingSupportReason))) {
+    downgradeReasons.push("rest_legality_support_incomplete");
+  }
+  if (deadheadRerouteConsequenceScenario && (!deadheadRerouteAnchorFound || Boolean(deadheadRerouteMissingSupportReason))) {
+    downgradeReasons.push("deadhead_reroute_consequence_support_incomplete");
+  }
   if (rerouteConsistencyScenario && (!rerouteAnchorFound || Boolean(rerouteMissingSupportReason))) {
     downgradeReasons.push("reroute_support_incomplete");
   }
@@ -2425,6 +2677,9 @@ function finalizeScenarioSafetyPipeline(args: {
   }
   if (oeNotificationScenario && (!oeNotificationAnchorFound || Boolean(oeNotificationMissingSupportReason))) {
     downgradeReasons.push("oe_notification_support_incomplete");
+  }
+  if (contactabilityScenario && (!contactabilityAnchorFound || Boolean(contactabilityMissingSupportReason))) {
+    downgradeReasons.push("contactability_support_incomplete");
   }
   if (shortCallNotificationScenario && (!shortCallNotificationAnchorFound || Boolean(shortCallNotificationMissingSupportReason))) {
     downgradeReasons.push("shortcall_notification_support_incomplete");
@@ -2566,6 +2821,14 @@ function finalizeScenarioSafetyPipeline(args: {
       assumptions: Array.from(new Set([...(adjustedAnswer.assumptions ?? []), payCreditMissingSupportReason])),
     };
   }
+  if (restLegalityScenario && restLegalityMissingSupportReason) {
+    adjustedAnswer = {
+      ...adjustedAnswer,
+      plainEnglishExplanation: `${adjustedAnswer.plainEnglishExplanation}\n${restLegalityMissingSupportReason}`.trim(),
+      caveats: Array.from(new Set([...(adjustedAnswer.caveats ?? []), restLegalityMissingSupportReason])),
+      assumptions: Array.from(new Set([...(adjustedAnswer.assumptions ?? []), restLegalityMissingSupportReason])),
+    };
+  }
   if (rerouteConsistencyScenario && rerouteMissingSupportReason) {
     adjustedAnswer = {
       ...adjustedAnswer,
@@ -2588,6 +2851,22 @@ function finalizeScenarioSafetyPipeline(args: {
       plainEnglishExplanation: `${adjustedAnswer.plainEnglishExplanation}\n${oeNotificationMissingSupportReason}`.trim(),
       caveats: Array.from(new Set([...(adjustedAnswer.caveats ?? []), oeNotificationMissingSupportReason])),
       assumptions: Array.from(new Set([...(adjustedAnswer.assumptions ?? []), oeNotificationMissingSupportReason])),
+    };
+  }
+  if (deadheadRerouteConsequenceScenario && deadheadRerouteMissingSupportReason) {
+    adjustedAnswer = {
+      ...adjustedAnswer,
+      plainEnglishExplanation: `${adjustedAnswer.plainEnglishExplanation}\n${deadheadRerouteMissingSupportReason}`.trim(),
+      caveats: Array.from(new Set([...(adjustedAnswer.caveats ?? []), deadheadRerouteMissingSupportReason])),
+      assumptions: Array.from(new Set([...(adjustedAnswer.assumptions ?? []), deadheadRerouteMissingSupportReason])),
+    };
+  }
+  if (contactabilityScenario && contactabilityMissingSupportReason) {
+    adjustedAnswer = {
+      ...adjustedAnswer,
+      plainEnglishExplanation: `${adjustedAnswer.plainEnglishExplanation}\n${contactabilityMissingSupportReason}`.trim(),
+      caveats: Array.from(new Set([...(adjustedAnswer.caveats ?? []), contactabilityMissingSupportReason])),
+      assumptions: Array.from(new Set([...(adjustedAnswer.assumptions ?? []), contactabilityMissingSupportReason])),
     };
   }
   if (shortCallNotificationScenario && shortCallNotificationMissingSupportReason) {
@@ -2667,9 +2946,51 @@ function finalizeScenarioSafetyPipeline(args: {
       payCreditConsistencyScenario,
       payCreditAnchorFound,
       payCreditMissingSupportReason,
+      silverSlipStatusScenario:
+        args.question.toLowerCase().includes("silver slip") &&
+        (args.question.toLowerCase().includes("what does") || args.question.toLowerCase().includes("status")) &&
+        (/\b['"]?[a-z]['"]?\b/i.test(args.question) || args.question.toLowerCase().includes("mean")),
+      gsTimeOffScenario:
+        (args.question.toLowerCase().includes("green slip") ||
+          args.question.toLowerCase().includes("greenslip") ||
+          /\bgs\b/i.test(args.question)) &&
+        (
+          args.question.toLowerCase().includes("24-hour") ||
+          args.question.toLowerCase().includes("24 hour") ||
+          args.question.toLowerCase().includes("periods off") ||
+          args.question.toLowerCase().includes("generate two")
+        ),
+      processLookupScenario:
+        args.question.toLowerCase().includes("23m7") ||
+        args.question.toLowerCase().includes("affected pilots") ||
+        args.question.toLowerCase().includes("friend swap") ||
+        args.question.toLowerCase().includes("swapped with a friend") ||
+        args.question.toLowerCase().includes("white slip") ||
+        args.question.toLowerCase().includes("personal drop"),
+      twentyThreeM7LogLookupScenario:
+        args.question.toLowerCase().includes("23m7") &&
+        (
+          args.question.toLowerCase().includes("affected pilots") ||
+          args.question.toLowerCase().includes("logs") ||
+          args.question.toLowerCase().includes("icrew") ||
+          args.question.toLowerCase().includes("open time")
+        ),
+      friendSwapUndoScenario:
+        args.question.toLowerCase().includes("friend swap") ||
+        args.question.toLowerCase().includes("swapped with a friend") ||
+        args.question.toLowerCase().includes("swap it back") ||
+        args.question.toLowerCase().includes("white slip") ||
+        args.question.toLowerCase().includes("personal drop") ||
+        (
+          args.question.toLowerCase().includes("micrew") &&
+          args.question.toLowerCase().includes("pickup")
+        ),
       rerouteConsistencyScenario,
       rerouteAnchorFound,
       rerouteMissingSupportReason,
+      deadheadRerouteConsequenceScenario,
+      deadheadRerouteAnchorFound,
+      deadheadRerouteMissingSupportReason,
       qsCallOrderScenario,
       qsCallOrderAnchorFound,
       qsCallOrderMissingSupportReason,
@@ -2677,6 +2998,9 @@ function finalizeScenarioSafetyPipeline(args: {
       oeNotificationAnchorFound,
       oeNotificationMissingSupportReason,
       oeNotificationSupportRejectedReasons,
+      contactabilityScenario,
+      contactabilityAnchorFound,
+      contactabilityMissingSupportReason,
       shortCallNotificationScenario,
       shortCallNotificationAnchorFound,
       shortCallNotificationMissingSupportReason,
@@ -4025,9 +4349,12 @@ function rerankSupportReferences(args: {
   const domicileLayoverScenario = detectDomicileLayoverScenario(args.question);
   const sickLookbackScenario = detectSickLookbackScenario(args.question);
   const payCreditConsistencyScenario = detectPayCreditConsistencyScenario(args.question);
+  const restLegalityScenario = detectRestLegalityScenario(args.question);
+  const deadheadRerouteConsequenceScenario = detectDeadheadRerouteConsequenceScenario(args.question);
   const rerouteConsistencyScenario = detectRerouteConsistencyScenario(args.question);
   const qsCallOrderScenario = detectQsCallOrderScenario(args.question);
   const oeNotificationScenario = detectOeNotificationScenario(args.question);
+  const contactabilityScenario = detectContactabilityScenario(args.question);
   const shortCallNotificationScenario = detectShortCallNotificationScenario(args.question);
   const futureRotationChangeScenario = detectFutureRotationChangeScenario(args.question);
   const apdDiagnosticScenario = detectApdDiagnosticScenario(args.question);
@@ -4166,6 +4493,20 @@ function rerankSupportReferences(args: {
     "13-hour layover": 85,
     layover: 60,
     "bank eligibility": 90,
+    "30-hour rest": 100,
+    "30 hour rest": 100,
+    "far legal": 90,
+    "pwa requirement": 85,
+    "release with pay": 95,
+    "9:45 rest": 95,
+    "10 hours required": 95,
+    "9:15": 85,
+    "dh-only": 90,
+    "dh only": 90,
+    fdp: 85,
+    "illegal rotation": 95,
+    "rest legality": 100,
+    "duty/rest": 90,
     "first airborne": 95,
     "different flight number": 85,
     "same destination": 80,
@@ -4204,6 +4545,15 @@ function rerankSupportReferences(args: {
     "electronic notification": 90,
     "non-fly day": 95,
     "non fly day": 95,
+    contactable: 90,
+    acars: 95,
+    "airport sit": 90,
+    "between flights": 90,
+    "on duty": 85,
+    "off duty": 75,
+    "check your schedule": 95,
+    "end of short call": 95,
+    "obligation to respond": 90,
   };
   const definitionStyle = isDefinitionStyleQuestion(args.question);
   const pcsGeneralTerms = [
@@ -4278,6 +4628,43 @@ function rerankSupportReferences(args: {
     "credit",
     "bank eligibility",
   ];
+  const restLegalityTerms = [
+    "30-hour rest",
+    "30 hour rest",
+    "far legal",
+    "pwa requirement",
+    "release with pay",
+    "9:45 rest",
+    "10 hours required",
+    "9:15",
+    "dh-only",
+    "dh only",
+    "fdp",
+    "illegal rotation",
+    "rest legality",
+    "duty/rest",
+    "section 12",
+    "rest",
+    "release",
+    "duty",
+  ];
+  const restLegalityRequiredTerms = restLegalityScenario
+    ? Array.from(
+        new Set(
+          [
+            ...(lowerIncludesAny(args.question, ["30-hour rest", "30 hour rest", "far legal", "release with pay"])
+              ? ["30-hour rest", "far legal", "release with pay", "section 12"]
+              : []),
+            ...(lowerIncludesAny(args.question, ["9:45 rest", "10 hours required", "9:15", "dh-only", "fdp"])
+              ? ["9:45 rest", "10 hours required", "dh-only", "fdp", "section 12"]
+              : []),
+            ...(lowerIncludesAny(args.question, ["illegal rotation", "rest legality", "timing"])
+              ? ["illegal rotation", "rest", "duty", "section 12"]
+              : []),
+          ].filter(Boolean)
+        )
+      )
+    : [];
   const payCreditRequiredTerms = payCreditConsistencyScenario
     ? Array.from(
         new Set(
@@ -4351,6 +4738,21 @@ function rerankSupportReferences(args: {
     "online notification",
     "electronic notification",
   ];
+  const contactabilityTerms = [
+    "contactable",
+    "answer the phone",
+    "phone call",
+    "acars",
+    "airport sit",
+    "between flights",
+    "on duty",
+    "off duty",
+    "acknowledge",
+    "notification",
+    "check your schedule",
+    "end of short call",
+    "short call",
+  ];
   const shortCallNotificationTerms = [
     "short call",
     "notification",
@@ -4418,6 +4820,20 @@ function rerankSupportReferences(args: {
             ...(lowerIncludesAny(args.question, ["micrew"]) ? ["micrew"] : []),
             ...(lowerIncludesAny(args.question, ["acknowledge", "acknowledgment"]) ? ["acknowledge"] : []),
             ...(lowerIncludesAny(args.question, ["cno"]) ? ["cno"] : []),
+          ].filter(Boolean)
+        )
+      )
+    : [];
+  const contactabilityRequiredTerms = contactabilityScenario
+    ? Array.from(
+        new Set(
+          [
+            ...(lowerIncludesAny(args.question, ["acars", "airport sit", "between flights", "on duty", "off duty"])
+              ? ["acars", "phone call", "on duty"]
+              : []),
+            ...(lowerIncludesAny(args.question, ["check your schedule", "end of short call"])
+              ? ["short call", "notification", "check your schedule"]
+              : []),
           ].filter(Boolean)
         )
       )
@@ -4625,6 +5041,31 @@ function rerankSupportReferences(args: {
       if (shortCallHit && dutyHit) score += 95;
       else if (shortCallHit) score += 45;
       if (combined.includes("promptly available") || combined.includes("report for a rotation")) score += 60;
+    }
+    if (restLegalityScenario) {
+      const section12Hit =
+        normalizeSectionIdentifier(reference.section).includes(normalizeSectionIdentifier("Section 12")) ||
+        normalizeSectionIdentifier(combined).includes(normalizeSectionIdentifier("Section 12"));
+      const schedulerRestHit =
+        reference.sourceId === "scheduler_manual" &&
+        (
+          combined.includes("rest") ||
+          combined.includes("duty") ||
+          combined.includes("release") ||
+          combined.includes("fdp") ||
+          combined.includes("dh-only") ||
+          combined.includes("dh only")
+        );
+      if (section12Hit) score += 210;
+      if (schedulerRestHit) score += 150;
+      if (restLegalityTerms.some((term) => combined.includes(term))) score += 120;
+      score += restLegalityTerms.filter((term) => combined.includes(term)).length * 20;
+      score += restLegalityRequiredTerms.filter((term) => combined.includes(term)).length * 40;
+      if (combined.includes("far legal")) score += 80;
+      if (combined.includes("release with pay")) score += 90;
+      if ((/\bsection 23\b/.test(combined) || /\bscheduling\b/.test(combined)) && !section12Hit && !schedulerRestHit && !exactSectionHit) {
+        score -= 170;
+      }
     }
     if (pcsSwapScenario) {
       const pcsHit = pcsSpecificHits.length > 0;
@@ -5404,6 +5845,48 @@ function rerankSupportReferences(args: {
         "I do not have the exact OE notification / CNO source attached.";
     }
   }
+  let contactabilityAnchorFound = false;
+  let contactabilityMissingSupportReason: string | undefined;
+  let contactabilityVisibleSupportTerms: string[] = [];
+  if (contactabilityScenario) {
+    const bestContactabilityCandidate = sorted.find((item) => {
+      const combined = normalizeSupportText(
+        `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""}`
+      );
+      const hits = contactabilityTerms.filter((term) => combined.includes(term));
+      const requiredHits = contactabilityRequiredTerms.filter((term) => combined.includes(term));
+      const schedulerHit =
+        item.reference.sourceId === "scheduler_manual" &&
+        (combined.includes("acars") ||
+          combined.includes("phone call") ||
+          combined.includes("contact") ||
+          combined.includes("notification") ||
+          combined.includes("short call"));
+      return schedulerHit || requiredHits.length >= 2 || hits.length >= 4;
+    });
+    if (bestContactabilityCandidate) {
+      const remaining = finalRanked.filter((item) => item.reference !== bestContactabilityCandidate.reference);
+      finalRanked.length = 0;
+      finalRanked.push(bestContactabilityCandidate, ...remaining);
+    }
+    contactabilityVisibleSupportTerms = Array.from(
+      new Set(
+        finalRanked.flatMap((item) => {
+          const combined = normalizeSupportText(
+            `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""}`
+          );
+          return contactabilityTerms.filter((term) => combined.includes(term));
+        })
+      )
+    );
+    contactabilityAnchorFound =
+      Boolean(bestContactabilityCandidate) &&
+      contactabilityRequiredTerms.every((term) => contactabilityVisibleSupportTerms.includes(term));
+    if (!contactabilityAnchorFound) {
+      contactabilityMissingSupportReason =
+        "I do not have the exact contactability / notification-obligation source attached for this question.";
+    }
+  }
   let shortCallNotificationAnchorFound = false;
   let shortCallNotificationMissingSupportReason: string | undefined;
   let shortCallNotificationVisibleSupportTerms: string[] = [];
@@ -5722,6 +6205,22 @@ function rerankSupportReferences(args: {
       )
     );
   });
+  const restLegalityAnchorFound = finalRanked.some((item) => {
+    const combined = normalizeSupportText(
+      `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""}`
+    );
+    return (
+      normalizeSectionIdentifier(item.reference.section).includes(normalizeSectionIdentifier("Section 12")) ||
+      combined.includes("30-hour rest") ||
+      combined.includes("30 hour rest") ||
+      combined.includes("rest") ||
+      combined.includes("release with pay") ||
+      combined.includes("far legal") ||
+      combined.includes("dh-only") ||
+      combined.includes("dh only") ||
+      combined.includes("fdp")
+    );
+  });
   const pcsSwapVisibleSupportTerms = pcsSwapScenario
     ? Array.from(
         new Set(
@@ -5794,6 +6293,7 @@ function rerankSupportReferences(args: {
       (!futureRotationChangeAnchorFound || !knownAbsenceAnchorFound || !payProtectionAnchorFound)) ||
     (domicileLayoverScenario && (!domicileLayoverAnchorFound || domicileLayoverSupportMissingAnchors.length > 0)) ||
     (sickLookbackScenario && (!sickLookbackAnchorFound || sickLookbackSupportMissingAnchors.length > 0)) ||
+    (restLegalityScenario && !restLegalityAnchorFound) ||
     (payCreditConsistencyScenario && !payCreditAnchorFound) ||
     (rerouteConsistencyScenario && !rerouteAnchorFound) ||
     (qsCallOrderScenario && !qsCallOrderAnchorFound) ||
@@ -5937,6 +6437,38 @@ function rerankSupportReferences(args: {
           : sickLookbackScenario && sickLookbackSupportMissingAnchors.length > 0
             ? `I do not see all of the expected sick-lookback / approval-process anchors in the attached support: ${sickLookbackSupportMissingAnchors.join(", ")}.`
             : undefined,
+      restLegalityScenario,
+      restLegalityAnchorFound,
+      restLegalityMissingSupportReason:
+        restLegalityScenario && !restLegalityAnchorFound
+          ? "I do not have the exact Section 12 rest-legality and release/pay language attached for this question."
+          : undefined,
+      farVsPwaIssueDetected:
+        restLegalityScenario &&
+        (
+          args.question.toLowerCase().includes("far legal") ||
+          args.question.toLowerCase().includes("release with pay") ||
+          args.question.toLowerCase().includes("pwa requirement")
+        ),
+      deadheadRerouteConsequenceScenario,
+      deadheadRerouteAnchorFound:
+        deadheadRerouteConsequenceScenario &&
+        (
+          rerouteAnchorFound ||
+          xDayAnchorFound ||
+          normalizeSupportText(args.question).includes("slv") ||
+          normalizeSupportText(args.question).includes("deadhead deviation")
+        ),
+      deadheadRerouteMissingSupportReason:
+        deadheadRerouteConsequenceScenario &&
+        !(
+          rerouteAnchorFound ||
+          xDayAnchorFound ||
+          normalizeSupportText(args.question).includes("slv") ||
+          normalizeSupportText(args.question).includes("deadhead deviation")
+        )
+          ? "I do not have the exact deadhead deviation / SLV / QS consequence rule attached for this question."
+          : undefined,
       payCreditConsistencyScenario,
       payCreditAnchorFound,
       payCreditMissingSupportReason,
@@ -5953,6 +6485,9 @@ function rerankSupportReferences(args: {
       oeNotificationMissingSupportReason,
       oeNotificationSupportRejectedReasons,
       oeNotificationVisibleSupportTerms,
+      contactabilityScenario,
+      contactabilityAnchorFound,
+      contactabilityMissingSupportReason,
       inferredPilotStatus: inferPilotStatus(args.question),
       shortCallNotificationScenario,
       shortCallNotificationAnchorFound,
@@ -6003,6 +6538,7 @@ function buildSupportFocusedCandidates(args: {
   const rerouteConsistencyScenario = detectRerouteConsistencyScenario(args.question);
   const qsCallOrderScenario = detectQsCallOrderScenario(args.question);
   const oeNotificationScenario = detectOeNotificationScenario(args.question);
+  const contactabilityScenario = detectContactabilityScenario(args.question);
   const shortCallNotificationScenario = detectShortCallNotificationScenario(args.question);
   const futureRotationChangeScenario = detectFutureRotationChangeScenario(args.question);
   const termWeights: Record<string, number> = {
@@ -6233,6 +6769,21 @@ function buildSupportFocusedCandidates(args: {
     "online notification",
     "electronic notification",
   ];
+  const contactabilityTerms = [
+    "contactable",
+    "answer the phone",
+    "phone call",
+    "acars",
+    "airport sit",
+    "between flights",
+    "on duty",
+    "off duty",
+    "acknowledge",
+    "notification",
+    "check your schedule",
+    "end of short call",
+    "short call",
+  ];
   const shortCallNotificationTerms = [
     "short call",
     "notification",
@@ -6304,6 +6855,12 @@ function buildSupportFocusedCandidates(args: {
           : chunk.source === "pwa"
             ? 40
             : 0
+        : contactabilityScenario
+        ? chunk.source === "scheduler_manual"
+          ? 96
+          : chunk.source === "pwa"
+            ? 52
+            : 8
         : rerouteConsistencyScenario
         ? chunk.source === "pwa"
           ? 86
@@ -6357,6 +6914,7 @@ function buildSupportFocusedCandidates(args: {
       const qsCallOrderSpecificHits = qsCallOrderTerms.filter((term) => chunkText.includes(term));
       const oeNotificationSpecificHits = getOeNotificationSupportHits(chunkText);
       const oeNotificationDirectSupport = hasDirectOeNotificationSupport(chunkText);
+      const contactabilitySpecificHits = contactabilityTerms.filter((term) => chunkText.includes(term));
       const shortCallNotificationSpecificHits = shortCallNotificationTerms.filter((term) => chunkText.includes(term));
       const futureRotationSpecificHits = futureRotationTerms.filter((term) => chunkText.includes(term));
       const score =
@@ -6432,6 +6990,13 @@ function buildSupportFocusedCandidates(args: {
         (oeNotificationScenario && normalizeSectionIdentifier(chunk.section).includes(normalizeSectionIdentifier("Section 10")) && !oeNotificationDirectSupport ? -220 : 0) +
         (oeNotificationScenario && normalizeSectionIdentifier(chunk.section).includes(normalizeSectionIdentifier("Section 2")) && !oeNotificationDirectSupport ? -220 : 0) +
         (oeNotificationScenario && /\bsection 23\b/.test(chunkText) && !oeNotificationDirectSupport ? -165 : 0) +
+        (contactabilityScenario && contactabilitySpecificHits.length > 0 ? 145 : 0) +
+        (contactabilityScenario ? contactabilitySpecificHits.length * 28 : 0) +
+        (contactabilityScenario && chunk.source === "scheduler_manual" && contactabilitySpecificHits.length > 0 ? 150 : 0) +
+        (contactabilityScenario && chunk.source === "pwa" && (chunkText.includes("notification") || chunkText.includes("contact")) ? 80 : 0) +
+        (contactabilityScenario && (chunkText.includes("green slip") || chunkText.includes("premium pay") || chunkText.includes("quick slip")) ? -220 : 0) +
+        (contactabilityScenario && normalizeSectionIdentifier(chunk.section).includes(normalizeSectionIdentifier("Section 10")) ? -190 : 0) +
+        (contactabilityScenario && normalizeSectionIdentifier(chunk.section).includes(normalizeSectionIdentifier("Section 2")) && !chunkText.includes("notification") && !chunkText.includes("contact") ? -180 : 0) +
         (rerouteConsistencyScenario && rerouteSpecificHits.length > 0 ? 155 : 0) +
         (rerouteConsistencyScenario ? rerouteSpecificHits.length * 30 : 0) +
         (rerouteConsistencyScenario && chunk.source === "pwa" && normalizeSectionIdentifier(chunk.section).includes(normalizeSectionIdentifier("Section 23 L")) ? 180 : 0) +
@@ -6482,6 +7047,12 @@ function buildSupportFocusedCandidates(args: {
                   quoteSnippet: chunk.text,
                 })
             : (oeNotificationScenario && oeNotificationDirectSupport)
+              ? inferSupportSectionAnchor({
+                  section: chunk.section,
+                  label: [chunk.title ?? "", ...(chunk.sectionAnchors ?? [])].join(" "),
+                  quoteSnippet: chunk.text,
+                })
+            : (contactabilityScenario && contactabilitySpecificHits.length > 0)
               ? inferSupportSectionAnchor({
                   section: chunk.section,
                   label: [chunk.title ?? "", ...(chunk.sectionAnchors ?? [])].join(" "),

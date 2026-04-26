@@ -1,18 +1,18 @@
 # Contract Copilot QA Report
 
-Generated: 2026-04-26T06:00:33.299Z
+Generated: 2026-04-26T15:58:37.050Z
 
 ## Answer QA Summary
 
 - PASS: 20
-- WARN: 53
+- WARN: 73
 - FAIL: 0
 - CRITICAL_FAIL: 0
 
 ## Support QA Summary
 
-- PASS: 55
-- WARN: 18
+- PASS: 74
+- WARN: 19
 - FAIL: 0
 
 ## Per-Test Results
@@ -92,6 +92,26 @@ Generated: 2026-04-26T06:00:33.299Z
 | qa-rw-new-014 | WARN | WARN | contract_scenario_retrieval | false | PWA, Compensation Manual, Scheduler Manual |
 | qa-rw-new-015 | WARN | PASS | contract_scenario_retrieval | false | PWA, Scheduler Manual |
 | qa-rw-new-016 | WARN | PASS | contract_scenario_retrieval | false | PWA, Compensation Manual, Scheduler Manual |
+| qa-rw-batch2-001 | WARN | WARN | contract_scenario_retrieval | false | PWA, Compensation Manual, Scheduler Manual |
+| qa-rw-batch2-002 | WARN | PASS | contract_scenario_retrieval | false | PWA, Compensation Manual, Scheduler Manual |
+| qa-rw-batch2-003 | WARN | PASS | contract_scenario_retrieval | false | PWA, Compensation Manual, Scheduler Manual |
+| qa-rw-batch2-004 | WARN | PASS | contract_scenario_retrieval | false | PWA, Compensation Manual, Scheduler Manual |
+| qa-rw-batch2-005 | WARN | PASS | contract_scenario_retrieval | false | PWA, Compensation Manual, Scheduler Manual |
+| qa-rw-batch2-006 | WARN | PASS | contract_scenario_retrieval | false | PWA, Compensation Manual, Scheduler Manual |
+| qa-rw-batch2-007 | WARN | PASS | contract_scenario_retrieval | false | PWA, Compensation Manual, Scheduler Manual |
+| qa-rw-batch2-008 | WARN | PASS | direct_term_lookup | false | PWA, Compensation Manual, Scheduler Manual |
+| qa-rw-batch2-009 | WARN | PASS | document_section_explanation | false | PWA |
+| qa-rw-batch2-010 | WARN | PASS | contract_scenario_retrieval | false | PWA, Compensation Manual, Scheduler Manual |
+| qa-rw-batch2-011 | WARN | PASS | contract_scenario_retrieval | false | PWA, Compensation Manual, Scheduler Manual |
+| qa-rw-batch2-012 | WARN | PASS | contract_scenario_retrieval | false | PWA, Compensation Manual, Scheduler Manual |
+| qa-rw-batch2-013 | WARN | PASS | contract_scenario_retrieval | false | PWA, Compensation Manual, Scheduler Manual |
+| qa-rw-batch2-014 | WARN | PASS | contract_scenario_retrieval | false | PWA, Compensation Manual, Scheduler Manual |
+| qa-rw-batch2-015 | WARN | PASS | contract_scenario_retrieval | false | PWA, Compensation Manual, Scheduler Manual |
+| qa-rw-batch2-016 | WARN | PASS | contract_scenario_retrieval | false | PWA, Compensation Manual, Scheduler Manual |
+| qa-rw-batch2-017 | WARN | PASS | contract_scenario_retrieval | false | PWA, Compensation Manual, Scheduler Manual |
+| qa-rw-batch2-018 | WARN | PASS | contract_scenario_retrieval | false | PWA, Compensation Manual, Scheduler Manual |
+| qa-rw-batch2-019 | WARN | PASS | contract_scenario_retrieval | false | PWA, Compensation Manual, Scheduler Manual |
+| qa-rw-batch2-020 | WARN | PASS | contract_scenario_retrieval | false | PWA, Compensation Manual, Scheduler Manual |
 
 ## Support Failures Grouped By Missing Anchor
 
