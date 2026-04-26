@@ -53,6 +53,11 @@ import { ContractCopilotPanel } from "./src/components/contractCopilot/ContractC
 import { fliegerTypography, getFliegerPalette } from "./src/theme/flieger";
 
 const embeddedChartData = embeddedDeltaCharts as unknown as DeltaChartsData;
+const appStylePalette = getFliegerPalette();
+const appStyleIsDark = appStylePalette.textPrimary === "#F2E9DC";
+const appDecisionRowSurface = appStyleIsDark ? "#303840" : "#D2D8DE";
+const appDecisionRowHighlight = appStyleIsDark ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.6)";
+const appDecisionRowShadowEdge = appStyleIsDark ? "rgba(0,0,0,0.5)" : "rgba(0,0,0,0.08)";
 
 const premiumTypeOptions = [
   { key: "none", label: "None" },
@@ -2953,7 +2958,7 @@ export default function App() {
         ]}
       >
         <View style={{ position: "absolute", top: -18, left: 0, right: 0, alignItems: "center" }}>
-          <FliegerMarker color={flieger.cream} dotSize={5} triangleWidth={10} triangleHeight={9} />
+          <FliegerMarker color={flieger.textPrimary} dotSize={5} triangleWidth={10} triangleHeight={9} />
         </View>
         {tabs.map((tab) => (
           <BottomNavItem
@@ -5051,6 +5056,8 @@ function MobilePreferencesPanel({
                 activeOpacity={0.85}
                 onPress={row.onPress}
               >
+                <View pointerEvents="none" style={styles.mobileTrackedCategoryTopEdge} />
+                <View pointerEvents="none" style={styles.mobileTrackedCategoryBottomEdge} />
                 <View
                   pointerEvents="none"
                   style={styles.mobileTrackedCategoryInnerEdge}
@@ -5731,11 +5738,11 @@ function MobileStatusBadge({
         {
           backgroundColor:
             tone === "green"
-              ? palette.surfaceRaised
+              ? (appStyleIsDark ? "rgba(0,255,102,0.16)" : "rgba(0,255,102,0.20)")
               : tone === "amber"
                 ? palette.badgeNeutral
                 : tone === "red"
-                  ? palette.surfaceRaised
+                  ? (appStyleIsDark ? "rgba(255,48,48,0.16)" : "rgba(255,48,48,0.18)")
                   : palette.badgeNeutral,
           borderColor:
             tone === "green"
@@ -5753,10 +5760,10 @@ function MobileStatusBadge({
               : tone === "red"
                 ? palette.red
                 : palette.borderStrong,
-          shadowOpacity: tone === "neutral" ? 0.14 : 0.18,
-          shadowRadius: 4,
-          shadowOffset: { width: 0, height: 0 },
-          elevation: 2,
+          shadowOpacity: tone === "neutral" ? 0.12 : appStyleIsDark ? 0.2 : 0.14,
+          shadowRadius: appStyleIsDark ? 4 : 3,
+          shadowOffset: { width: 0, height: 2 },
+          elevation: 3,
         },
         tone === "green" && styles.mobileStatusBadgeGreen,
         tone === "amber" && styles.mobileStatusBadgeAmber,
@@ -5911,51 +5918,53 @@ function toneForForecastStatus(status: HoldForecastResult["status"]) {
 
 function statusBackgroundStyle(tone: "green" | "amber" | "red" | "neutral") {
   const palette = getFliegerPalette();
+  const isDark = palette.textPrimary === "#F2E9DC";
+  const rowSurface = isDark ? "#303840" : "#D2D8DE";
   if (tone === "green") {
     return {
-      backgroundColor: palette.surfaceRaised,
+      backgroundColor: rowSurface,
       borderColor: palette.green,
       borderWidth: 2.8,
       shadowColor: "rgba(0,255,102,0.25)",
-      shadowOpacity: 0.22,
-      shadowRadius: 6,
-      shadowOffset: { width: 0, height: 0 },
-      elevation: 4,
+      shadowOpacity: isDark ? 0.24 : 0.14,
+      shadowRadius: isDark ? 6 : 4,
+      shadowOffset: { width: 0, height: isDark ? 3 : 2 },
+      elevation: 5,
     };
   }
   if (tone === "amber") {
     return {
-      backgroundColor: palette.surfaceRaised,
+      backgroundColor: rowSurface,
       borderColor: palette.borderStrong,
       borderWidth: 2.8,
       shadowColor: "rgba(17,24,32,0.08)",
-      shadowOpacity: 0.12,
+      shadowOpacity: isDark ? 0.16 : 0.1,
       shadowRadius: 4,
-      shadowOffset: { width: 0, height: 0 },
-      elevation: 2,
+      shadowOffset: { width: 0, height: isDark ? 3 : 2 },
+      elevation: 3,
     };
   }
   if (tone === "red") {
     return {
-      backgroundColor: palette.surfaceRaised,
+      backgroundColor: rowSurface,
       borderColor: palette.red,
       borderWidth: 2.8,
       shadowColor: "rgba(255,48,48,0.25)",
-      shadowOpacity: 0.22,
-      shadowRadius: 6,
-      shadowOffset: { width: 0, height: 0 },
-      elevation: 4,
+      shadowOpacity: isDark ? 0.24 : 0.14,
+      shadowRadius: isDark ? 6 : 4,
+      shadowOffset: { width: 0, height: isDark ? 3 : 2 },
+      elevation: 5,
     };
   }
   return {
-    backgroundColor: palette.surfaceRaised,
+    backgroundColor: rowSurface,
     borderColor: palette.borderStrong,
     borderWidth: 2.8,
     shadowColor: "rgba(17,24,32,0.08)",
-    shadowOpacity: 0.12,
+    shadowOpacity: isDark ? 0.16 : 0.1,
     shadowRadius: 4,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 2,
+    shadowOffset: { width: 0, height: isDark ? 3 : 2 },
+    elevation: 3,
   };
 }
 
@@ -6338,7 +6347,7 @@ function payPriorityScore(entry: CategoryEntry) {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#B8C0C8",
+    backgroundColor: appStylePalette.background,
   },
   container: {
     padding: 20,
@@ -6346,7 +6355,7 @@ const styles = StyleSheet.create({
     gap: 18,
   },
   hero: {
-    backgroundColor: "#2B3239",
+    backgroundColor: appStylePalette.surface,
     borderRadius: 16,
     padding: 22,
     gap: 12,
@@ -6355,13 +6364,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textTransform: "uppercase",
     letterSpacing: fliegerTypography.letterSpacingWide,
-    color: "#66D9F2",
+    color: appStylePalette.accent,
     textAlign: "center",
   },
   title: {
     fontSize: 34,
     fontWeight: "700",
-    color: "#F2E9DC",
+    color: appStylePalette.textPrimary,
     textAlign: "center",
     letterSpacing: fliegerTypography.letterSpacingWordmark,
     textTransform: "uppercase",
@@ -6369,7 +6378,7 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 15,
     lineHeight: 22,
-    color: "#C3CBD2",
+    color: appStylePalette.textMuted,
     letterSpacing: fliegerTypography.letterSpacingWide,
     textTransform: "uppercase",
   },
@@ -6381,25 +6390,27 @@ const styles = StyleSheet.create({
   metricCard: {
     minWidth: 98,
     flex: 1,
-    backgroundColor: "#16395D",
+    backgroundColor: appStylePalette.surfaceRaised,
     borderRadius: 18,
     padding: 14,
     gap: 6,
+    borderWidth: 1.5,
+    borderColor: appStylePalette.borderStrong,
   },
   metricGold: {
-    backgroundColor: "#A6192E",
+    borderColor: appStylePalette.redBorder,
   },
   metricGreen: {
-    backgroundColor: "#234B73",
+    borderColor: appStylePalette.greenBorder,
   },
   metricLabel: {
-    color: "#D7E2EE",
+    color: appStylePalette.label,
     fontSize: 12,
     textTransform: "uppercase",
     letterSpacing: fliegerTypography.letterSpacingLabel,
   },
   metricValue: {
-    color: "#FFFFFF",
+    color: appStylePalette.textPrimary,
     fontSize: 18,
     fontWeight: "800",
     fontVariant: ["tabular-nums"],
@@ -6415,16 +6426,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingTop: 18,
     paddingBottom: 20,
-    backgroundColor: "#242A30",
+    backgroundColor: appStylePalette.surface,
     borderTopWidth: 1,
-    borderTopColor: "#46515C",
+    borderTopColor: appStylePalette.borderStrong,
   },
   tabButton: {
     flex: 1,
     paddingHorizontal: 10,
     paddingVertical: 10,
     borderRadius: 14,
-    backgroundColor: "#2B3239",
+    backgroundColor: appStylePalette.surfaceRaised,
     alignItems: "center",
     gap: 8,
   },
@@ -6435,7 +6446,7 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: "#151A1F",
+    backgroundColor: appStylePalette.surfaceRecessed,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -6443,7 +6454,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(102,217,242,0.14)",
   },
   tabIconText: {
-    color: "#F2E9DC",
+    color: appStylePalette.textPrimary,
     fontWeight: "900",
     fontSize: 22,
     lineHeight: 24,
@@ -6457,7 +6468,7 @@ const styles = StyleSheet.create({
     color: "#66D9F2",
   },
   tabLabel: {
-    color: "#C3CBD2",
+    color: appStylePalette.textMuted,
     fontWeight: "700",
     fontSize: 11,
     textTransform: "uppercase",
@@ -6470,24 +6481,24 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   card: {
-    backgroundColor: "#C6CDD4",
+    backgroundColor: appStylePalette.surface,
     borderRadius: 14,
     padding: 18,
     gap: 10,
     borderWidth: 1.5,
-    borderColor: "#5F6B76",
+    borderColor: appStylePalette.borderStrong,
   },
   cardTitle: {
     fontSize: 22,
     fontWeight: "800",
-    color: "#007FA3",
+    color: appStylePalette.accent,
     letterSpacing: 1.1,
     textTransform: "uppercase",
   },
   cardDescription: {
     fontSize: 14,
     lineHeight: 21,
-    color: "#344552",
+    color: appStylePalette.textMuted,
   },
   cardBody: {
     gap: 14,
@@ -6505,50 +6516,50 @@ const styles = StyleSheet.create({
   summaryCard: {
     flex: 1,
     minWidth: 220,
-    backgroundColor: "#C6CDD4",
+    backgroundColor: appStylePalette.surfaceRaised,
     borderRadius: 14,
     padding: 18,
     gap: 10,
     borderWidth: 1.5,
-    borderColor: "#5F6B76",
+    borderColor: appStylePalette.borderStrong,
   },
   summaryTitle: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#007FA3",
+    color: appStylePalette.accent,
     textTransform: "uppercase",
     letterSpacing: fliegerTypography.letterSpacingLabel,
   },
   summaryMain: {
     fontSize: 42,
     fontWeight: "800",
-    color: "#111820",
+    color: appStylePalette.textPrimary,
     lineHeight: 44,
     fontVariant: ["tabular-nums"],
   },
   summaryDetail: {
     fontSize: 14,
-    color: "#344552",
+    color: appStylePalette.textMuted,
     fontWeight: "600",
   },
   summarySub: {
     fontSize: 14,
     lineHeight: 20,
-    color: "#344552",
+    color: appStylePalette.textMuted,
   },
   summaryTrack: {
     height: 18,
     borderRadius: 999,
-    backgroundColor: "#AEB7C0",
+    backgroundColor: appStylePalette.surfaceRecessed,
     overflow: "hidden",
   },
   summaryFill: {
     height: "100%",
     borderRadius: 999,
-    backgroundColor: "#007FA3",
+    backgroundColor: appStylePalette.accent,
   },
   snapshotPill: {
-    backgroundColor: "#2B3239",
+    backgroundColor: appStylePalette.surfaceRaised,
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -6556,14 +6567,14 @@ const styles = StyleSheet.create({
   },
   snapshotLabel: {
     fontSize: 12,
-    color: "#66D9F2",
+    color: appStylePalette.textMuted,
     textTransform: "uppercase",
     letterSpacing: fliegerTypography.letterSpacingLabel,
   },
   snapshotValue: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#F2E9DC",
+    color: appStylePalette.textPrimary,
     fontVariant: ["tabular-nums"],
   },
   formRow: {
@@ -6578,7 +6589,7 @@ const styles = StyleSheet.create({
   },
   inputLabel: {
     fontSize: 13,
-    color: "#007FA3",
+    color: appStylePalette.accent,
     fontWeight: "700",
     textTransform: "uppercase",
     letterSpacing: 1.1,
@@ -6586,29 +6597,29 @@ const styles = StyleSheet.create({
   inputShell: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#D8DDE2",
+    backgroundColor: appStylePalette.surfaceRecessed,
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: "#5F6B76",
+    borderColor: appStylePalette.borderStrong,
     paddingHorizontal: 14,
     minHeight: 52,
   },
   inputAffix: {
-    color: "#344552",
+    color: appStylePalette.textMuted,
     fontSize: 16,
     fontWeight: "700",
   },
   input: {
     flex: 1,
     fontSize: 18,
-    color: "#111820",
+    color: appStylePalette.textPrimary,
     paddingVertical: 12,
   },
   textAreaShell: {
-    backgroundColor: "#D8DDE2",
+    backgroundColor: appStylePalette.surfaceRecessed,
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: "#5F6B76",
+    borderColor: appStylePalette.borderStrong,
     paddingHorizontal: 14,
     paddingVertical: 12,
     minHeight: 220,
@@ -6617,41 +6628,41 @@ const styles = StyleSheet.create({
     minHeight: 192,
     fontSize: 14,
     lineHeight: 21,
-    color: "#111820",
+    color: appStylePalette.textPrimary,
   },
   resultPanel: {
-    backgroundColor: "#C6CDD4",
+    backgroundColor: appStylePalette.surface,
     borderRadius: 14,
     padding: 16,
     gap: 12,
     borderWidth: 1.5,
-    borderColor: "#5F6B76",
+    borderColor: appStylePalette.borderStrong,
   },
   quickLinkButton: {
     alignSelf: "flex-start",
-    backgroundColor: "#2B3239",
+    backgroundColor: appStylePalette.surfaceRaised,
     borderRadius: 999,
     borderWidth: 1.5,
-    borderColor: "#66D9F2",
+    borderColor: appStylePalette.accent,
     paddingHorizontal: 16,
     paddingVertical: 10,
   },
   quickLinkButtonText: {
     fontSize: 14,
     fontWeight: "800",
-    color: "#66D9F2",
+    color: appStylePalette.accent,
   },
   whatIfScenarioPanel: {
     flex: 1,
     minWidth: 260,
   },
   paySummaryCard: {
-    backgroundColor: "#C6CDD4",
+    backgroundColor: appStylePalette.surfaceRaised,
     borderRadius: 14,
     padding: 16,
     gap: 12,
     borderWidth: 1.5,
-    borderColor: "#5F6B76",
+    borderColor: appStylePalette.borderStrong,
   },
   payToolGrid: {
     flexDirection: "row",
@@ -6662,18 +6673,18 @@ const styles = StyleSheet.create({
   payToolCard: {
     flex: 1,
     minWidth: 240,
-    backgroundColor: "#C6CDD4",
+    backgroundColor: appStylePalette.surface,
     borderRadius: 14,
     overflow: "hidden",
     borderWidth: 1.5,
-    borderColor: "#5F6B76",
+    borderColor: appStylePalette.borderStrong,
   },
   payToolCardActive: {
     borderColor: "#007FA3",
   },
   payToolHero: {
     minHeight: 104,
-    backgroundColor: "#AEB7C0",
+    backgroundColor: appStylePalette.surfaceRaised,
     paddingHorizontal: 18,
     paddingVertical: 16,
     justifyContent: "space-between",
@@ -6681,12 +6692,12 @@ const styles = StyleSheet.create({
   payToolGlyph: {
     fontSize: 28,
     fontWeight: "900",
-    color: "#007FA3",
+    color: appStylePalette.accent,
   },
   payToolBadge: {
     alignSelf: "flex-start",
-    backgroundColor: "#D8DDE2",
-    color: "#111820",
+    backgroundColor: appStylePalette.surfaceRecessed,
+    color: appStylePalette.textPrimary,
     fontSize: 12,
     fontWeight: "800",
     paddingHorizontal: 10,
@@ -6703,18 +6714,18 @@ const styles = StyleSheet.create({
   payToolTitle: {
     fontSize: 22,
     fontWeight: "800",
-    color: "#111820",
+    color: appStylePalette.textPrimary,
   },
   payToolSubtitle: {
     fontSize: 14,
     lineHeight: 21,
-    color: "#344552",
+    color: appStylePalette.textMuted,
   },
   payToolButton: {
     marginHorizontal: 18,
     marginBottom: 18,
-    backgroundColor: "#2B3239",
-    color: "#F2E9DC",
+    backgroundColor: appStylePalette.surfaceRaised,
+    color: appStylePalette.textPrimary,
     textAlign: "center",
     fontSize: 14,
     fontWeight: "800",
@@ -6722,50 +6733,50 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     paddingVertical: 12,
     borderWidth: 1.5,
-    borderColor: "#66D9F2",
+    borderColor: appStylePalette.accent,
   },
   payToolPlaceholder: {
-    backgroundColor: "#C6CDD4",
+    backgroundColor: appStylePalette.surface,
     borderRadius: 14,
     padding: 18,
     gap: 10,
     borderWidth: 1.5,
-    borderColor: "#5F6B76",
+    borderColor: appStylePalette.borderStrong,
   },
   payToolPlaceholderTitle: {
     fontSize: 20,
     fontWeight: "800",
-    color: "#111820",
+    color: appStylePalette.textPrimary,
   },
   payToolPlaceholderText: {
     fontSize: 14,
     lineHeight: 22,
-    color: "#344552",
+    color: appStylePalette.textMuted,
   },
   auditButton: {
     alignSelf: "flex-start",
-    backgroundColor: "#2B3239",
+    backgroundColor: appStylePalette.surfaceRaised,
     borderRadius: 14,
     paddingHorizontal: 18,
     paddingVertical: 12,
     borderWidth: 1.5,
-    borderColor: "#66D9F2",
+    borderColor: appStylePalette.accent,
   },
   auditButtonDisabled: {
-    backgroundColor: "#AEB7C0",
+    backgroundColor: appStylePalette.surfaceRaised,
   },
   auditButtonText: {
     fontSize: 14,
     fontWeight: "800",
-    color: "#F2E9DC",
+    color: appStylePalette.textPrimary,
   },
   auditSummaryHero: {
-    backgroundColor: "#C6CDD4",
+    backgroundColor: appStylePalette.surface,
     borderRadius: 14,
     padding: 18,
     gap: 14,
     borderWidth: 1.5,
-    borderColor: "#007FA3",
+    borderColor: appStylePalette.accent,
   },
   auditSummaryHeader: {
     gap: 4,
@@ -6773,7 +6784,7 @@ const styles = StyleSheet.create({
   auditSummaryTitle: {
     fontSize: 28,
     fontWeight: "900",
-    color: "#111820",
+    color: appStylePalette.textPrimary,
   },
   auditSummaryMeta: {
     fontSize: 13,
@@ -6921,7 +6932,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 8,
     paddingHorizontal: 8,
-    borderWidth: 2,
+    borderWidth: 2.8,
+    overflow: "visible",
+    shadowOffset: { width: 0, height: appStyleIsDark ? 3 : 2 },
+    shadowRadius: appStyleIsDark ? 6 : 4,
+    shadowOpacity: appStyleIsDark ? 0.22 : 0.1,
+    elevation: 5,
   },
   mobileCategoryCard: {
     borderRadius: 16,
@@ -6973,10 +6989,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     borderWidth: 1,
-    borderColor: "#46515C",
+    borderColor: appStylePalette.border,
     borderRadius: 12,
     overflow: "hidden",
-    backgroundColor: "#343C44",
+    backgroundColor: appStylePalette.surfaceRaised,
   },
   instrumentStatCell: {
     width: "50%",
@@ -6986,41 +7002,41 @@ const styles = StyleSheet.create({
     gap: 4,
     justifyContent: "center",
     borderBottomWidth: 1,
-    borderBottomColor: "#46515C",
+    borderBottomColor: appStylePalette.border,
   },
   instrumentStatCellLeft: {
     borderRightWidth: 1,
-    borderRightColor: "#46515C",
+    borderRightColor: appStylePalette.border,
   },
   instrumentStatCellRight: {},
   mobileMetricCard: {
     flexGrow: 1,
     flexBasis: "47%",
     minWidth: 120,
-    backgroundColor: "#2B3239",
+    backgroundColor: appStylePalette.surfaceRaised,
     borderRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 10,
     gap: 3,
     borderWidth: 1,
-    borderColor: "#46515C",
+    borderColor: appStylePalette.borderStrong,
   },
   mobileMetricLabel: {
     fontSize: 12,
     fontWeight: "800",
     textTransform: "uppercase",
     letterSpacing: 0.8,
-    color: "#66D9F2",
+    color: appStylePalette.accent,
   },
   mobileMetricValue: {
     fontSize: 24,
     fontWeight: "800",
-    color: "#F2E9DC",
+    color: appStylePalette.textPrimary,
   },
   mobileMetricDetail: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#C3CBD2",
+    color: appStylePalette.textMuted,
   },
   mobileDashboardStack: {
     gap: 12,
@@ -7043,10 +7059,10 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     flexBasis: 180,
     minWidth: 160,
-    backgroundColor: "#2B3239",
+    backgroundColor: appStylePalette.surfaceRaised,
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: "#46515C",
+    borderColor: appStylePalette.borderStrong,
     padding: 14,
     gap: 6,
   },
@@ -7055,31 +7071,31 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     textTransform: "uppercase",
     letterSpacing: fliegerTypography.letterSpacingLabel,
-    color: "#66D9F2",
+    color: appStylePalette.accent,
   },
   mobileKeyMetricValue: {
     fontSize: 28,
     fontWeight: "900",
-    color: "#F2E9DC",
+    color: appStylePalette.textPrimary,
     fontVariant: ["tabular-nums"],
   },
   mobileKeyMetricDetail: {
     fontSize: 12,
     lineHeight: 18,
-    color: "#C3CBD2",
+    color: appStylePalette.textMuted,
     fontWeight: "600",
   },
   mobileKeyMetricSubdetail: {
     fontSize: 12,
     lineHeight: 18,
-    color: "#F2E9DC",
+    color: appStylePalette.textPrimary,
     fontWeight: "800",
   },
   mobileDashboardCard: {
-    backgroundColor: "#2B3239",
+    backgroundColor: appStylePalette.surface,
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: "#46515C",
+    borderColor: appStylePalette.borderStrong,
     padding: 16,
     gap: 10,
   },
@@ -7088,12 +7104,12 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     textTransform: "uppercase",
     letterSpacing: fliegerTypography.letterSpacingLabel,
-    color: "#66D9F2",
+    color: appStylePalette.accent,
   },
   mobileDashboardTitle: {
     fontSize: 22,
     fontWeight: "700",
-    color: "#F2E9DC",
+    color: appStylePalette.textPrimary,
     textTransform: "uppercase",
     letterSpacing: 1.6,
   },
@@ -7106,18 +7122,18 @@ const styles = StyleSheet.create({
   mobileDashboardMeta: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#C3CBD2",
+    color: appStylePalette.textMuted,
   },
   mobileDashboardBodyText: {
     fontSize: 14,
     lineHeight: 21,
-    color: "#C3CBD2",
+    color: appStylePalette.textMuted,
   },
   mobilePreferencesCard: {
-    backgroundColor: "#2B3239",
+    backgroundColor: appStylePalette.surface,
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: "#46515C",
+    borderColor: appStylePalette.borderStrong,
     padding: 16,
     gap: 12,
   },
@@ -7125,23 +7141,23 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingTop: 4,
     borderTopWidth: 1,
-    borderTopColor: "#323A42",
+    borderTopColor: appStylePalette.border,
   },
   mobileSectionTitle: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#F2E9DC",
+    color: appStylePalette.textPrimary,
   },
   mobileSectionText: {
     fontSize: 14,
     lineHeight: 21,
-    color: "#C3CBD2",
+    color: appStylePalette.textMuted,
   },
   mobilePrefsSummaryCard: {
-    backgroundColor: "#2B3239",
+    backgroundColor: appStylePalette.surface,
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: "#46515C",
+    borderColor: appStylePalette.borderStrong,
     padding: 16,
     gap: 12,
   },
@@ -7152,14 +7168,14 @@ const styles = StyleSheet.create({
     minHeight: 48,
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: "#46515C",
-    backgroundColor: "#343C44",
+    borderColor: appStylePalette.borderStrong,
+    backgroundColor: appStylePalette.surfaceRaised,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 18,
   },
   mobilePrefsCollapsedButtonText: {
-    color: "#F2E9DC",
+    color: appStylePalette.textPrimary,
     fontSize: 14,
     fontWeight: "800",
   },
@@ -7198,12 +7214,36 @@ const styles = StyleSheet.create({
     gap: 12,
     borderRadius: 16,
     borderWidth: 2.8,
-    borderColor: "#46515C",
-    backgroundColor: "#2B3239",
+    borderColor: appStylePalette.borderStrong,
+    backgroundColor: appDecisionRowSurface,
     paddingHorizontal: 14,
     paddingVertical: 13,
     position: "relative",
     overflow: "visible",
+    shadowOffset: { width: 0, height: appStyleIsDark ? 3 : 2 },
+    shadowRadius: appStyleIsDark ? 6 : 4,
+    shadowOpacity: appStyleIsDark ? 0.22 : 0.1,
+    elevation: 5,
+  },
+  mobileTrackedCategoryTopEdge: {
+    position: "absolute",
+    top: 1.5,
+    left: 1.5,
+    right: 1.5,
+    height: 1,
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
+    backgroundColor: appDecisionRowHighlight,
+  },
+  mobileTrackedCategoryBottomEdge: {
+    position: "absolute",
+    left: 1.5,
+    right: 1.5,
+    bottom: 1.5,
+    height: 1,
+    borderBottomLeftRadius: 14,
+    borderBottomRightRadius: 14,
+    backgroundColor: appDecisionRowShadowEdge,
   },
   mobileTrackedCategoryInnerEdge: {
     position: "absolute",
@@ -7220,14 +7260,15 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   mobileTrackedCategoryTitle: {
-    fontSize: 18,
+    fontSize: 16,
+    lineHeight: 18,
     fontWeight: "800",
-    color: "#f3ead7",
+    color: appStylePalette.textPrimary,
   },
   mobileTrackedCategorySubtitle: {
     fontSize: 14,
-    lineHeight: 20,
-    color: "#C3CBD2",
+    lineHeight: 18,
+    color: appStylePalette.textMuted,
   },
   mobileTrackedDeleteButton: {
     alignSelf: "flex-start",
@@ -7247,14 +7288,14 @@ const styles = StyleSheet.create({
     minHeight: 48,
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: "#46515C",
-    backgroundColor: "#343C44",
+    borderColor: appStylePalette.borderStrong,
+    backgroundColor: appStylePalette.surfaceRecessed,
     justifyContent: "center",
     paddingHorizontal: 14,
   },
   textChipInput: {
     fontSize: 16,
-    color: "#F2E9DC",
+    color: appStylePalette.textPrimary,
     paddingVertical: 10,
   },
   mobileGoalRow: {
@@ -7266,27 +7307,27 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   mobileAddGoalButton: {
-    backgroundColor: "#2B3239",
+    backgroundColor: appStylePalette.surfaceRaised,
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 14,
   },
   mobileAddGoalButtonText: {
-    color: "#F2E9DC",
+    color: appStylePalette.textPrimary,
     fontSize: 13,
     fontWeight: "800",
   },
   mobileSavePrefsButton: {
     alignSelf: "flex-start",
-    backgroundColor: "#2B3239",
+    backgroundColor: appStylePalette.surfaceRaised,
     borderRadius: 14,
     paddingHorizontal: 16,
     paddingVertical: 11,
     borderWidth: 1.5,
-    borderColor: "#66D9F2",
+    borderColor: appStylePalette.accent,
   },
   mobileSavePrefsButtonText: {
-    color: "#F2E9DC",
+    color: appStylePalette.textPrimary,
     fontSize: 13,
     fontWeight: "800",
   },
@@ -7314,19 +7355,19 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   mobileGreenCard: {
-    backgroundColor: "#2B3239",
+    backgroundColor: appStylePalette.surfaceRecessed,
     borderColor: "#00FF66",
   },
   mobileAmberCard: {
-    backgroundColor: "#2B3239",
+    backgroundColor: appStylePalette.surfaceRecessed,
     borderColor: "#5F6B76",
   },
   mobileRedCard: {
-    backgroundColor: "#2B3239",
+    backgroundColor: appStylePalette.surfaceRecessed,
     borderColor: "#FF3030",
   },
   mobileNeutralCard: {
-    backgroundColor: "#2B3239",
+    backgroundColor: appStylePalette.surfaceRecessed,
     borderColor: "#5F6B76",
   },
   mobileDecisionHeader: {
@@ -7342,28 +7383,28 @@ const styles = StyleSheet.create({
   mobileDecisionTitle: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#F2E9DC",
+    color: appStylePalette.textPrimary,
     letterSpacing: 1.1,
   },
   mobileDecisionSubtitle: {
     fontSize: 14,
     lineHeight: 20,
-    color: "#C3CBD2",
+    color: appStylePalette.textMuted,
   },
   mobileDecisionFooter: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#C3CBD2",
+    color: appStylePalette.textMuted,
   },
   plannerModeHint: {
     fontSize: 12,
     lineHeight: 18,
-    color: "#C3CBD2",
+    color: appStylePalette.textMuted,
   },
   plannerSectionLabel: {
     fontSize: 12,
     fontWeight: "800",
-    color: "#66D9F2",
+    color: appStylePalette.accent,
     textTransform: "uppercase",
     letterSpacing: 1,
   },
@@ -7373,30 +7414,30 @@ const styles = StyleSheet.create({
   mobileEvidenceText: {
     fontSize: 14,
     lineHeight: 20,
-    color: "#F2E9DC",
+    color: appStylePalette.textPrimary,
   },
   mobileEvidenceTextMuted: {
     fontSize: 13,
     lineHeight: 19,
-    color: "#C3CBD2",
+    color: appStylePalette.textMuted,
   },
   mobilePlannerCallout: {
-    backgroundColor: "#343C44",
+    backgroundColor: appStylePalette.surfaceRaised,
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: "#66D9F2",
+    borderColor: appStylePalette.accent,
     padding: 12,
     gap: 4,
   },
   mobilePlannerCalloutTitle: {
     fontSize: 14,
     fontWeight: "800",
-    color: "#66D9F2",
+    color: appStylePalette.accent,
   },
   mobilePlannerCalloutText: {
     fontSize: 13,
     lineHeight: 19,
-    color: "#C3CBD2",
+    color: appStylePalette.textMuted,
   },
   mobileStatusBadge: {
     paddingHorizontal: 12,
@@ -7432,7 +7473,7 @@ const styles = StyleSheet.create({
   mobileInfoChip: {
     minWidth: 88,
     flexGrow: 1,
-    backgroundColor: "#343C44",
+    backgroundColor: appStylePalette.surfaceRaised,
     borderRadius: 14,
     paddingHorizontal: 10,
     paddingVertical: 8,
@@ -7443,12 +7484,12 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     textTransform: "uppercase",
     letterSpacing: fliegerTypography.letterSpacingLabel,
-    color: "#66D9F2",
+    color: appStylePalette.accent,
   },
   mobileInfoChipValue: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#F2E9DC",
+    color: appStylePalette.textPrimary,
     fontVariant: ["tabular-nums"],
   },
   mobileListStack: {
@@ -7495,19 +7536,19 @@ const styles = StyleSheet.create({
     color: "#A6192E",
   },
   tableRowHold: {
-    backgroundColor: "#2B3239",
+    backgroundColor: appDecisionRowSurface,
     borderColor: "#00FF66",
   },
   tableRowNoHold: {
-    backgroundColor: "#2B3239",
+    backgroundColor: appDecisionRowSurface,
     borderColor: "#FF3030",
   },
   tableRowCurrent: {
-    backgroundColor: "#343C44",
+    backgroundColor: appDecisionRowSurface,
     borderColor: "#00FF66",
   },
   tableRowNeutral: {
-    backgroundColor: "#343C44",
+    backgroundColor: appDecisionRowSurface,
     borderColor: "#5F6B76",
   },
   seatSectionLabel: {
@@ -7515,7 +7556,7 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     textTransform: "uppercase",
     letterSpacing: 1,
-    color: "#C3CBD2",
+    color: appStylePalette.textMuted,
     marginTop: 4,
   },
   modalBackdrop: {
@@ -7530,10 +7571,10 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     maxHeight: "88%",
-    backgroundColor: "#C6CDD4",
+    backgroundColor: appStylePalette.surface,
     borderRadius: 24,
     borderWidth: 1.5,
-    borderColor: "#5F6B76",
+    borderColor: appStylePalette.borderStrong,
     padding: 18,
     position: "relative",
   },
@@ -7555,12 +7596,12 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 24,
     fontWeight: "800",
-    color: "#111820",
+    color: appStylePalette.textPrimary,
   },
   modalSubtitle: {
     fontSize: 14,
     lineHeight: 20,
-    color: "#344552",
+    color: appStylePalette.textMuted,
   },
   modalFloatingCloseButton: {
     position: "absolute",
@@ -7569,12 +7610,12 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: "#D8DDE2",
+    backgroundColor: appStylePalette.surfaceRecessed,
     alignItems: "center",
     justifyContent: "center",
     zIndex: 10,
     borderWidth: 1,
-    borderColor: "#5F6B76",
+    borderColor: appStylePalette.borderStrong,
     shadowColor: "transparent",
     shadowOpacity: 0,
     shadowRadius: 0,
@@ -7584,14 +7625,14 @@ const styles = StyleSheet.create({
   modalFloatingCloseText: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#111820",
+    color: appStylePalette.textPrimary,
     lineHeight: 18,
   },
   modalTableHeader: {
     flexDirection: "row",
     alignItems: "center",
     borderBottomWidth: 1,
-    borderBottomColor: "#5F6B76",
+    borderBottomColor: appStylePalette.borderStrong,
     paddingBottom: 8,
     gap: 10,
   },
@@ -7618,7 +7659,7 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#5F6B76",
+    borderBottomColor: appStylePalette.borderStrong,
   },
   modalNameCell: {
     flex: 1.6,
@@ -7626,7 +7667,7 @@ const styles = StyleSheet.create({
   modalPilotName: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#111820",
+    color: appStylePalette.textPrimary,
   },
   listCompareWrap: {
     gap: 12,
@@ -7640,12 +7681,12 @@ const styles = StyleSheet.create({
   listCompareCard: {
     flex: 1,
     minWidth: 320,
-    backgroundColor: "#D8DDE2",
+    backgroundColor: appStylePalette.surfaceRaised,
     borderRadius: 16,
     padding: 14,
     gap: 8,
     borderWidth: 1.5,
-    borderColor: "#5F6B76",
+    borderColor: appStylePalette.borderStrong,
   },
   listCompareCardCompact: {
     minWidth: 0,
@@ -7655,12 +7696,12 @@ const styles = StyleSheet.create({
   listCompareTitle: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#111820",
+    color: appStylePalette.textPrimary,
   },
   listCompareMeta: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#344552",
+    color: appStylePalette.textMuted,
   },
   listCompareRow: {
     flexDirection: "row",
@@ -7671,7 +7712,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     borderRadius: 10,
     borderBottomWidth: 1,
-    borderBottomColor: "#5F6B76",
+    borderBottomColor: appStylePalette.borderStrong,
   },
   listCompareRowCompact: {
     alignItems: "flex-start",
@@ -7698,22 +7739,22 @@ const styles = StyleSheet.create({
   listCompareName: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#111820",
+    color: appStylePalette.textPrimary,
   },
   listCompareStatus: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#344552",
+    color: appStylePalette.textMuted,
   },
   listCompareContext: {
     fontSize: 11,
     fontWeight: "600",
-    color: "#344552",
+    color: appStylePalette.textMuted,
   },
   listCompareNumber: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#111820",
+    color: appStylePalette.textPrimary,
   },
   listCompareNumberCompact: {
     fontSize: 14,
@@ -7723,33 +7764,33 @@ const styles = StyleSheet.create({
     marginTop: 10,
     paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: "#46515C",
+    borderTopColor: appStylePalette.border,
   },
   baseNetText: {
     fontSize: 13,
     fontWeight: "800",
-    color: "#007FA3",
+    color: appStylePalette.accent,
     textAlign: "center",
   },
   baseNetSubtext: {
     marginTop: 4,
     fontSize: 12,
     fontWeight: "600",
-    color: "#344552",
+    color: appStylePalette.textMuted,
     textAlign: "center",
   },
   seatDivider: {
     marginVertical: 6,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: "#5F6B76",
+    borderTopColor: appStylePalette.borderStrong,
   },
   seatDividerText: {
     fontSize: 11,
     fontWeight: "800",
     textTransform: "uppercase",
     letterSpacing: 1,
-    color: "#C3CBD2",
+    color: appStylePalette.textMuted,
   },
   tableCategoryCell: {
     flex: 1.7,
@@ -7761,19 +7802,19 @@ const styles = StyleSheet.create({
     minHeight: 48,
     justifyContent: "center",
     borderLeftWidth: 1,
-    borderLeftColor: "#46515C",
+    borderLeftColor: appStylePalette.border,
   },
   tableCell: {
     textAlign: "center",
     fontSize: 14,
     fontWeight: "900",
-    color: "#f3ead7",
+    color: appStylePalette.textPrimary,
     fontVariant: ["tabular-nums"],
   },
   tableDelta: {
     fontSize: 11,
     fontWeight: "700",
-    color: "#C3CBD2",
+    color: appStylePalette.textMuted,
     fontVariant: ["tabular-nums"],
   },
   tableDeltaPositive: {
@@ -7783,13 +7824,15 @@ const styles = StyleSheet.create({
     color: "#d94a50",
   },
   tableCategoryText: {
-    fontSize: 13,
+    fontSize: 16,
+    lineHeight: 18,
     fontWeight: "800",
-    color: "#f3ead7",
+    color: appStylePalette.textPrimary,
   },
   tableSubtext: {
-    fontSize: 11,
-    color: "#C3CBD2",
+    fontSize: 14,
+    lineHeight: 16,
+    color: appStylePalette.textMuted,
   },
   insightText: {
     fontSize: 14,

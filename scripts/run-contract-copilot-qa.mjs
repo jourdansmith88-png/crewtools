@@ -78,6 +78,32 @@ function sectionMatches(expected, actual) {
   return expectedVariants.some((e) => actualVariants.some((a) => a.includes(e) || e.includes(a)));
 }
 
+function extractSectionReferences(value) {
+  const text = String(value ?? "");
+  const matches =
+    text.match(
+      /\bsection\s+\d{1,2}(?:\s*[A-Z](?:\.?\d+)?)?(?:\.\d+)?(?:\.[A-Z])?|\b\d{1,2}\s*[A-Z](?:\.?\d+)?\b|§\s*\d{1,2}(?:\s*[A-Z](?:\.?\d+)?)?/gi
+    ) ?? [];
+  return Array.from(
+    new Set(
+      matches.map((item) =>
+        item
+          .replace(/^§\s*/i, "Section ")
+          .replace(/\s+/g, " ")
+          .replace(/(\d{1,2})([A-Z])/i, "$1 $2")
+          .replace(/([A-Z])(\d+)/i, "$1.$2")
+          .trim()
+          .toUpperCase()
+      )
+    )
+  );
+}
+
+function isSpecificSection(value) {
+  const section = String(value ?? "").trim().toUpperCase();
+  return /^SECTION\s+\d{1,2}\s+[A-Z](?:\.\d+)?$/.test(section);
+}
+
 function toSourceSet(debug) {
   const actual = new Set();
   for (const item of debug?.sourcesUsed ?? []) actual.add(item);
@@ -193,6 +219,16 @@ function termGroupMatches(text, terms) {
   if (!terms || terms.length === 0) return true;
   const haystack = normalize(text);
   return terms.some((term) => haystack.includes(normalize(term)));
+}
+
+function termsRoughlyOverlap(left, right) {
+  const leftNorm = normalize(left);
+  const rightNorm = normalize(right);
+  return (
+    leftNorm === rightNorm ||
+    leftNorm.includes(rightNorm) ||
+    rightNorm.includes(leftNorm)
+  );
 }
 
 function anchorMatchesItem(anchor, item) {
@@ -350,6 +386,12 @@ function scoreTest(test, payload) {
   const missingSupportIncludes = (test.expectedSupportIncludes ?? []).filter(
     (item) => !supportHaystack.includes(item.toLowerCase()),
   );
+  const requiredSupportTerms = (test.expectedSupportAnchors ?? [])
+    .filter((anchor) => anchor.required !== false)
+    .flatMap((anchor) => anchor.terms ?? []);
+  const missingRequiredSupportIncludes = missingSupportIncludes.filter((item) =>
+    requiredSupportTerms.some((term) => termsRoughlyOverlap(term, item))
+  );
   const missingMustInclude = (test.mustInclude ?? []).filter(
     (item) => !answerHaystack.includes(item.toLowerCase()),
   );
@@ -431,17 +473,58 @@ function scoreTest(test, payload) {
     );
 
   const laneMatch = debug.selectedLane === test.expectedLane ? "pass" : "fail";
+  const governingSectionExpectation = (() => {
+    const explicitAnswerSections = extractSectionReferences(
+      [payload.answer?.shortAnswer ?? "", payload.answer?.plainEnglishExplanation ?? ""].join(" ")
+    ).filter(isSpecificSection);
+    if (explicitAnswerSections.length > 0) {
+      return explicitAnswerSections;
+    }
+    if (typeof debug.controllingSectionDisplay === "string") {
+      const controllingSections = extractSectionReferences(debug.controllingSectionDisplay).filter(isSpecificSection);
+      if (controllingSections.length > 0) {
+        return controllingSections;
+      }
+    }
+    if (typeof debug.governingSectionUsed === "string") {
+      const governingTail = debug.governingSectionUsed.includes(":")
+        ? debug.governingSectionUsed.split(":").slice(-1)[0]
+        : debug.governingSectionUsed;
+      const governingSections = extractSectionReferences(governingTail).filter(isSpecificSection);
+      if (governingSections.length > 0) {
+        return governingSections;
+      }
+    }
+    return [];
+  })();
+  const controllingSectionDisplayMatch =
+    governingSectionExpectation.length === 0
+      ? "pass"
+      : governingSectionExpectation.every((section) =>
+            sectionMatches(section, payload.answer?.plainEnglishExplanation ?? "") ||
+            sectionMatches(section, debug.controllingSectionDisplay ?? "") ||
+            getVisibleSupport(payload).some((reference) => sectionMatches(section, reference.section))
+          )
+        ? "pass"
+        : "fail";
   const strongClaimWithWeakSupport =
     scenarioSafetyExpected &&
     (debug.strongClaimsDetected?.length ?? 0) > 0 &&
     debug.supportWeakMatchWarning === true &&
     debug.answerDowngradedToCaution !== true;
+  const optionalOnlySupportGap =
+    missingSources.length === 0 &&
+    missingSupportIncludes.length > 0 &&
+    missingRequiredSupportIncludes.length === 0 &&
+    supportScores.supportAnchorMatch === "pass";
   const sourceMatch =
     missingSources.length === 0 && missingSupportIncludes.length === 0
       ? "pass"
+      : optionalOnlySupportGap
+        ? "warn"
       : realWorldScenario && explicitControllingSourceLimitation
         ? "warn"
-        : test.riskLevel === "critical" || test.riskLevel === "high"
+      : test.riskLevel === "critical" || test.riskLevel === "high"
           ? "fail"
           : "warn";
   const synthesisUnavailable =
@@ -543,6 +626,7 @@ function scoreTest(test, payload) {
   } else if (
     [
       laneMatch,
+      controllingSectionDisplayMatch,
       sourceMatch,
       synthesisMatch,
       verifierBehavior,
@@ -560,6 +644,7 @@ function scoreTest(test, payload) {
   } else if (
     [
       laneMatch,
+      controllingSectionDisplayMatch,
       sourceMatch,
       synthesisMatch,
       verifierBehavior,
@@ -601,6 +686,7 @@ function scoreTest(test, payload) {
     supportFinalScore,
     checks: {
       laneMatch,
+      controllingSectionDisplayMatch,
       sourceMatch,
       synthesisMatch,
       verifierBehavior,
@@ -696,6 +782,9 @@ function scoreTest(test, payload) {
       sourcesUsed: actualSources,
       redFlags: redFlagResult.redFlags,
       redFlagSeverity: redFlagResult.severity,
+      redFlagTopicDriftTerms: redFlagResult.topicDriftTerms ?? [],
+      missingSupportIncludes,
+      missingRequiredSupportIncludes,
       missingMustInclude,
       foundMustNotInclude,
       clarificationAsked,

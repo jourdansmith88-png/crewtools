@@ -1,5 +1,6 @@
 import React from "react";
 import { Text, View } from "react-native";
+import { getFliegerPalette } from "../../theme/flieger";
 
 type ContractBulletSectionCardProps = {
   title: string;
@@ -7,6 +8,8 @@ type ContractBulletSectionCardProps = {
 };
 
 export function ContractBulletSectionCard({ title, items }: ContractBulletSectionCardProps) {
+  const palette = getFliegerPalette();
+
   if (!items || items.length === 0) {
     return null;
   }
@@ -15,16 +18,16 @@ export function ContractBulletSectionCard({ title, items }: ContractBulletSectio
     <View
       style={{
         gap: 10,
-        backgroundColor: "#F7FAFC",
+        backgroundColor: palette.surfaceRaised,
         borderRadius: 18,
-        borderWidth: 1,
-        borderColor: "#D4DEE9",
+        borderWidth: 1.5,
+        borderColor: palette.border,
         padding: 16,
       }}
     >
-      <Text style={{ fontSize: 16, fontWeight: "800", color: "#0C2340" }}>{title}</Text>
+      <Text style={{ fontSize: 16, fontWeight: "800", color: palette.textPrimary }}>{title}</Text>
       {items.map((item) => (
-        <Text key={item} style={{ fontSize: 14, lineHeight: 21, color: "#52606D" }}>
+        <Text key={item} style={{ fontSize: 14, lineHeight: 21, color: palette.textMuted }}>
           • {item}
         </Text>
       ))}

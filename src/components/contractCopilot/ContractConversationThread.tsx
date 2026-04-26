@@ -1,12 +1,15 @@
 import React from "react";
 import { Text, View } from "react-native";
 import type { ContractCopilotTurn } from "../../types/contractCopilot";
+import { getFliegerPalette } from "../../theme/flieger";
 
 type ContractConversationThreadProps = {
   turns: ContractCopilotTurn[];
 };
 
 export function ContractConversationThread({ turns }: ContractConversationThreadProps) {
+  const palette = getFliegerPalette();
+
   if (turns.length === 0) {
     return null;
   }
@@ -20,13 +23,15 @@ export function ContractConversationThread({ turns }: ContractConversationThread
             style={{
               alignSelf: "flex-end",
               maxWidth: "88%",
-              backgroundColor: "#E4EEF8",
+              backgroundColor: palette.surfaceRaised,
+              borderWidth: 1.5,
+              borderColor: palette.accent,
               borderRadius: 18,
               paddingHorizontal: 14,
               paddingVertical: 12,
             }}
           >
-            <Text style={{ fontSize: 14, lineHeight: 21, color: "#0C2340", fontWeight: "700" }}>
+            <Text style={{ fontSize: 14, lineHeight: 21, color: palette.textPrimary, fontWeight: "700" }}>
               {turn.message}
             </Text>
           </View>
@@ -36,21 +41,21 @@ export function ContractConversationThread({ turns }: ContractConversationThread
             style={{
               alignSelf: "flex-start",
               maxWidth: "92%",
-              backgroundColor: "#F7FAFC",
-              borderWidth: 1,
-              borderColor: "#D4DEE9",
+              backgroundColor: palette.surfaceRaised,
+              borderWidth: 1.5,
+              borderColor: palette.border,
               borderRadius: 18,
               paddingHorizontal: 14,
               paddingVertical: 12,
               gap: 6,
             }}
           >
-            <Text style={{ fontSize: 12, fontWeight: "800", color: "#6B7C93", textTransform: "uppercase" }}>
+            <Text style={{ fontSize: 12, fontWeight: "800", color: palette.label, textTransform: "uppercase" }}>
               Copilot
             </Text>
-            <Text style={{ fontSize: 14, lineHeight: 21, color: "#0C2340" }}>{turn.message}</Text>
+            <Text style={{ fontSize: 14, lineHeight: 21, color: palette.textPrimary }}>{turn.message}</Text>
             {turn.source === "quick_reply" && turn.factPatch ? (
-              <Text style={{ fontSize: 12, lineHeight: 18, color: "#6B7C93" }}>
+              <Text style={{ fontSize: 12, lineHeight: 18, color: palette.textMuted }}>
                 Updated facts: {Object.keys(turn.factPatch).join(", ")}
               </Text>
             ) : null}

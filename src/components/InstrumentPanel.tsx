@@ -24,9 +24,11 @@ export function InstrumentPanel({
     variant === "elevated"
       ? palette.surfaceRaised
       : variant === "dataPlate"
-        ? palette.badgeNeutral
+        ? palette.surfaceRaised
+        : variant === "decision"
+          ? palette.surfaceRecessed
         : variant === "callout"
-          ? palette.badgeNeutral
+          ? palette.surfaceRaised
           : palette.surface;
 
   const borderColor =

@@ -22,6 +22,7 @@ export type ContractCopilotRedFlagDetectorInput = {
 export type ContractCopilotRedFlagDetectorResult = {
   redFlags: string[];
   severity: ContractCopilotRedFlagSeverity;
+  topicDriftTerms?: string[];
 };
 
 function normalize(value: string | undefined) {
@@ -39,6 +40,7 @@ export function detectContractCopilotRedFlags(
   const referencesCount = input.referencesCount ?? 0;
   const retrievedSnippetContext = normalize((input.retrievedSnippets ?? []).join(" "));
   const contextualTerms = `${question} ${retrievedSnippetContext} ${normalize(input.category)}`.trim();
+  const apdDiagnosticQuestion = /\bapd\b|\bauthorized personal drop\b/.test(question);
 
   const namedSourcesInFallback =
     /\bwhat controls:\b|\bavailable sources:\b|\bsources used:\b|\bi found related source support\b|\bsource support i found\b|\bwhat i can't confirm\b/.test(
@@ -63,11 +65,21 @@ export function detectContractCopilotRedFlags(
     },
     { flag: "topic_drift", pattern: /\bgreenslip\b|\bgs\b|\bgswc\b/, allowed: /\bgreenslip\b|\bgs\b|\bgswc\b/.test(contextualTerms) },
     { flag: "topic_drift", pattern: /\bsick\b/, allowed: /\bsick\b/.test(contextualTerms) },
-    { flag: "topic_drift", pattern: /\breserve\b/, allowed: /\breserve\b/.test(contextualTerms) },
+    {
+      flag: "topic_drift",
+      pattern: /\breserve\b/,
+      allowed:
+        /\breserve\b/.test(contextualTerms) ||
+        apdDiagnosticQuestion ||
+        /\brequired\b|\bavailable\b|\bthreshold\b|\bpool\b/.test(contextualTerms),
+    },
   ];
+  const topicDriftTerms = unrelatedTopics
+    .filter((entry) => entry.pattern.test(combined) && !entry.allowed)
+    .map((entry) => entry.pattern.source);
   if (
     input.selectedLane !== "document_section_explanation" &&
-    unrelatedTopics.some((entry) => entry.pattern.test(combined) && !entry.allowed) &&
+    topicDriftTerms.length > 0 &&
     !redFlags.includes("topic_drift")
   ) {
     redFlags.push("topic_drift");
@@ -189,5 +201,6 @@ export function detectContractCopilotRedFlags(
   return {
     redFlags: uniqueFlags,
     severity,
+    topicDriftTerms,
   };
 }

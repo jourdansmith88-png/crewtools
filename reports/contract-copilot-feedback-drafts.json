@@ -1,0 +1,3255 @@
+[
+  {
+    "submittedAt": "2026-04-25T23:53:32.770Z",
+    "question": "Reroute question: original pairing 2 legs but due to delays and timing out, crew rest after first leg. Next day DH to resume original pairing. Is the DH reroute considered to be after a break in duty. We were informed of the reroute enroute to first destination. Essentially, is our reroute 150% or 200%? I can make a case for either side. Thanks.",
+    "answer": {
+      "status": "needs_clarification",
+      "scenarioLabel": "Reroute / reassignment",
+      "shortAnswer": "The deadhead after the break-in-duty is treated as a new duty period, so the reroute pay for that deadhead is likely 150%, not 200%.",
+      "plainEnglishExplanation": "The key issue is that a break-in-duty ends the original duty period, so any flying after that is a new duty period with reroute pay at 150%.",
+      "confidence": "medium",
+      "supportLevel": "contract_backed",
+      "assumptions": [
+        "The break-in-duty was sufficient to end the original duty period.",
+        "The deadhead segment occurred after the break-in-duty and is considered a new duty period.",
+        "Notification enroute counts as notification after report for pay purposes."
+      ],
+      "missingFacts": [
+        "status",
+        "eventTiming"
+      ],
+      "evidenceSummary": [
+        "Reroute analysis depends on comparing original schedule value and changed value.",
+        "Report timing and when the change occurred may affect the applicable rule path."
+      ],
+      "references": [
+        {
+          "label": "12. 2",
+          "sourceId": "pwa",
+          "section": "12. 2",
+          "quoteSnippet": "C. Time Card\n 2\nThe Company will display each pilot's actual time, scheduled time, and pay time in DBMS\nas expeditiously as possible.\n 5\nD. Duty Period (DP) and Flight Duty Period (FDP) Limits\n 7\n1. An FDP will be scheduled to be at least 30 minutes less than the most restrictive\napplicable limit shown in Section 12 D. 2. (not to exceed a maximum of 13 hours) and 12\nD. 3. A pilot will not be rerouted to remain on an ",
+          "ruleType": "contract"
+        },
+        {
+          "label": "12. 2",
+          "sourceId": "pwa",
+          "section": "12. 2",
+          "quoteSnippet": "C. Time Card\n 2\nThe Company will display each pilot's actual time, scheduled time, and pay time in DBMS\nas expeditiously as possible.\n 5\nD. Duty Period (DP) and Flight Duty Period (FDP) Limits\n 7\n1. An FDP will be scheduled to be at least 30 minutes less than the most restrictive\napplicable limit shown in Section 12 D. 2. (not to exceed a maximum of 13 hours) and 12\nD. 3. A pilot will not be rerouted to remain on an ",
+          "ruleType": "contract"
+        },
+        {
+          "label": "12. 2",
+          "sourceId": "pwa",
+          "section": "12. 2",
+          "quoteSnippet": "4. A pilot who reports for the last duty period of a rotation and deadheads, but does not fly,\nwill receive rotation credit calculated at the pay rate applicable to the equipment the pilot\nwas scheduled to fly.\n 4\nL. Rotation Pay and Credit Calculations\n 6\n1. When a rotation is constructed, the total pay and credit of such rotation is the greater of:\na. ADG (Section 12 I.), if applicable,\nor\nb. rotation credit (Secti",
+          "ruleType": "contract"
+        }
+      ],
+      "whatCouldChangeThisAnswer": [
+        "Whether the deadhead was originally scheduled or added as a reroute after break-in-duty.",
+        "Exact timing and length of the break-in-duty to confirm it ends the duty period.",
+        "Whether the reroute notification timing affects pay premium classification.",
+        "If the deadhead is considered part of the original duty period, pay premium could be 200%."
+      ],
+      "breakItDown": [],
+      "answerCompleteness": "provisional",
+      "clarifyingQuestions": [
+        {
+          "id": "reroute-status",
+          "prompt": "Were you reserve or lineholder that month?",
+          "factField": "status",
+          "required": true,
+          "quickReplies": [
+            {
+              "id": "reserve",
+              "label": "I'm reserve",
+              "factPatch": {
+                "status": "reserve"
+              }
+            },
+            {
+              "id": "lineholder",
+              "label": "I'm lineholder",
+              "factPatch": {
+                "status": "lineholder"
+              }
+            }
+          ]
+        }
+      ],
+      "scenarioBreakdown": [
+        "Day 1: First leg of original pairing flown, then a break-in-duty occurs due to crew rest.",
+        "Day 2: Deadhead segment to resume original pairing, notified enroute of reroute.",
+        "Deadhead after break-in-duty starts a new duty period under the contract.",
+        "Reroute pay rules apply to the deadhead segment as a new duty period."
+      ],
+      "payBreakdown": [
+        "Reroute pay for the deadhead after break-in-duty is generally 150%.",
+        "The first leg before break-in-duty is paid normally as part of the original rotation.",
+        "Enroute notification confirms reroute status for pay calculation."
+      ]
+    },
+    "supportCards": [
+      {
+        "label": "12. 2",
+        "sourceId": "pwa",
+        "section": "12. 2",
+        "quoteSnippet": "C. Time Card\n 2\nThe Company will display each pilot's actual time, scheduled time, and pay time in DBMS\nas expeditiously as possible.\n 5\nD. Duty Period (DP) and Flight Duty Period (FDP) Limits\n 7\n1. An FDP will be scheduled to be at least 30 minutes less than the most restrictive\napplicable limit shown in Section 12 D. 2. (not to exceed a maximum of 13 hours) and 12\nD. 3. A pilot will not be rerouted to remain on an ",
+        "ruleType": "contract"
+      },
+      {
+        "label": "12. 2",
+        "sourceId": "pwa",
+        "section": "12. 2",
+        "quoteSnippet": "C. Time Card\n 2\nThe Company will display each pilot's actual time, scheduled time, and pay time in DBMS\nas expeditiously as possible.\n 5\nD. Duty Period (DP) and Flight Duty Period (FDP) Limits\n 7\n1. An FDP will be scheduled to be at least 30 minutes less than the most restrictive\napplicable limit shown in Section 12 D. 2. (not to exceed a maximum of 13 hours) and 12\nD. 3. A pilot will not be rerouted to remain on an ",
+        "ruleType": "contract"
+      },
+      {
+        "label": "12. 2",
+        "sourceId": "pwa",
+        "section": "12. 2",
+        "quoteSnippet": "4. A pilot who reports for the last duty period of a rotation and deadheads, but does not fly,\nwill receive rotation credit calculated at the pay rate applicable to the equipment the pilot\nwas scheduled to fly.\n 4\nL. Rotation Pay and Credit Calculations\n 6\n1. When a rotation is constructed, the total pay and credit of such rotation is the greater of:\na. ADG (Section 12 I.), if applicable,\nor\nb. rotation credit (Secti",
+        "ruleType": "contract"
+      }
+    ],
+    "debugPayload": {
+      "mode": "ai",
+      "parsedKeys": [
+        "detectedScenario",
+        "questionType",
+        "answerCompleteness",
+        "shortAnswer",
+        "confidence",
+        "needsClarification",
+        "clarifyingQuestion",
+        "clarifyingField",
+        "quickReplies",
+        "whyItApplies",
+        "contractSupport",
+        "extractedFacts",
+        "assumptions",
+        "scenarioBreakdown",
+        "payBreakdown",
+        "whatCouldChange",
+        "practicalBreakdown",
+        "followUpSuggestion"
+      ],
+      "missingRequiredFields": [],
+      "weakResponseGateFired": false,
+      "retrievedSnippetCount": 10,
+      "retrievedSections": [
+        "Green Slip (inferred)",
+        "8. Deadheading",
+        "12. 2",
+        "12. 2",
+        "12. 2",
+        "12. 2",
+        "12. 2",
+        "12. 2",
+        "12. 2",
+        "Green Slip (inferred)"
+      ],
+      "knownInteractionRuleIds": [],
+      "routedGoverningSections": [
+        "pwa:Section 23 L",
+        "pwa:Section 4 F"
+      ],
+      "searchMode": "constrained",
+      "routingFallbackOccurred": false,
+      "governingSectionsSelected": [
+        "PWA:Section 23 L",
+        "PWA:Section 4 F"
+      ],
+      "governingSectionUsed": "pwa:12. 2",
+      "bottomLineMode": "section_led",
+      "bottomLineReflectsGoverningRule": true,
+      "strongerRuleBasedAnswerAvailableButNotUsed": false,
+      "classificationLevelOnly": false,
+      "concreteRuleBasedAnswerAvailable": true,
+      "finalAnswerUsedConcreteRule": true,
+      "concreteInteractionRuleAvailable": false,
+      "finalAnswerUsedConcreteInteractionRule": false,
+      "answerStillGenericDespiteInteractionRule": false,
+      "missingGatingFacts": [],
+      "answerIsConditional": false,
+      "gatingQuestionUsed": "Were you reserve or lineholder that month?",
+      "sectionExpansionUsed": true,
+      "crossReferencesFollowed": [
+        "Section 23 L",
+        "Section 4 F",
+        "Section 23 N",
+        "Section 23 H",
+        "Section 11 B",
+        "Section 4 E",
+        "Section 23 K",
+        "Section 5 E",
+        "Section 18"
+      ],
+      "contextPacketSummary": {
+        "governingSections": [
+          "PWA:Section 23 L",
+          "PWA:Section 4 F"
+        ],
+        "exceptionsNotes": [],
+        "workedExamples": [],
+        "interactionRuleLinkedSections": [],
+        "compensationSupport": [],
+        "schedulerSupport": [
+          "Scheduler Manual:Rerouted Rotations"
+        ]
+      },
+      "governingSourcePriorityUsed": [
+        "PWA",
+        "Compensation Manual",
+        "Scheduler Manual",
+        "CrewTools Logic"
+      ],
+      "reasoningMode": "generic_retrieval_led",
+      "answerMode": "section_led",
+      "retrievedSnippets": [
+        "Green Slip (inferred): i. a removal from recovery or reroute flying (for pay and credit treatment, see\nSection 4 F.)\nj. disciplinary suspension\nk. the removal of a rotation under Section 23 P. 10. a. (proffered white slip),\nSection 23 P. 13. (white slip errors and omissions) and Section 23 Q. 13. (green slip\nerrors and omissions)\nl. witness/representative appearance (for pay and credit treatment, see Section 17 B.)\nm. failure to complete t",
+        "8. Deadheading: 1\nF. Deadhead Seating\n 3\n1. A pilot who deadheads on any of the following flights, as scheduled or rerouted, will be\nprovided:\na. Delta One accommodations:\n1) an ocean crossing flight segment.\n2) a flight segment to or from NRT or HND that is scheduled for more than five\nhours and fifteen minutes, block-to-block.\nNote: If the aircraft is not configured with Delta One, such pilot will be provided first\nclass accommoda",
+        "12. 2: C. Time Card\n 2\nThe Company will display each pilot's actual time, scheduled time, and pay time in DBMS\nas expeditiously as possible.\n 5\nD. Duty Period (DP) and Flight Duty Period (FDP) Limits\n 7\n1. An FDP will be scheduled to be at least 30 minutes less than the most restrictive\napplicable limit shown in Section 12 D. 2. (not to exceed a maximum of 13 hours) and 12\nD. 3. A pilot will not be rerouted to remain on an ",
+        "12. 2: 3. Augmented FDP Limits\n 2\n Maximum Flight Duty Period � Augmented Operations\n Scheduled Time of Based on Rest Facility and Number of Pilots\n Report\n (Acclimated Time) Class 1 Rest Facility Class 2 Rest Facility Class 3 Rest Facility\n 3 Pilots 4 Pilots 3 Pilots 4 Pilots 3 Pilots 4 Pilots\n 00:00 � 05:59 15:00 17:00 14:00 15:30 13:00 13:30\n 06:00 � 06:59 16:00 18:30 15:00 16:30 14:00 14:30\n 07:00 � 12:59 17:00 19:00 16",
+        "12. 2: a. reduce the scheduled report of the pilot by up to 30 minutes.\nb. remove a scheduled flight segment(s) from the pilot's line.\n5. In order to achieve an FAR-required rest period, Crew Tracking may reduce the\nscheduled report of a pilot, with their concurrence, by up to 30 minutes.\nNote: Such pilot's actual break-in-duty under Section 12 G. 2. will be based on an\nunreduced report as defined in Section 12 A. 32.\n6. Th",
+        "12. 2: I. Average Daily Guarantee (ADG)\n 2\nA pilot will be guaranteed average pay and credit of not less than five hours and 15 minutes\nfor each day of their rotation, including days added as a result of a reroute or late operations.\nException: A pilot will not be entitled to ADG for the last day of a rotation that has a release\nprior to 0200, unless the rotation was scheduled or rerouted to release on or after 0200 on\nsuch",
+        "12. 2: 4. A pilot who reports for the last duty period of a rotation and deadheads, but does not fly,\nwill receive rotation credit calculated at the pay rate applicable to the equipment the pilot\nwas scheduled to fly.\n 4\nL. Rotation Pay and Credit Calculations\n 6\n1. When a rotation is constructed, the total pay and credit of such rotation is the greater of:\na. ADG (Section 12 I.), if applicable,\nor\nb. rotation credit (Secti",
+        "12. 2: c. to purchase, by mutual agreement, up to ten vacation days for use during the current\nvacation year.\nNote: See Section 7 E. 4. and 5. concerning placement of purchased vacation days.\n5. A pilot may not use more than ten purchased vacation days in any vacation year.\n6. Bank credit withdrawn or borrowed by a pilot will be paid at their carry-over rate for the\nbid period in which such transaction occurs.\n7. Bank trans",
+        "12. 2: Extended Duty Period 0:00 1:00 0:00\n Pay\n21\nRotation Report: 10:00 Rotation Release: 17:00 TAFB: 55:00\n23\nPay Calculation under Section 12 L. 2.:\nRotation Credit: 15:43\nSum of Duty Period Credits: 13:30\nADG: 15:45\nSum of DPM: 06:00\nSum of Flight Time/MCD: 14:00\nRotation as Constructed: 15:45 pay/credit (ADG)\n31\nRotation Pays: 15:45 pay and credit, plus 1:00 pay, no credit (for Extended Duty Period Pay)\n33\nU. Minimum ",
+        "Green Slip (inferred): 5. \"Block time\" means the time beginning when an aircraft first moves for the purpose of\nflight or repositioning and ending when the aircraft comes to a stop at the next destination\nor at the point of departure.\n6. \"Break-in-duty\" means a rest period (measured from release to report) that is sufficient to\nbreak a pilot's duty period under Section 12 G.\n7. \"Credit\" means the time attributed to a pilot for PWA flight t"
+      ],
+      "groundingSource": "retrieved_contract_snippets",
+      "usedRetrievedSupport": true,
+      "externalAllowed": false,
+      "externalUsed": false,
+      "externalSnippetCount": 0,
+      "externalLabels": [],
+      "hasPwaIndex": true,
+      "hasCompensationIndex": true,
+      "hasSchedulerIndex": true,
+      "retrievalSourcesUsed": [
+        "PWA",
+        "Compensation Manual",
+        "Scheduler Manual",
+        "CrewTools Logic",
+        "Retrieved contract snippets"
+      ],
+      "sourcesUsed": [
+        "PWA",
+        "Compensation Manual",
+        "Scheduler Manual"
+      ],
+      "pwaSectionsUsed": [
+        "Section 23 L",
+        "Section 4 F",
+        "23. Scheduling"
+      ],
+      "compensationChunksUsed": [
+        "Section 4 H"
+      ],
+      "schedulerChunksUsed": [
+        "Rerouted Rotations",
+        "Section 7",
+        "Section 12"
+      ],
+      "structuredRowsUsed": [],
+      "missingSourceWarnings": [],
+      "aiSynthesisUsed": true,
+      "OPENAI_API_KEYPresent": true,
+      "modelClientCalled": true,
+      "modelClientSucceeded": true,
+      "aiSynthesisAttempted": true,
+      "aiSynthesisRejected": false,
+      "laneEnforced": true,
+      "expectedTool": "multi_source_scenario_packet",
+      "retrievalAttempted": true,
+      "laneExecutionResult": "success",
+      "documentShortcutUsed": false,
+      "fallbackUsed": false,
+      "fallthroughPrevented": true,
+      "retryAttempts": [],
+      "sourceAvailability": {
+        "hasPwaIndex": true,
+        "hasCompensationIndex": true,
+        "hasSchedulerIndex": true,
+        "compensationRowsAvailable": 432
+      },
+      "verifierRan": true,
+      "verifierPassed": true,
+      "verifierWarnings": [],
+      "verifierFailureReasons": [],
+      "verifierAdjustedAnswer": false,
+      "finalSafetyPipelineRan": true,
+      "truthGuardRan": true,
+      "definitionApplicationGuardRan": true,
+      "strongClaimsDetected": [],
+      "strongClaimsSupported": [],
+      "strongClaimsDowngraded": [],
+      "definitionSectionUsed": false,
+      "operationalSectionUsed": false,
+      "definitionOverrodeOperation": false,
+      "definitionBasedAnswer": false,
+      "applicationClaimDetected": true,
+      "applicationClaimSupported": false,
+      "applicationClaimDowngraded": false,
+      "answerDowngradedToCaution": false,
+      "downgradeReasons": [],
+      "answerReferencedSections": [],
+      "supportInjectedFromAnswer": false,
+      "supportMissingForReferencedSection": false,
+      "xDayScenario": false,
+      "xDayAnchorFound": false,
+      "governingSectionIncludesXDay": false,
+      "shortCallDutyScenario": false,
+      "shortCallDutyAnchorFound": false,
+      "governingSectionIncludesDutyLegality": false,
+      "supportRerankerRan": true,
+      "supportQualityGateRan": true,
+      "supportCandidatesBefore": 19,
+      "supportCandidatesAfter": 4,
+      "supportTopScores": [
+        {
+          "section": "12. 2",
+          "score": 200
+        },
+        {
+          "section": "12. 2",
+          "score": 200
+        },
+        {
+          "section": "12. 2",
+          "score": 200
+        },
+        {
+          "section": "23. Scheduling",
+          "score": 200
+        }
+      ],
+      "supportWeakMatchWarning": false,
+      "supportMatchedTerms": [
+        "reroute",
+        "duty period",
+        "deadhead"
+      ],
+      "supportMatchedSections": [],
+      "supportMatchedAnswerTerms": [
+        "reroute",
+        "deadhead",
+        "duty period"
+      ],
+      "supportMatchedAnswerSections": [],
+      "retrievalSilverSlipAnchorsFound": [],
+      "retrievalGreenSlipAnchorsFound": [
+        "Green Slip (inferred)"
+      ],
+      "retrievalComparisonMode": false,
+      "silverSlipPrimarySupportFound": false,
+      "greenSlipComparisonSupportFound": false,
+      "silverSlipSupportMissing": false,
+      "supportCardsFilteredOut": 1,
+      "supportDroppedReasons": [],
+      "supportPrimaryAnchorMissing": false,
+      "primarySupportForcedByExactAnchor": false,
+      "visibleSupportAnchorPromoted": false,
+      "visibleSupportOriginalSection": [
+        "12. 2",
+        "12. 2",
+        "12. 2",
+        "23. Scheduling"
+      ],
+      "visibleSupportPromotedSection": [
+        "12. 2",
+        "12. 2",
+        "12. 2",
+        "23. Scheduling"
+      ],
+      "supportFinalRankingReason": "quality_gate_kept only cards matching answer anchors or strong question anchors",
+      "finalVisibleSupportSections": [
+        "12. 2",
+        "12. 2",
+        "12. 2"
+      ],
+      "finalVisibleSupportPromotionApplied": false,
+      "intentType": "contract_scenario",
+      "selectedLane": "contract_scenario_retrieval",
+      "requiredFieldsFound": [
+        "question"
+      ],
+      "missingFields": [],
+      "toolsUsed": [
+        "intent_router",
+        "question_scope_guard",
+        "section_aware_retrieval",
+        "openai_contract_synthesis"
+      ],
+      "scenarioProceedWithPartialContext": true,
+      "evidenceParsingAttempted": true,
+      "evidenceParsingSucceeded": false,
+      "evidenceParsingForcedFallback": false,
+      "evidenceParsingIgnoredReason": "Ignored question_scope fallback because the original question already contained enough scenario information to continue safely.",
+      "retrievalPassCounts": {
+        "primary": 8,
+        "expanded": 10,
+        "linked": 8
+      }
+    },
+    "userFeedback": "support_wrong",
+    "correctedAnswer": null,
+    "expectedSource": null,
+    "draft": {
+      "id": "beta-feedback-1777161212769",
+      "question": "Reroute question: original pairing 2 legs but due to delays and timing out, crew rest after first leg. Next day DH to resume original pairing. Is the DH reroute considered to be after a break in duty. We were informed of the reroute enroute to first destination. Essentially, is our reroute 150% or 200%? I can make a case for either side. Thanks.",
+      "expectedLane": "contract_scenario_retrieval",
+      "expectedSupportAnchors": [
+        {
+          "source": "PWA",
+          "terms": [
+            "reroute",
+            "question",
+            "original",
+            "pairing",
+            "legs",
+            "delays"
+          ],
+          "required": true,
+          "role": "primary"
+        }
+      ],
+      "mustInclude": [
+        "Reroute question: original pairing 2 legs but due to delays and timing out",
+        "crew rest after first leg. Next day DH to resume original pairing. Is the DH reroute considered to be after a break in duty. We were informed of the reroute enroute to first destination. Essentially",
+        "is our reroute 150% or 200%? I can make a case for either side. Thanks."
+      ],
+      "mustNotInclude": [
+        "12. 2",
+        "12. 2",
+        "12. 2"
+      ],
+      "riskLevel": "medium",
+      "category": "beta_reported"
+    }
+  },
+  {
+    "submittedAt": "2026-04-25T23:55:03.729Z",
+    "question": "Reroute question: original pairing 2 legs but due to delays and timing out, crew rest after first leg. Next day DH to resume original pairing. Is the DH reroute considered to be after a break in duty. We were informed of the reroute enroute to first destination. Essentially, is our reroute 150% or 200%? I can make a case for either side. Thanks.",
+    "answer": {
+      "status": "needs_clarification",
+      "scenarioLabel": "Reroute / reassignment",
+      "shortAnswer": "The deadhead after the break-in-duty is treated as a new duty period, so the reroute pay for that deadhead is likely 150%, not 200%.",
+      "plainEnglishExplanation": "The key issue is that a break-in-duty ends the original duty period, so any flying after that is a new duty period with reroute pay at 150%.",
+      "confidence": "medium",
+      "supportLevel": "contract_backed",
+      "assumptions": [
+        "The break-in-duty was sufficient to end the original duty period.",
+        "The deadhead segment occurred after the break-in-duty and is considered a new duty period.",
+        "Notification enroute counts as notification after report for pay purposes."
+      ],
+      "missingFacts": [
+        "status",
+        "eventTiming"
+      ],
+      "evidenceSummary": [
+        "Reroute analysis depends on comparing original schedule value and changed value.",
+        "Report timing and when the change occurred may affect the applicable rule path."
+      ],
+      "references": [
+        {
+          "label": "12. 2",
+          "sourceId": "pwa",
+          "section": "12. 2",
+          "quoteSnippet": "C. Time Card\n 2\nThe Company will display each pilot's actual time, scheduled time, and pay time in DBMS\nas expeditiously as possible.\n 5\nD. Duty Period (DP) and Flight Duty Period (FDP) Limits\n 7\n1. An FDP will be scheduled to be at least 30 minutes less than the most restrictive\napplicable limit shown in Section 12 D. 2. (not to exceed a maximum of 13 hours) and 12\nD. 3. A pilot will not be rerouted to remain on an ",
+          "ruleType": "contract"
+        },
+        {
+          "label": "12. 2",
+          "sourceId": "pwa",
+          "section": "12. 2",
+          "quoteSnippet": "C. Time Card\n 2\nThe Company will display each pilot's actual time, scheduled time, and pay time in DBMS\nas expeditiously as possible.\n 5\nD. Duty Period (DP) and Flight Duty Period (FDP) Limits\n 7\n1. An FDP will be scheduled to be at least 30 minutes less than the most restrictive\napplicable limit shown in Section 12 D. 2. (not to exceed a maximum of 13 hours) and 12\nD. 3. A pilot will not be rerouted to remain on an ",
+          "ruleType": "contract"
+        },
+        {
+          "label": "12. 2",
+          "sourceId": "pwa",
+          "section": "12. 2",
+          "quoteSnippet": "4. A pilot who reports for the last duty period of a rotation and deadheads, but does not fly,\nwill receive rotation credit calculated at the pay rate applicable to the equipment the pilot\nwas scheduled to fly.\n 4\nL. Rotation Pay and Credit Calculations\n 6\n1. When a rotation is constructed, the total pay and credit of such rotation is the greater of:\na. ADG (Section 12 I.), if applicable,\nor\nb. rotation credit (Secti",
+          "ruleType": "contract"
+        }
+      ],
+      "whatCouldChangeThisAnswer": [
+        "Whether the deadhead was originally scheduled or added as a reroute after break-in-duty.",
+        "Exact timing and length of the break-in-duty to confirm it ends the duty period.",
+        "Whether the reroute notification timing affects pay premium classification.",
+        "If the deadhead is considered part of the original duty period, pay premium could be 200%."
+      ],
+      "breakItDown": [],
+      "answerCompleteness": "provisional",
+      "clarifyingQuestions": [
+        {
+          "id": "reroute-status",
+          "prompt": "Were you reserve or lineholder that month?",
+          "factField": "status",
+          "required": true,
+          "quickReplies": [
+            {
+              "id": "reserve",
+              "label": "I'm reserve",
+              "factPatch": {
+                "status": "reserve"
+              }
+            },
+            {
+              "id": "lineholder",
+              "label": "I'm lineholder",
+              "factPatch": {
+                "status": "lineholder"
+              }
+            }
+          ]
+        }
+      ],
+      "scenarioBreakdown": [
+        "Day 1: First leg of original pairing flown, then a break-in-duty occurs due to crew rest.",
+        "Day 2: Deadhead segment to resume original pairing, notified enroute of reroute.",
+        "Deadhead after break-in-duty starts a new duty period under the contract.",
+        "Reroute pay rules apply to the deadhead segment as a new duty period."
+      ],
+      "payBreakdown": [
+        "Reroute pay for the deadhead after break-in-duty is generally 150%.",
+        "The first leg before break-in-duty is paid normally as part of the original rotation.",
+        "Enroute notification confirms reroute status for pay calculation."
+      ]
+    },
+    "supportCards": [
+      {
+        "label": "12. 2",
+        "sourceId": "pwa",
+        "section": "12. 2",
+        "quoteSnippet": "C. Time Card\n 2\nThe Company will display each pilot's actual time, scheduled time, and pay time in DBMS\nas expeditiously as possible.\n 5\nD. Duty Period (DP) and Flight Duty Period (FDP) Limits\n 7\n1. An FDP will be scheduled to be at least 30 minutes less than the most restrictive\napplicable limit shown in Section 12 D. 2. (not to exceed a maximum of 13 hours) and 12\nD. 3. A pilot will not be rerouted to remain on an ",
+        "ruleType": "contract"
+      },
+      {
+        "label": "12. 2",
+        "sourceId": "pwa",
+        "section": "12. 2",
+        "quoteSnippet": "C. Time Card\n 2\nThe Company will display each pilot's actual time, scheduled time, and pay time in DBMS\nas expeditiously as possible.\n 5\nD. Duty Period (DP) and Flight Duty Period (FDP) Limits\n 7\n1. An FDP will be scheduled to be at least 30 minutes less than the most restrictive\napplicable limit shown in Section 12 D. 2. (not to exceed a maximum of 13 hours) and 12\nD. 3. A pilot will not be rerouted to remain on an ",
+        "ruleType": "contract"
+      },
+      {
+        "label": "12. 2",
+        "sourceId": "pwa",
+        "section": "12. 2",
+        "quoteSnippet": "4. A pilot who reports for the last duty period of a rotation and deadheads, but does not fly,\nwill receive rotation credit calculated at the pay rate applicable to the equipment the pilot\nwas scheduled to fly.\n 4\nL. Rotation Pay and Credit Calculations\n 6\n1. When a rotation is constructed, the total pay and credit of such rotation is the greater of:\na. ADG (Section 12 I.), if applicable,\nor\nb. rotation credit (Secti",
+        "ruleType": "contract"
+      }
+    ],
+    "debugPayload": {
+      "mode": "ai",
+      "parsedKeys": [
+        "detectedScenario",
+        "questionType",
+        "answerCompleteness",
+        "shortAnswer",
+        "confidence",
+        "needsClarification",
+        "clarifyingQuestion",
+        "clarifyingField",
+        "quickReplies",
+        "whyItApplies",
+        "contractSupport",
+        "extractedFacts",
+        "assumptions",
+        "scenarioBreakdown",
+        "payBreakdown",
+        "whatCouldChange",
+        "practicalBreakdown",
+        "followUpSuggestion"
+      ],
+      "missingRequiredFields": [],
+      "weakResponseGateFired": false,
+      "retrievedSnippetCount": 10,
+      "retrievedSections": [
+        "Green Slip (inferred)",
+        "8. Deadheading",
+        "12. 2",
+        "12. 2",
+        "12. 2",
+        "12. 2",
+        "12. 2",
+        "12. 2",
+        "12. 2",
+        "Green Slip (inferred)"
+      ],
+      "knownInteractionRuleIds": [],
+      "routedGoverningSections": [
+        "pwa:Section 23 L",
+        "pwa:Section 4 F"
+      ],
+      "searchMode": "constrained",
+      "routingFallbackOccurred": false,
+      "governingSectionsSelected": [
+        "PWA:Section 23 L",
+        "PWA:Section 4 F"
+      ],
+      "governingSectionUsed": "pwa:12. 2",
+      "bottomLineMode": "section_led",
+      "bottomLineReflectsGoverningRule": true,
+      "strongerRuleBasedAnswerAvailableButNotUsed": false,
+      "classificationLevelOnly": false,
+      "concreteRuleBasedAnswerAvailable": true,
+      "finalAnswerUsedConcreteRule": true,
+      "concreteInteractionRuleAvailable": false,
+      "finalAnswerUsedConcreteInteractionRule": false,
+      "answerStillGenericDespiteInteractionRule": false,
+      "missingGatingFacts": [],
+      "answerIsConditional": false,
+      "gatingQuestionUsed": "Were you reserve or lineholder that month?",
+      "sectionExpansionUsed": true,
+      "crossReferencesFollowed": [
+        "Section 23 L",
+        "Section 4 F",
+        "Section 23 N",
+        "Section 23 H",
+        "Section 11 B",
+        "Section 4 E",
+        "Section 23 K",
+        "Section 5 E",
+        "Section 18"
+      ],
+      "contextPacketSummary": {
+        "governingSections": [
+          "PWA:Section 23 L",
+          "PWA:Section 4 F"
+        ],
+        "exceptionsNotes": [],
+        "workedExamples": [],
+        "interactionRuleLinkedSections": [],
+        "compensationSupport": [],
+        "schedulerSupport": [
+          "Scheduler Manual:Rerouted Rotations"
+        ]
+      },
+      "governingSourcePriorityUsed": [
+        "PWA",
+        "Compensation Manual",
+        "Scheduler Manual",
+        "CrewTools Logic"
+      ],
+      "reasoningMode": "generic_retrieval_led",
+      "answerMode": "section_led",
+      "retrievedSnippets": [
+        "Green Slip (inferred): i. a removal from recovery or reroute flying (for pay and credit treatment, see\nSection 4 F.)\nj. disciplinary suspension\nk. the removal of a rotation under Section 23 P. 10. a. (proffered white slip),\nSection 23 P. 13. (white slip errors and omissions) and Section 23 Q. 13. (green slip\nerrors and omissions)\nl. witness/representative appearance (for pay and credit treatment, see Section 17 B.)\nm. failure to complete t",
+        "8. Deadheading: 1\nF. Deadhead Seating\n 3\n1. A pilot who deadheads on any of the following flights, as scheduled or rerouted, will be\nprovided:\na. Delta One accommodations:\n1) an ocean crossing flight segment.\n2) a flight segment to or from NRT or HND that is scheduled for more than five\nhours and fifteen minutes, block-to-block.\nNote: If the aircraft is not configured with Delta One, such pilot will be provided first\nclass accommoda",
+        "12. 2: C. Time Card\n 2\nThe Company will display each pilot's actual time, scheduled time, and pay time in DBMS\nas expeditiously as possible.\n 5\nD. Duty Period (DP) and Flight Duty Period (FDP) Limits\n 7\n1. An FDP will be scheduled to be at least 30 minutes less than the most restrictive\napplicable limit shown in Section 12 D. 2. (not to exceed a maximum of 13 hours) and 12\nD. 3. A pilot will not be rerouted to remain on an ",
+        "12. 2: 3. Augmented FDP Limits\n 2\n Maximum Flight Duty Period � Augmented Operations\n Scheduled Time of Based on Rest Facility and Number of Pilots\n Report\n (Acclimated Time) Class 1 Rest Facility Class 2 Rest Facility Class 3 Rest Facility\n 3 Pilots 4 Pilots 3 Pilots 4 Pilots 3 Pilots 4 Pilots\n 00:00 � 05:59 15:00 17:00 14:00 15:30 13:00 13:30\n 06:00 � 06:59 16:00 18:30 15:00 16:30 14:00 14:30\n 07:00 � 12:59 17:00 19:00 16",
+        "12. 2: a. reduce the scheduled report of the pilot by up to 30 minutes.\nb. remove a scheduled flight segment(s) from the pilot's line.\n5. In order to achieve an FAR-required rest period, Crew Tracking may reduce the\nscheduled report of a pilot, with their concurrence, by up to 30 minutes.\nNote: Such pilot's actual break-in-duty under Section 12 G. 2. will be based on an\nunreduced report as defined in Section 12 A. 32.\n6. Th",
+        "12. 2: I. Average Daily Guarantee (ADG)\n 2\nA pilot will be guaranteed average pay and credit of not less than five hours and 15 minutes\nfor each day of their rotation, including days added as a result of a reroute or late operations.\nException: A pilot will not be entitled to ADG for the last day of a rotation that has a release\nprior to 0200, unless the rotation was scheduled or rerouted to release on or after 0200 on\nsuch",
+        "12. 2: 4. A pilot who reports for the last duty period of a rotation and deadheads, but does not fly,\nwill receive rotation credit calculated at the pay rate applicable to the equipment the pilot\nwas scheduled to fly.\n 4\nL. Rotation Pay and Credit Calculations\n 6\n1. When a rotation is constructed, the total pay and credit of such rotation is the greater of:\na. ADG (Section 12 I.), if applicable,\nor\nb. rotation credit (Secti",
+        "12. 2: c. to purchase, by mutual agreement, up to ten vacation days for use during the current\nvacation year.\nNote: See Section 7 E. 4. and 5. concerning placement of purchased vacation days.\n5. A pilot may not use more than ten purchased vacation days in any vacation year.\n6. Bank credit withdrawn or borrowed by a pilot will be paid at their carry-over rate for the\nbid period in which such transaction occurs.\n7. Bank trans",
+        "12. 2: Extended Duty Period 0:00 1:00 0:00\n Pay\n21\nRotation Report: 10:00 Rotation Release: 17:00 TAFB: 55:00\n23\nPay Calculation under Section 12 L. 2.:\nRotation Credit: 15:43\nSum of Duty Period Credits: 13:30\nADG: 15:45\nSum of DPM: 06:00\nSum of Flight Time/MCD: 14:00\nRotation as Constructed: 15:45 pay/credit (ADG)\n31\nRotation Pays: 15:45 pay and credit, plus 1:00 pay, no credit (for Extended Duty Period Pay)\n33\nU. Minimum ",
+        "Green Slip (inferred): 5. \"Block time\" means the time beginning when an aircraft first moves for the purpose of\nflight or repositioning and ending when the aircraft comes to a stop at the next destination\nor at the point of departure.\n6. \"Break-in-duty\" means a rest period (measured from release to report) that is sufficient to\nbreak a pilot's duty period under Section 12 G.\n7. \"Credit\" means the time attributed to a pilot for PWA flight t"
+      ],
+      "groundingSource": "retrieved_contract_snippets",
+      "usedRetrievedSupport": true,
+      "externalAllowed": false,
+      "externalUsed": false,
+      "externalSnippetCount": 0,
+      "externalLabels": [],
+      "hasPwaIndex": true,
+      "hasCompensationIndex": true,
+      "hasSchedulerIndex": true,
+      "retrievalSourcesUsed": [
+        "PWA",
+        "Compensation Manual",
+        "Scheduler Manual",
+        "CrewTools Logic",
+        "Retrieved contract snippets"
+      ],
+      "sourcesUsed": [
+        "PWA",
+        "Compensation Manual",
+        "Scheduler Manual"
+      ],
+      "pwaSectionsUsed": [
+        "Section 23 L",
+        "Section 4 F",
+        "23. Scheduling"
+      ],
+      "compensationChunksUsed": [
+        "Section 4 H"
+      ],
+      "schedulerChunksUsed": [
+        "Rerouted Rotations",
+        "Section 7",
+        "Section 12"
+      ],
+      "structuredRowsUsed": [],
+      "missingSourceWarnings": [],
+      "aiSynthesisUsed": true,
+      "OPENAI_API_KEYPresent": true,
+      "modelClientCalled": true,
+      "modelClientSucceeded": true,
+      "aiSynthesisAttempted": true,
+      "aiSynthesisRejected": false,
+      "laneEnforced": true,
+      "expectedTool": "multi_source_scenario_packet",
+      "retrievalAttempted": true,
+      "laneExecutionResult": "success",
+      "documentShortcutUsed": false,
+      "fallbackUsed": false,
+      "fallthroughPrevented": true,
+      "retryAttempts": [],
+      "sourceAvailability": {
+        "hasPwaIndex": true,
+        "hasCompensationIndex": true,
+        "hasSchedulerIndex": true,
+        "compensationRowsAvailable": 432
+      },
+      "verifierRan": true,
+      "verifierPassed": true,
+      "verifierWarnings": [],
+      "verifierFailureReasons": [],
+      "verifierAdjustedAnswer": false,
+      "finalSafetyPipelineRan": true,
+      "truthGuardRan": true,
+      "definitionApplicationGuardRan": true,
+      "strongClaimsDetected": [],
+      "strongClaimsSupported": [],
+      "strongClaimsDowngraded": [],
+      "definitionSectionUsed": false,
+      "operationalSectionUsed": false,
+      "definitionOverrodeOperation": false,
+      "definitionBasedAnswer": false,
+      "applicationClaimDetected": true,
+      "applicationClaimSupported": false,
+      "applicationClaimDowngraded": false,
+      "answerDowngradedToCaution": false,
+      "downgradeReasons": [],
+      "answerReferencedSections": [],
+      "supportInjectedFromAnswer": false,
+      "supportMissingForReferencedSection": false,
+      "xDayScenario": false,
+      "xDayAnchorFound": false,
+      "governingSectionIncludesXDay": false,
+      "shortCallDutyScenario": false,
+      "shortCallDutyAnchorFound": false,
+      "governingSectionIncludesDutyLegality": false,
+      "supportRerankerRan": true,
+      "supportQualityGateRan": true,
+      "supportCandidatesBefore": 19,
+      "supportCandidatesAfter": 4,
+      "supportTopScores": [
+        {
+          "section": "12. 2",
+          "score": 200
+        },
+        {
+          "section": "12. 2",
+          "score": 200
+        },
+        {
+          "section": "12. 2",
+          "score": 200
+        },
+        {
+          "section": "23. Scheduling",
+          "score": 200
+        }
+      ],
+      "supportWeakMatchWarning": false,
+      "supportMatchedTerms": [
+        "reroute",
+        "duty period",
+        "deadhead"
+      ],
+      "supportMatchedSections": [],
+      "supportMatchedAnswerTerms": [
+        "reroute",
+        "deadhead",
+        "duty period"
+      ],
+      "supportMatchedAnswerSections": [],
+      "retrievalSilverSlipAnchorsFound": [],
+      "retrievalGreenSlipAnchorsFound": [
+        "Green Slip (inferred)"
+      ],
+      "retrievalComparisonMode": false,
+      "silverSlipPrimarySupportFound": false,
+      "greenSlipComparisonSupportFound": false,
+      "silverSlipSupportMissing": false,
+      "supportCardsFilteredOut": 1,
+      "supportDroppedReasons": [],
+      "supportPrimaryAnchorMissing": false,
+      "primarySupportForcedByExactAnchor": false,
+      "visibleSupportAnchorPromoted": false,
+      "visibleSupportOriginalSection": [
+        "12. 2",
+        "12. 2",
+        "12. 2",
+        "23. Scheduling"
+      ],
+      "visibleSupportPromotedSection": [
+        "12. 2",
+        "12. 2",
+        "12. 2",
+        "23. Scheduling"
+      ],
+      "supportFinalRankingReason": "quality_gate_kept only cards matching answer anchors or strong question anchors",
+      "finalVisibleSupportSections": [
+        "12. 2",
+        "12. 2",
+        "12. 2"
+      ],
+      "finalVisibleSupportPromotionApplied": false,
+      "intentType": "contract_scenario",
+      "selectedLane": "contract_scenario_retrieval",
+      "requiredFieldsFound": [
+        "question"
+      ],
+      "missingFields": [],
+      "toolsUsed": [
+        "intent_router",
+        "question_scope_guard",
+        "section_aware_retrieval",
+        "openai_contract_synthesis"
+      ],
+      "scenarioProceedWithPartialContext": true,
+      "evidenceParsingAttempted": true,
+      "evidenceParsingSucceeded": false,
+      "evidenceParsingForcedFallback": false,
+      "evidenceParsingIgnoredReason": "Ignored question_scope fallback because the original question already contained enough scenario information to continue safely.",
+      "retrievalPassCounts": {
+        "primary": 8,
+        "expanded": 10,
+        "linked": 8
+      }
+    },
+    "userFeedback": "support_wrong",
+    "correctedAnswer": "If a leg was removed on day one then a break in duty then a new leg, the new leg will pay at 100% vs 50%. Expectations will be missed if you expect 150 or 200%.",
+    "expectedSource": null,
+    "draft": {
+      "id": "beta-feedback-1777161303727",
+      "question": "Reroute question: original pairing 2 legs but due to delays and timing out, crew rest after first leg. Next day DH to resume original pairing. Is the DH reroute considered to be after a break in duty. We were informed of the reroute enroute to first destination. Essentially, is our reroute 150% or 200%? I can make a case for either side. Thanks.",
+      "expectedLane": "contract_scenario_retrieval",
+      "expectedSupportAnchors": [
+        {
+          "source": "PWA",
+          "terms": [
+            "reroute",
+            "question",
+            "original",
+            "pairing",
+            "legs",
+            "delays"
+          ],
+          "required": true,
+          "role": "primary"
+        }
+      ],
+      "mustInclude": [
+        "If a leg was removed on day one then a break in duty then a new leg",
+        "the new leg will pay at 100% vs 50%. Expectations will be missed if you expect 150 or 200%.  Reroute question: original pairing 2 legs but due to delays and timing out",
+        "crew rest after first leg. Next day DH to resume original pairing. Is the DH reroute considered to be after a break in duty. We were informed of the reroute enroute to first destination. Essentially",
+        "is our reroute 150% or 200%? I can make a case for either side. Thanks."
+      ],
+      "mustNotInclude": [
+        "12. 2",
+        "12. 2",
+        "12. 2"
+      ],
+      "riskLevel": "medium",
+      "category": "beta_reported"
+    }
+  },
+  {
+    "submittedAt": "2026-04-26T04:00:41.908Z",
+    "question": "If I don't receive notification of a short call assignment after vacation, would it make sense to just call the duty pilot 18 hours inside of the assignment start time rather than the backand forth with scheduling about a CNO not being enough? Can I expect pushback that they cansee I saw the trip on MICREW even if I didn't acknowledge it? Thanks again.",
+    "answer": {
+      "status": "needs_clarification",
+      "scenarioLabel": "Reserve short call notification and acknowledgment after vacation",
+      "shortAnswer": "Based on typical scenarios, here's how this usually works: You should expect to be notified by telephone or electronic placement before your short call starts, but if you see the trip on iCrew without acknowledging, the Company may still consider you notified. Calling the duty pilot 18 hours before report is not a substitute for proper notification from Crew Scheduling and may not be accepted as fulfilling your notification obligation. Not directly applicable to notification question. This could change if Whether Crew Scheduling attempted telephone contact or placed assignment timely on schedule.",
+      "plainEnglishExplanation": "Per PWA Section 23 S. 9, notification of short call assignments after a non-fly day (like vacation) likely must be by telephone contact or electronic placement on schedule at least 12 hours before the end of the non-fly day.",
+      "confidence": "low",
+      "supportLevel": "mixed",
+      "assumptions": [
+        "Pilot is a reserve pilot returning from vacation.",
+        "Short call assignment is after vacation day.",
+        "Pilot has access to iCrew schedule.",
+        "AI (unverified): this answer was shown for debugging after the weak-response gate rejected it.",
+        "Final safety pipeline downgraded this answer to caution."
+      ],
+      "missingFacts": [
+        "status"
+      ],
+      "evidenceSummary": [
+        "When a Greenslip overlaps the sick period, the contract example may distinguish overlap-day pay treatment from credit and sick-bank replenishment.",
+        "Section 14 and Section 23 examples show that once the pilot is well, later GS/GSWC processing can be evaluated separately from the sick portion instead of flattening the whole event.",
+        "Whether flying was dropped sick, later picked up, or overlapped affects the answer.",
+        "Sick, vacation, training, and other leaves do not share one answer path."
+      ],
+      "references": [
+        {
+          "label": "Short Call Reserve Coverage for FRMS Flights",
+          "sourceId": "scheduler_manual",
+          "section": "SECTION 23 S",
+          "quoteSnippet": "Short Call Reserve Coverage for FRMS Flights\nTo provide reserve coverage for last-minute FRMS flights, Crew Scheduling will notify reserve pilots in\nA350 categories of their conversion to short call 24 hours in advance, placing them into rest at the time of\nnotification. A reserve pilot in an A350 category may be converted to short call on their first on-call day\nfollowing a non-fly day(s) by being notified of the co",
+          "ruleType": "scheduler_practice"
+        },
+        {
+          "label": "4. 2",
+          "sourceId": "pwa",
+          "section": "SECTION 23 S",
+          "quoteSnippet": "H. Suit-Up Pay and Credit\n 2\n1. A regular pilot or a long call reserve pilot will receive a minimum of two hours pay and\ncredit if the pilot:\na. has not acknowledged their removal from a rotation or portion thereof, and\nb. reports for duty.\nException: A pilot who is entitled to a rotation guarantee under Section 4 F. will not\nreceive suit-up pay and credit if the pilot elects to waive their rotation guarantee and the",
+          "ruleType": "contract"
+        },
+        {
+          "label": "Short call",
+          "sourceId": "pwa",
+          "section": "SECTION 23 S",
+          "quoteSnippet": "Exception two: A pilot who has submitted a YS for conversion to short call may submit a preference to be released from duty during the ten hours immediately preceding the start of their short call period. d.",
+          "ruleType": "contract"
+        }
+      ],
+      "whatCouldChangeThisAnswer": [
+        "Whether Crew Scheduling attempted telephone contact or placed assignment timely on schedule.",
+        "Whether pilot acknowledged the assignment.",
+        "Whether pilot checked schedule within required timeframe.",
+        "Whether pilot contacted Crew Scheduling about notification issues."
+      ],
+      "breakItDown": [],
+      "answerCompleteness": "provisional",
+      "clarifyingQuestions": [
+        {
+          "id": "leave-status",
+          "prompt": "Were you reserve or lineholder that month?",
+          "factField": "status",
+          "required": true,
+          "quickReplies": [
+            {
+              "id": "reserve",
+              "label": "I'm reserve",
+              "factPatch": {
+                "status": "reserve"
+              }
+            },
+            {
+              "id": "lineholder",
+              "label": "I'm lineholder",
+              "factPatch": {
+                "status": "lineholder"
+              }
+            }
+          ]
+        }
+      ],
+      "scenarioBreakdown": [
+        "Pilot finishes vacation day (a non-fly day).",
+        "Crew Scheduling must notify pilot of short call assignment by telephone or electronic placement on schedule at least 12 hours before end of vacation day.",
+        "Pilot is responsible for checking schedule and acknowledging any assignment.",
+        "If notification is timely and proper, pilot must comply with assignment.",
+        "If notification is not timely or proper, pilot may not be considered notified but should clarify with Crew Scheduling."
+      ],
+      "payBreakdown": [
+        "Not directly applicable to notification question.",
+        "No pay impact from notification method itself.",
+        "Failure to acknowledge a timely notified assignment may lead to responsibility for flying.",
+        "No pay or credit is generated by simply seeing the trip without acknowledgment."
+      ],
+      "caveats": [
+        "AI (unverified)",
+        "Truth guard downgraded unsupported strong claim(s)."
+      ]
+    },
+    "supportCards": [
+      {
+        "label": "Short Call Reserve Coverage for FRMS Flights",
+        "sourceId": "scheduler_manual",
+        "section": "SECTION 23 S",
+        "quoteSnippet": "Short Call Reserve Coverage for FRMS Flights\nTo provide reserve coverage for last-minute FRMS flights, Crew Scheduling will notify reserve pilots in\nA350 categories of their conversion to short call 24 hours in advance, placing them into rest at the time of\nnotification. A reserve pilot in an A350 category may be converted to short call on their first on-call day\nfollowing a non-fly day(s) by being notified of the co",
+        "ruleType": "scheduler_practice"
+      },
+      {
+        "label": "4. 2",
+        "sourceId": "pwa",
+        "section": "SECTION 23 S",
+        "quoteSnippet": "H. Suit-Up Pay and Credit\n 2\n1. A regular pilot or a long call reserve pilot will receive a minimum of two hours pay and\ncredit if the pilot:\na. has not acknowledged their removal from a rotation or portion thereof, and\nb. reports for duty.\nException: A pilot who is entitled to a rotation guarantee under Section 4 F. will not\nreceive suit-up pay and credit if the pilot elects to waive their rotation guarantee and the",
+        "ruleType": "contract"
+      },
+      {
+        "label": "Short call",
+        "sourceId": "pwa",
+        "section": "SECTION 23 S",
+        "quoteSnippet": "Exception two: A pilot who has submitted a YS for conversion to short call may submit a preference to be released from duty during the ten hours immediately preceding the start of their short call period. d.",
+        "ruleType": "contract"
+      }
+    ],
+    "debugPayload": {
+      "mode": "ai_unverified",
+      "fallbackReason": "weak_ai_response",
+      "validationError": "weak_ai_response",
+      "parsedKeys": [
+        "detectedScenario",
+        "questionType",
+        "answerCompleteness",
+        "shortAnswer",
+        "confidence",
+        "needsClarification",
+        "clarifyingQuestion",
+        "clarifyingField",
+        "quickReplies",
+        "whyItApplies",
+        "contractSupport",
+        "extractedFacts",
+        "assumptions",
+        "scenarioBreakdown",
+        "payBreakdown",
+        "whatCouldChange",
+        "practicalBreakdown",
+        "followUpSuggestion"
+      ],
+      "missingRequiredFields": [],
+      "weakResponseGateFired": true,
+      "retrievedSnippetCount": 10,
+      "retrievedSections": [
+        "23. Scheduling",
+        "Green Slip (inferred)",
+        "Section 23",
+        "Section 23",
+        "Section 12",
+        "Section 12",
+        "Section 12",
+        "Section 23",
+        "Section 12",
+        "Green Slip (inferred)"
+      ],
+      "knownInteractionRuleIds": [],
+      "routedGoverningSections": [
+        "pwa:Section 23 S.9",
+        "scheduler_manual:Short Call (23 S.9)",
+        "pwa:Section 12"
+      ],
+      "searchMode": "constrained",
+      "routingFallbackOccurred": false,
+      "governingSectionsSelected": [
+        "PWA:Section 23 S.9",
+        "PWA:Section 12"
+      ],
+      "governingSectionUsed": "scheduler_manual:SECTION 23 S",
+      "bottomLineMode": "section_led",
+      "bottomLineReflectsGoverningRule": true,
+      "strongerRuleBasedAnswerAvailableButNotUsed": false,
+      "classificationLevelOnly": false,
+      "concreteRuleBasedAnswerAvailable": true,
+      "finalAnswerUsedConcreteRule": true,
+      "concreteInteractionRuleAvailable": false,
+      "finalAnswerUsedConcreteInteractionRule": false,
+      "answerStillGenericDespiteInteractionRule": false,
+      "missingGatingFacts": [],
+      "answerIsConditional": false,
+      "gatingQuestionUsed": "Were you reserve or lineholder that month?",
+      "sectionExpansionUsed": true,
+      "crossReferencesFollowed": [
+        "Section 23 S.9",
+        "Section 12",
+        "Section 23 S",
+        "Section 23 N",
+        "Section 12 D",
+        "Section 11 F"
+      ],
+      "contextPacketSummary": {
+        "governingSections": [
+          "PWA:Section 23 S.9",
+          "PWA:Section 12"
+        ],
+        "exceptionsNotes": [],
+        "workedExamples": [],
+        "interactionRuleLinkedSections": [],
+        "compensationSupport": [],
+        "schedulerSupport": [
+          "Scheduler Manual:Short Call (23 S.9)"
+        ]
+      },
+      "governingSourcePriorityUsed": [
+        "PWA",
+        "Compensation Manual",
+        "Scheduler Manual",
+        "CrewTools Logic"
+      ],
+      "reasoningMode": "generic_retrieval_led",
+      "answerMode": "section_led",
+      "retrievedSnippets": [
+        "23. Scheduling: 3) the actual time the pilot is released by the Company (after completion of any\nadditional duty required by the Company) to begin a rest period sufficient to\nbreak their duty period under Section 12 G.\n50. \"Report\" means the later of the actual or scheduled time that a pilot begins duty. Such\nscheduled time is:\na. one hour before the scheduled departure of the first:\n1) non-trans-oceanic flying segment.\n2) deadhead ",
+        "Green Slip (inferred): When Have You Been Contacted?\nA pilot's contact and response obligations can be broken down into several categories. A pilot has not been\ncontacted concerning their schedule unless they have spoken personally with a Company representative,\nand/or has acknowledged a message via telephone, IVR, iCrew, ARCOS, or the Crew Auto Notification\nSystem (CNO).\nA reserve pilot:\n� on long call or short call must respond to an att",
+        "Section 23: General (23 S.)\nA reserve pilot is, by default, on call 24 hours a day unless on an X-day, a designated rest period, a\nduty-free period prior to report or prior to the start of short call, or some other non-flying status.\nA reserve pilot may receive an assignment up to two days prior to report time. If a reserve pilot is\nassigned a rotation with more than 24 hours to report, their assignment remains subject to change",
+        "Section 23: Regular Pilots Removed for IROPS (23 K.)\nWhen a regular pilot is removed from a rotation due to IROPS affecting their rotation and they are\nnotified before the airborne departure of the first flight segment, Section 23 K. recovery rules\napply.\nException: A pilot who is removed from a rotation will have no recovery obligation under Section 23\nK. 1. if they are removed due to cancellation or equipment substitution that",
+        "Section 12: Flight and Duty Time Limits and Rest Requirements\nFAR Flight Duty Period (FDP) Limits .............................................................................. 171\nFDP Limits--Unaugmented Crew ........................................................................................................... 171\nFDP Limits--Augmented Crew ...................................................................................",
+        "Section 12: Reserve Rules\nA reserve availability period (RAP) is the period of time a reserve pilot spends on short call (SC) prior\nto report of an assigned FDP. This time must be accounted for when determining the reserve's\nmaximum flight duty period.\nWhen a short call reserve pilot is assigned a rotation, they do not accrue FDP hours until they report\nfor the FDP. The time spent during their RAP does not count as FDP time. FAR",
+        "Section 12: Short Call Reserve Coverage for FRMS Flights\nTo provide reserve coverage for last-minute FRMS flights, Crew Scheduling will notify reserve pilots in\nA350 categories of their conversion to short call 24 hours in advance, placing them into rest at the time of\nnotification. A reserve pilot in an A350 category may be converted to short call on their first on-call day\nfollowing a non-fly day(s) by being notified of the co",
+        "Section 23: Short Call Reserve Coverage for FRMS Flights\nTo provide reserve coverage for last-minute FRMS flights, Crew Scheduling will notify reserve pilots in\nA350 categories of their conversion to short call 24 hours in advance, placing them into rest at the time of\nnotification. A reserve pilot in an A350 category may be converted to short call on their first on-call day\nfollowing a non-fly day(s) by being notified of the co",
+        "Section 12: o Because of the 30-minute post-flight duty, there should never be less than 10:30 between\nblock-in and report time prior to the start of an FDP\n� All pilots must have a 30-hour rest period in the previous 168-hour period measured from the start\nof a Flight Duty Period (FDP), though the rest can be on a layover as long as it is prospective\n(known ahead of time)\no REG pilot is always on rest unless performing duty for",
+        "Green Slip (inferred): Exception two: If a pilot holds a position with more than one rate when deadheading by\nair transportation on the last flight segment(s) of their rotation, the applicable rate will be\nthe rate for the aircraft model used on the last non-deadhead segment before the deadhead\non which the pilot performed, or was scheduled to perform, duty as a crew member.\n21. \"ARCOS\" means any automated notification system that offers a"
+      ],
+      "groundingSource": "retrieved_contract_snippets",
+      "usedRetrievedSupport": true,
+      "externalAllowed": false,
+      "externalUsed": false,
+      "externalSnippetCount": 0,
+      "externalLabels": [],
+      "hasPwaIndex": true,
+      "retrievalSourcesUsed": [
+        "PWA",
+        "Scheduler Manual",
+        "CrewTools Logic",
+        "Retrieved contract snippets"
+      ],
+      "sourcesUsed": [
+        "PWA",
+        "Scheduler Manual"
+      ],
+      "pwaSectionsUsed": [
+        "Section 23 S.9",
+        "Section 12",
+        "1. 2",
+        "Section 14 E",
+        "Section 14 E and Example Three"
+      ],
+      "compensationChunksUsed": [],
+      "schedulerChunksUsed": [
+        "Short Call (23 S.9)",
+        "Section 23"
+      ],
+      "structuredRowsUsed": [],
+      "missingSourceWarnings": [],
+      "aiSynthesisUsed": true,
+      "OPENAI_API_KEYPresent": true,
+      "modelClientCalled": true,
+      "modelClientSucceeded": true,
+      "modelClientError": "weak_ai_response",
+      "aiSynthesisAttempted": true,
+      "aiSynthesisRejected": true,
+      "aiRejectionReason": "weak_ai_response",
+      "laneEnforced": true,
+      "expectedTool": "multi_source_scenario_packet",
+      "retrievalAttempted": true,
+      "laneExecutionResult": "success",
+      "documentShortcutUsed": false,
+      "fallbackUsed": true,
+      "fallthroughPrevented": true,
+      "retryAttempts": [],
+      "sourceAvailability": {
+        "hasPwaIndex": true,
+        "hasCompensationIndex": true,
+        "hasSchedulerIndex": true,
+        "compensationRowsAvailable": 432
+      },
+      "verifierRan": true,
+      "verifierPassed": true,
+      "verifierWarnings": [
+        "Strong claim language was downgraded because the attached support did not explicitly ground it."
+      ],
+      "verifierFailureReasons": [],
+      "verifierAdjustedAnswer": true,
+      "finalSafetyPipelineRan": true,
+      "truthGuardRan": true,
+      "definitionApplicationGuardRan": true,
+      "strongClaimsDetected": [
+        "9, notification of short call assignments after a non-fly day (like vacation) must be by telephone contact or electronic placement on schedule at least 12 hours before the end of the non-fly day.",
+        "Crew Scheduling must notify pilot of short call assignment by telephone or electronic placement on schedule at least 12 hours before end of vacation day.",
+        "If notification is timely and proper, pilot must comply with assignment."
+      ],
+      "strongClaimsSupported": [
+        "9, notification of short call assignments after a non-fly day (like vacation) must be by telephone contact or electronic placement on schedule at least 12 hours before the end of the non-fly day.",
+        "Crew Scheduling must notify pilot of short call assignment by telephone or electronic placement on schedule at least 12 hours before end of vacation day."
+      ],
+      "strongClaimsDowngraded": [
+        "If notification is timely and proper, pilot must comply with assignment."
+      ],
+      "definitionSectionUsed": true,
+      "operationalSectionUsed": true,
+      "definitionOverrodeOperation": false,
+      "definitionBasedAnswer": true,
+      "applicationClaimDetected": true,
+      "applicationClaimSupported": true,
+      "applicationClaimDowngraded": false,
+      "answerDowngradedToCaution": true,
+      "downgradeReasons": [
+        "verifier_adjusted_answer",
+        "unsupported_strong_claim"
+      ],
+      "answerReferencedSections": [
+        "SECTION 23 S"
+      ],
+      "supportInjectedFromAnswer": true,
+      "supportMissingForReferencedSection": false,
+      "xDayScenario": false,
+      "xDayAnchorFound": false,
+      "governingSectionIncludesXDay": false,
+      "shortCallDutyScenario": true,
+      "shortCallDutyAnchorFound": true,
+      "governingSectionIncludesDutyLegality": true,
+      "supportRerankerRan": true,
+      "supportQualityGateRan": true,
+      "supportCandidatesBefore": 20,
+      "supportCandidatesAfter": 4,
+      "supportTopScores": [
+        {
+          "section": "SECTION 23 S",
+          "score": 625
+        },
+        {
+          "section": "SECTION 23 S",
+          "score": 805
+        },
+        {
+          "section": "SECTION 23 S",
+          "score": 735
+        },
+        {
+          "section": "Section 12",
+          "score": 405
+        }
+      ],
+      "supportWeakMatchWarning": false,
+      "supportMatchedTerms": [
+        "short call",
+        "notification",
+        "duty period"
+      ],
+      "supportMatchedSections": [
+        "SECTION 23 S"
+      ],
+      "supportMatchedAnswerTerms": [
+        "short call",
+        "duty period",
+        "notification"
+      ],
+      "supportMatchedAnswerSections": [
+        "SECTION 23 S"
+      ],
+      "retrievalSilverSlipAnchorsFound": [],
+      "retrievalGreenSlipAnchorsFound": [
+        "Green Slip (inferred)"
+      ],
+      "retrievalComparisonMode": false,
+      "silverSlipPrimarySupportFound": false,
+      "greenSlipComparisonSupportFound": false,
+      "silverSlipSupportMissing": false,
+      "supportCardsFilteredOut": 1,
+      "supportDroppedReasons": [],
+      "supportPrimaryAnchorMissing": false,
+      "primarySupportForcedByExactAnchor": true,
+      "primarySupportAnchorUsed": "SECTION 23 S",
+      "visibleSupportAnchorPromoted": true,
+      "visibleSupportOriginalSection": [
+        "Section 23",
+        "Section 23 S",
+        "Section 23 S.9",
+        "Section 12"
+      ],
+      "visibleSupportPromotedSection": [
+        "SECTION 23 S",
+        "SECTION 23 S",
+        "SECTION 23 S",
+        "Section 12"
+      ],
+      "supportFinalRankingReason": "quality_gate_kept only cards matching answer anchors or strong question anchors",
+      "finalVisibleSupportSections": [
+        "SECTION 23 S",
+        "SECTION 23 S",
+        "SECTION 23 S"
+      ],
+      "finalVisibleSupportPromotionApplied": true,
+      "intentType": "contract_scenario",
+      "selectedLane": "contract_scenario_retrieval",
+      "requiredFieldsFound": [
+        "question"
+      ],
+      "missingFields": [],
+      "toolsUsed": [
+        "scenario_classifier",
+        "section_aware_retrieval",
+        "openai_contract_synthesis"
+      ],
+      "scenarioProceedWithPartialContext": false,
+      "evidenceParsingAttempted": true,
+      "evidenceParsingSucceeded": false,
+      "evidenceParsingForcedFallback": false,
+      "hasCompensationIndex": true,
+      "hasSchedulerIndex": true,
+      "retrievalPassCounts": {
+        "primary": 1,
+        "expanded": 3,
+        "linked": 2
+      }
+    },
+    "userFeedback": "support_wrong",
+    "correctedAnswer": null,
+    "expectedSource": "support section incorect",
+    "draft": {
+      "id": "beta-feedback-1777176041902",
+      "question": "If I don't receive notification of a short call assignment after vacation, would it make sense to just call the duty pilot 18 hours inside of the assignment start time rather than the backand forth with scheduling about a CNO not being enough? Can I expect pushback that they cansee I saw the trip on MICREW even if I didn't acknowledge it? Thanks again.",
+      "expectedLane": "contract_scenario_retrieval",
+      "expectedSupportAnchors": [
+        {
+          "source": "Scheduler Manual",
+          "section": "SECTION 23 S",
+          "terms": [
+            "receive",
+            "notification",
+            "short",
+            "call",
+            "assignment",
+            "after"
+          ],
+          "required": true,
+          "role": "primary"
+        }
+      ],
+      "mustInclude": [
+        "support section incorect If I don't receive notification of a short call assignment after vacation",
+        "would it make sense to just call the duty pilot 18 hours inside of the assignment start time rather than the backand forth with scheduling about a CNO not being enough? Can I expect pushback that they cansee I saw the trip on MICREW even if I didn't acknowledge it? Thanks again."
+      ],
+      "mustNotInclude": [
+        "SECTION 23 S",
+        "SECTION 23 S",
+        "SECTION 23 S"
+      ],
+      "riskLevel": "medium",
+      "category": "beta_reported"
+    }
+  },
+  {
+    "submittedAt": "2026-04-26T04:46:29.096Z",
+    "question": "Searched both the SRH & TRH, plus here, and can't seem to find the current answer (I know it's changed over the years). What is the current requirement for OE notification? Is it a phone call, or can it be done by CNO? It used to have to be a phone call. Thanks!",
+    "answer": {
+      "status": "needs_clarification",
+      "scenarioLabel": "OE Notification Method",
+      "shortAnswer": "Currently, the contract does not explicitly require OE notification by phone call; it may be acceptable via Company Notification Online (CNO) unless otherwise specified by the Company or local policy.",
+      "plainEnglishExplanation": "The key issue is that the contract and manuals do not currently mandate a phone call, so electronic methods like CNO are often accepted unless the Company or base says otherwise.",
+      "confidence": "low",
+      "supportLevel": "mixed",
+      "assumptions": [
+        "No explicit current PWA language mandates phone call for OE notification.",
+        "Company policy may allow electronic notification methods such as CNO.",
+        "Final safety pipeline downgraded this answer to caution."
+      ],
+      "evidenceSummary": [
+        "No scenario family matched with high confidence."
+      ],
+      "references": [
+        {
+          "label": "2. 2",
+          "sourceId": "pwa",
+          "section": "Green Slip (inferred)",
+          "quoteSnippet": "Exception two: If a pilot holds a position with more than one rate when deadheading by\nair transportation on the last flight segment(s) of their rotation, the applicable rate will be\nthe rate for the aircraft model used on the last non-deadhead segment before the deadhead\non which the pilot performed, or was scheduled to perform, duty as a crew member.\n21. \"ARCOS\" means any automated notification system that offers a",
+          "ruleType": "contract"
+        },
+        {
+          "label": "2. 2",
+          "sourceId": "pwa",
+          "section": "2. 2",
+          "quoteSnippet": "or\nb. alteration of a pilot's rotation or portion thereof to:\n1) delete a previously scheduled flight segment(s), and/or\n2) add a flight segment(s) under Section 23 N. 24. or O. 18.;\nand\nc. notification to the pilot, after the airborne departure of his first flight segment, of such\nalteration.\nNote: An alteration in the departure, enroute or arrival time of a scheduled flight segment\ndoes not constitute a reroute.\n24",
+          "ruleType": "contract"
+        },
+        {
+          "label": "5. 2",
+          "sourceId": "pwa",
+          "section": "5. 2",
+          "quoteSnippet": "Note: A pilot's request for lodging under Section 5 E. 1. b. will comply with the\nprocess established by Flight Training Planning in coordination with the MEC Hotel\nCommittee Chairman.\nc. at their base upon request, provided:\n1) the pilot reports for duty and is assigned recovery flying under Section 23 K. 1.,\n2) the time between the notification of the replacement flying and the scheduled\ndeparture time is at least ",
+          "ruleType": "contract"
+        }
+      ],
+      "whatCouldChangeThisAnswer": [
+        "Explicit contract language mandating phone call notification.",
+        "Company policy updates restricting or expanding acceptable notification methods.",
+        "Specific OE type requiring different notification procedures.",
+        "Local domicile or base procedures differing from general Company policy."
+      ],
+      "breakItDown": [],
+      "answerCompleteness": "provisional",
+      "scenarioBreakdown": [
+        "Pilot must notify the Company of an OE (Operational Event) such as sick leave or leave of absence.",
+        "Historically, notification was required by phone call.",
+        "Current contract or manuals do not explicitly require phone call notification.",
+        "Electronic notification methods like CNO may be acceptable depending on Company policy.",
+        "Pilot should verify local or current Company instructions for OE notification."
+      ],
+      "payBreakdown": [
+        "Notification method does not directly affect pay.",
+        "Timely notification is required to ensure proper pay and credit treatment for OE-related absences.",
+        "Failure to notify properly may affect pay or sick leave credit.",
+        "Using approved notification methods ensures compliance and pay protection."
+      ],
+      "clarifyingQuestions": [
+        {
+          "id": "ai-clarification",
+          "prompt": "Are you asking about notification for an OE related to sick leave, leave of absence, or another specific event?",
+          "factField": "questionIntent",
+          "required": true,
+          "quickReplies": [
+            {
+              "id": "sickLeaveNotification",
+              "label": "OE notification for sick leave",
+              "factPatch": {
+                "processingCountsKnown": false,
+                "beforeReport": false,
+                "afterReport": false,
+                "rerouteOccurred": false,
+                "reassignmentOccurred": false,
+                "tripTouched": false,
+                "leaveType": "sick",
+                "sickUsed": true,
+                "sameDayInteraction": false,
+                "questionIntent": "OE notification for sick leave"
+              },
+              "replyMessage": "I am asking about OE notification specifically for sick leave."
+            },
+            {
+              "id": "leaveOfAbsenceNotification",
+              "label": "OE notification for leave of absence",
+              "factPatch": {
+                "processingCountsKnown": false,
+                "beforeReport": false,
+                "afterReport": false,
+                "rerouteOccurred": false,
+                "reassignmentOccurred": false,
+                "tripTouched": false,
+                "leaveType": "leave",
+                "sickUsed": false,
+                "sameDayInteraction": false,
+                "questionIntent": "OE notification for leave of absence"
+              },
+              "replyMessage": "I am asking about OE notification for a leave of absence."
+            },
+            {
+              "id": "otherNotification",
+              "label": "OE notification for other event",
+              "factPatch": {
+                "processingCountsKnown": false,
+                "beforeReport": false,
+                "afterReport": false,
+                "rerouteOccurred": false,
+                "reassignmentOccurred": false,
+                "tripTouched": false,
+                "leaveType": "other",
+                "sickUsed": false,
+                "sameDayInteraction": false,
+                "questionIntent": "OE notification for other event"
+              },
+              "replyMessage": "I am asking about OE notification for another type of event."
+            }
+          ]
+        }
+      ],
+      "caveats": [
+        "Truth guard downgraded unsupported strong claim(s)."
+      ]
+    },
+    "supportCards": [
+      {
+        "label": "2. 2",
+        "sourceId": "pwa",
+        "section": "Green Slip (inferred)",
+        "quoteSnippet": "Exception two: If a pilot holds a position with more than one rate when deadheading by\nair transportation on the last flight segment(s) of their rotation, the applicable rate will be\nthe rate for the aircraft model used on the last non-deadhead segment before the deadhead\non which the pilot performed, or was scheduled to perform, duty as a crew member.\n21. \"ARCOS\" means any automated notification system that offers a",
+        "ruleType": "contract"
+      },
+      {
+        "label": "2. 2",
+        "sourceId": "pwa",
+        "section": "2. 2",
+        "quoteSnippet": "or\nb. alteration of a pilot's rotation or portion thereof to:\n1) delete a previously scheduled flight segment(s), and/or\n2) add a flight segment(s) under Section 23 N. 24. or O. 18.;\nand\nc. notification to the pilot, after the airborne departure of his first flight segment, of such\nalteration.\nNote: An alteration in the departure, enroute or arrival time of a scheduled flight segment\ndoes not constitute a reroute.\n24",
+        "ruleType": "contract"
+      },
+      {
+        "label": "5. 2",
+        "sourceId": "pwa",
+        "section": "5. 2",
+        "quoteSnippet": "Note: A pilot's request for lodging under Section 5 E. 1. b. will comply with the\nprocess established by Flight Training Planning in coordination with the MEC Hotel\nCommittee Chairman.\nc. at their base upon request, provided:\n1) the pilot reports for duty and is assigned recovery flying under Section 23 K. 1.,\n2) the time between the notification of the replacement flying and the scheduled\ndeparture time is at least ",
+        "ruleType": "contract"
+      }
+    ],
+    "debugPayload": {
+      "mode": "ai",
+      "parsedKeys": [
+        "detectedScenario",
+        "questionType",
+        "answerCompleteness",
+        "shortAnswer",
+        "confidence",
+        "needsClarification",
+        "clarifyingQuestion",
+        "clarifyingField",
+        "quickReplies",
+        "whyItApplies",
+        "contractSupport",
+        "extractedFacts",
+        "assumptions",
+        "scenarioBreakdown",
+        "payBreakdown",
+        "whatCouldChange",
+        "practicalBreakdown",
+        "followUpSuggestion"
+      ],
+      "missingRequiredFields": [],
+      "weakResponseGateFired": false,
+      "retrievedSnippetCount": 10,
+      "retrievedSections": [
+        "Green Slip (inferred)",
+        "2. 2",
+        "5. 2",
+        "7. Vacations",
+        "7. Vacations",
+        "8. Deadheading",
+        "10. 2",
+        "10. 2",
+        "10. 2",
+        "11. Training"
+      ],
+      "knownInteractionRuleIds": [],
+      "routedGoverningSections": [],
+      "searchMode": "global",
+      "routingFallbackOccurred": false,
+      "governingSectionsSelected": [],
+      "governingSectionUsed": "pwa:Green Slip (inferred)",
+      "bottomLineMode": "generic",
+      "bottomLineReflectsGoverningRule": false,
+      "strongerRuleBasedAnswerAvailableButNotUsed": false,
+      "classificationLevelOnly": false,
+      "concreteRuleBasedAnswerAvailable": false,
+      "finalAnswerUsedConcreteRule": false,
+      "concreteInteractionRuleAvailable": false,
+      "finalAnswerUsedConcreteInteractionRule": false,
+      "answerStillGenericDespiteInteractionRule": false,
+      "missingGatingFacts": [],
+      "answerIsConditional": false,
+      "gatingQuestionUsed": "Are you asking about notification for an OE related to sick leave, leave of absence, or another specific event?",
+      "sectionExpansionUsed": false,
+      "crossReferencesFollowed": [],
+      "contextPacketSummary": {
+        "governingSections": [],
+        "exceptionsNotes": [],
+        "workedExamples": [],
+        "interactionRuleLinkedSections": [],
+        "compensationSupport": [],
+        "schedulerSupport": []
+      },
+      "governingSourcePriorityUsed": [
+        "PWA",
+        "Compensation Manual",
+        "Scheduler Manual",
+        "CrewTools Logic"
+      ],
+      "reasoningMode": "generic_retrieval_led",
+      "answerMode": "generic",
+      "retrievedSnippets": [
+        "Green Slip (inferred): Exception two: If a pilot holds a position with more than one rate when deadheading by\nair transportation on the last flight segment(s) of their rotation, the applicable rate will be\nthe rate for the aircraft model used on the last non-deadhead segment before the deadhead\non which the pilot performed, or was scheduled to perform, duty as a crew member.\n21. \"ARCOS\" means any automated notification system that offers a",
+        "2. 2: or\nb. alteration of a pilot's rotation or portion thereof to:\n1) delete a previously scheduled flight segment(s), and/or\n2) add a flight segment(s) under Section 23 N. 24. or O. 18.;\nand\nc. notification to the pilot, after the airborne departure of his first flight segment, of such\nalteration.\nNote: An alteration in the departure, enroute or arrival time of a scheduled flight segment\ndoes not constitute a reroute.\n24",
+        "5. 2: Note: A pilot's request for lodging under Section 5 E. 1. b. will comply with the\nprocess established by Flight Training Planning in coordination with the MEC Hotel\nCommittee Chairman.\nc. at their base upon request, provided:\n1) the pilot reports for duty and is assigned recovery flying under Section 23 K. 1.,\n2) the time between the notification of the replacement flying and the scheduled\ndeparture time is at least ",
+        "7. Vacations: 1\n Period Posting Deadline Bid Closing Bids Awarded\n Primary January 1st January 8th January 12th\n Secondary January 12th January 19th January 23rd\n Tertiary January 23rd January 30th February 3rd\n Quaternary February 3rd February 10th February 14th\n Quinary February 14th February 21st February 25th\n 2\n3. A pilot will bid their vacation based on the category the pilot:\na. holds on January 31st, or\nb. is scheduled to ",
+        "7. Vacations: b. accept pay, under Section 7 G. 3. b., in lieu of such vacation not taken.\n8. A pilot who flies into their vacation period due to a reroute or late operations may, at\ntheir option, place the lost vacation day(s) at the end of the affected vacation period\n(without a reduction from their vacation bank hours for any rotation removed to\naccommodate such placement of lost vacation days), or add the lost vacation day(s) ",
+        "8. Deadheading: 1\nE. Off-Rotation Deadheads\n 3\n1. A regular pilot may utilize an off-rotation deadhead at the beginning or end of a rotation.\n2. A regular pilot is required to notify Crew Scheduling of an off-rotation deadhead at the\nbeginning of a rotation within the 24 hours preceding the report of the scheduled\ndeadhead segment.\n3. A reserve pilot may utilize an off-rotation deadhead at the end of a rotation. They may\nutilize an ",
+        "10. 2: a) MLOA code is the default and is used when an SLI desires an unpaid leave of\nabsence and wants the rest of their monthly obligation to Training Department\nto be pro-rated. MLOA will be pro-rated the same as vacation and the SLI's 17\nduty periods/90:06 hour contractual guarantee will be reduced by a value of\n3:15 for each MLOA day.\nb) MLOX code is used when an SLI notifies their Fleet Manager and their training\nplan",
+        "10. 2: a. will be paid the rate applicable to the LCP or LVP's position and longevity, per\nSection 3 B., plus 30% of the rate of the highest paying aircraft type in the\nCompany's fleet for the greater of the actual or scheduled block time of a flight\nsegment(s) when the FSP performs LCP or LVP duties on such rotation:\n1) on which the FSP was scheduled to be an operating crewmember, or\n2) which occurred during a reserve on-c",
+        "10. 2: 10) Notification of an FSP rotation assignment may not be expected more than seven\ndays in advance. Every effort will be made to provide maximum notification.\nb. Step 2: Replace existing rotation for another rotation(s) with Flight Standards work\n1) The FSP shall be provided the option to drop specific rotations and allow the\nOE/LC Planner to replace the dropped rotation for a rotation with an equal or\ngreater number",
+        "11. Training: 8. A First Officer who is upgrading to become a Delta Captain for the first time and eligible\nfor a short training (upgrade) course may, at the pilot's option, undergo a full initial\nqualification training course.\n 4\nH. Requalification\n 6\nDelta's requalification curricula are accomplished in accordance with FAR Part 121, subpart\nY, which governs AQP. Specific information on these curricula is outlined in the AQP\nOper"
+      ],
+      "groundingSource": "retrieved_contract_snippets",
+      "usedRetrievedSupport": true,
+      "externalAllowed": false,
+      "externalUsed": false,
+      "externalSnippetCount": 0,
+      "externalLabels": [],
+      "hasPwaIndex": true,
+      "hasCompensationIndex": true,
+      "hasSchedulerIndex": true,
+      "retrievalSourcesUsed": [
+        "PWA",
+        "Compensation Manual",
+        "Scheduler Manual",
+        "Retrieved contract snippets"
+      ],
+      "sourcesUsed": [
+        "PWA",
+        "Compensation Manual",
+        "Scheduler Manual"
+      ],
+      "pwaSectionsUsed": [
+        "1. 2",
+        "2. Duration",
+        "Section 14 E",
+        "Section 14 E and Example Three",
+        "Section 2 Definitions"
+      ],
+      "compensationChunksUsed": [
+        "Section 23 L"
+      ],
+      "schedulerChunksUsed": [
+        "Section 8",
+        "Section 23",
+        "Section 12"
+      ],
+      "structuredRowsUsed": [],
+      "missingSourceWarnings": [],
+      "aiSynthesisUsed": true,
+      "OPENAI_API_KEYPresent": true,
+      "modelClientCalled": true,
+      "modelClientSucceeded": true,
+      "aiSynthesisAttempted": true,
+      "aiSynthesisRejected": false,
+      "laneEnforced": true,
+      "expectedTool": "multi_source_scenario_packet",
+      "retrievalAttempted": true,
+      "laneExecutionResult": "success",
+      "documentShortcutUsed": false,
+      "fallbackUsed": false,
+      "fallthroughPrevented": true,
+      "retryAttempts": [],
+      "sourceAvailability": {
+        "hasPwaIndex": true,
+        "hasCompensationIndex": true,
+        "hasSchedulerIndex": true,
+        "compensationRowsAvailable": 432
+      },
+      "verifierRan": true,
+      "verifierPassed": true,
+      "verifierWarnings": [
+        "Strong claim language was downgraded because the attached support did not explicitly ground it."
+      ],
+      "verifierFailureReasons": [],
+      "verifierAdjustedAnswer": true,
+      "finalSafetyPipelineRan": true,
+      "truthGuardRan": true,
+      "definitionApplicationGuardRan": true,
+      "strongClaimsDetected": [
+        "Pilot must notify the Company of an OE (Operational Event) such as sick leave or leave of absence.",
+        "Timely notification is required to ensure proper pay and credit treatment for OE-related absences."
+      ],
+      "strongClaimsSupported": [],
+      "strongClaimsDowngraded": [
+        "Pilot must notify the Company of an OE (Operational Event) such as sick leave or leave of absence.",
+        "Timely notification is required to ensure proper pay and credit treatment for OE-related absences."
+      ],
+      "definitionSectionUsed": false,
+      "operationalSectionUsed": false,
+      "definitionOverrodeOperation": false,
+      "definitionBasedAnswer": false,
+      "applicationClaimDetected": false,
+      "applicationClaimSupported": false,
+      "applicationClaimDowngraded": false,
+      "answerDowngradedToCaution": true,
+      "downgradeReasons": [
+        "verifier_adjusted_answer",
+        "unsupported_strong_claim"
+      ],
+      "answerReferencedSections": [],
+      "supportInjectedFromAnswer": false,
+      "supportMissingForReferencedSection": false,
+      "xDayScenario": false,
+      "xDayAnchorFound": false,
+      "governingSectionIncludesXDay": false,
+      "shortCallDutyScenario": false,
+      "shortCallDutyAnchorFound": false,
+      "governingSectionIncludesDutyLegality": false,
+      "supportRerankerRan": true,
+      "supportQualityGateRan": true,
+      "supportCandidatesBefore": 18,
+      "supportCandidatesAfter": 4,
+      "supportTopScores": [
+        {
+          "section": "Green Slip (inferred)",
+          "score": 90
+        },
+        {
+          "section": "2. 2",
+          "score": 90
+        },
+        {
+          "section": "5. 2",
+          "score": 90
+        },
+        {
+          "section": "Green Slip (inferred)",
+          "score": 90
+        }
+      ],
+      "supportWeakMatchWarning": false,
+      "supportMatchedTerms": [
+        "notification"
+      ],
+      "supportMatchedSections": [],
+      "supportMatchedAnswerTerms": [
+        "notification"
+      ],
+      "supportMatchedAnswerSections": [],
+      "retrievalSilverSlipAnchorsFound": [],
+      "retrievalGreenSlipAnchorsFound": [
+        "Green Slip (inferred)"
+      ],
+      "retrievalComparisonMode": false,
+      "silverSlipPrimarySupportFound": false,
+      "greenSlipComparisonSupportFound": false,
+      "silverSlipSupportMissing": false,
+      "supportCardsFilteredOut": 1,
+      "supportDroppedReasons": [],
+      "supportPrimaryAnchorMissing": false,
+      "primarySupportForcedByExactAnchor": false,
+      "visibleSupportAnchorPromoted": false,
+      "visibleSupportOriginalSection": [
+        "Green Slip (inferred)",
+        "2. 2",
+        "5. 2",
+        "Green Slip (inferred)"
+      ],
+      "visibleSupportPromotedSection": [
+        "Green Slip (inferred)",
+        "2. 2",
+        "5. 2",
+        "Green Slip (inferred)"
+      ],
+      "supportFinalRankingReason": "quality_gate_kept only cards matching answer anchors or strong question anchors",
+      "finalVisibleSupportSections": [
+        "Green Slip (inferred)",
+        "2. 2",
+        "5. 2"
+      ],
+      "finalVisibleSupportPromotionApplied": false,
+      "intentType": "contract_scenario",
+      "selectedLane": "contract_scenario_retrieval",
+      "requiredFieldsFound": [
+        "question"
+      ],
+      "missingFields": [],
+      "toolsUsed": [
+        "intent_router",
+        "question_scope_guard",
+        "section_aware_retrieval",
+        "openai_contract_synthesis"
+      ],
+      "scenarioProceedWithPartialContext": true,
+      "evidenceParsingAttempted": true,
+      "evidenceParsingSucceeded": false,
+      "evidenceParsingForcedFallback": false,
+      "evidenceParsingIgnoredReason": "Ignored question_scope fallback because the original question already contained enough scenario information to continue safely.",
+      "retrievalPassCounts": {
+        "primary": 8,
+        "expanded": 10,
+        "linked": 3
+      }
+    },
+    "userFeedback": "support_wrong",
+    "correctedAnswer": null,
+    "expectedSource": null,
+    "draft": {
+      "id": "beta-feedback-1777178789092",
+      "question": "Searched both the SRH & TRH, plus here, and can't seem to find the current answer (I know it's changed over the years). What is the current requirement for OE notification? Is it a phone call, or can it be done by CNO? It used to have to be a phone call. Thanks!",
+      "expectedLane": "contract_scenario_retrieval",
+      "expectedSupportAnchors": [
+        {
+          "source": "PWA",
+          "terms": [
+            "searched",
+            "both",
+            "plus",
+            "here",
+            "seem",
+            "find"
+          ],
+          "required": true,
+          "role": "primary"
+        }
+      ],
+      "mustInclude": [
+        "Searched both the SRH & TRH",
+        "plus here",
+        "and can't seem to find the current answer (I know it's changed over the years). What is the current requirement for OE notification? Is it a phone call",
+        "or can it be done by CNO? It used to have to be a phone call. Thanks!"
+      ],
+      "mustNotInclude": [
+        "Green Slip (inferred)",
+        "2. 2",
+        "5. 2"
+      ],
+      "riskLevel": "medium",
+      "category": "beta_reported"
+    }
+  },
+  {
+    "submittedAt": "2026-04-26T04:48:14.413Z",
+    "question": "I am asking about OE notification for another type of event.",
+    "answer": {
+      "status": "needs_clarification",
+      "scenarioLabel": "OE Notification for Other Event",
+      "shortAnswer": "Currently, OE notification can generally be done via CNO unless the event specifically requires immediate personal contact, in which case a phone call may still be needed.",
+      "plainEnglishExplanation": "The key issue is the event type, which determines if immediate personal contact is needed or if CNO suffices.",
+      "confidence": "low",
+      "supportLevel": "mixed",
+      "assumptions": [
+        "The tool reused facts from this session where your new question did not override them.",
+        "No explicit current PWA language mandates phone call for OE notification.",
+        "CNO is accepted as notification method unless specified otherwise.",
+        "Event type affects notification method requirements.",
+        "Final safety pipeline downgraded this answer to caution."
+      ],
+      "evidenceSummary": [
+        "No scenario family matched with high confidence."
+      ],
+      "references": [
+        {
+          "label": "10. 2",
+          "sourceId": "pwa",
+          "section": "10. 2",
+          "quoteSnippet": "a. will be paid the rate applicable to the LCP or LVP's position and longevity, per\nSection 3 B., plus 30% of the rate of the highest paying aircraft type in the\nCompany's fleet for the greater of the actual or scheduled block time of a flight\nsegment(s) when the FSP performs LCP or LVP duties on such rotation:\n1) on which the FSP was scheduled to be an operating crewmember, or\n2) which occurred during a reserve on-call day\nb. who is removed from a rotation(s) on which the FSP was scheduled to be an\noperating crewmember to perform LCP or LVP duties will be paid the greater of the\ndollar value of the:\n1) schedule credit of the rotation(s) removed, or\n2) actual credit of the rotation(s) flown, on which the FSP performs LCP or LVP\nduties computed at the rate determined under Section 10 D. 2. a.\nNote: An LCP removed from their line to perform line checks will be paid under\nSection 10 D. 2. b. 1) or 2)\nc. will be paid 5:00 per day (pay and credit) for the following known absences: all\nmeetings, FSP classroom training, FSP simulator or procedures training, office days\nand travel days to Standards Meetings and FSP training events.\nd. will be paid the same as a pilot for a day of CQ for simulator FCF training.\ne. may perform LCP or LVP duties in a position other than the position they hold. At\nthe Company's discretion, a pilot who has volunteered and was an LCP or LVP in\ntheir previous position, may serve as an LCP or LVP in their previous position. Such\nLCP or LVP will not be considered when determining the Company's compliance\nwith Section 22 C. for the previous position in which they are performing LCP or\nLVP duties.\nIn such a circumstance, the LCP or LVP will be paid under Section 10 D. 2. a., b., c.,\nor Section 10 D. 8. (whichever is applicable) based on the greater of the rate\napplicable to the position they hold, or the rate applicable to the position in which\nthey perform LCP or LVP duties, and as determined under Section 10 D. 2. a.\nNote one: When an LCP qualifying on another aircraft has commenced training on a\nnew aircraft, they will not conduct OE training on their previous equipment.\nNote two: PBS line construction value for office days/meetings can be found on the\nPBS calendar once the days are posted to the FSP's schedule.\nf. LLCPs will be paid an override of $1,000 per month. This override will be paid\nregardless of line check activity as long as the LLCP meets all currency requirements.\n3. Military Leave or Sick Leave\nIf absent from work due to military leave, sick leave for greater than 30 consecutive days\nor a full bid period the FSP must notify the Manager, Flight Training and Standards as\nsoon as practical. In addition, the FSP must notify Flight Standards when they return to\nwork. Upon notification of return to work, current automation will return a pilot to their\nassigned aircraft category, however not their FSP status. FSPs must be manually\nconverted to their appropriate FSP status in order to receive their override pay and or\nability to certify Flight Standards events.\nNote one: Military Leave provisons, under Section 13 D., applies to all pilots\nNote two: Sick Leave provisions, under Section 14 F. applies to all pilots\n4. Company Business Travel\na. FSPs are authorized Company Business travel to perform duties that start or end at\nstations other than their assigned base, to attend base meetings, office days, or FSP\ntraining (not to include line events).\n 10-16",
+          "ruleType": "contract"
+        },
+        {
+          "label": "2. 2",
+          "sourceId": "pwa",
+          "section": "Green Slip (inferred)",
+          "quoteSnippet": "Exception two: If a pilot holds a position with more than one rate when deadheading by\nair transportation on the last flight segment(s) of their rotation, the applicable rate will be\nthe rate for the aircraft model used on the last non-deadhead segment before the deadhead\non which the pilot performed, or was scheduled to perform, duty as a crew member.\n21. \"ARCOS\" means any automated notification system that offers a",
+          "ruleType": "contract"
+        },
+        {
+          "label": "2. 2",
+          "sourceId": "pwa",
+          "section": "Green Slip (inferred)",
+          "quoteSnippet": "Exception two: If a pilot holds a position with more than one rate when deadheading by\nair transportation on the last flight segment(s) of their rotation, the applicable rate will be\nthe rate for the aircraft model used on the last non-deadhead segment before the deadhead\non which the pilot performed, or was scheduled to perform, duty as a crew member.\n21. \"ARCOS\" means any automated notification system that offers a",
+          "ruleType": "contract"
+        }
+      ],
+      "whatCouldChangeThisAnswer": [
+        "Specific event type requiring OE notification.",
+        "Updated contract language mandating phone call.",
+        "Company policy changes on notification methods.",
+        "Pilot status or assignment type affecting notification requirements."
+      ],
+      "breakItDown": [],
+      "answerCompleteness": "provisional",
+      "scenarioBreakdown": [
+        "Pilot receives notification requirement for OE event.",
+        "Pilot must notify Company of OE event per contract or manual guidance.",
+        "Notification can be via CNO or phone depending on event type and contract.",
+        "If event requires immediate personal contact, phone call may be necessary.",
+        "Company acknowledges notification and processes pilot status accordingly."
+      ],
+      "payBreakdown": [
+        "Notification method does not directly affect pay.",
+        "Pay depends on event type and contract provisions for that event.",
+        "Failure to notify properly may affect pay or leave status.",
+        "Scheduled events with proper notification maintain pay and credit.",
+        "Unscheduled or improper notification may lead to unpaid leave or other consequences."
+      ],
+      "clarifyingQuestions": [
+        {
+          "id": "ai-clarification",
+          "prompt": "What specific type of event are you referring to for OE notification?",
+          "factField": "questionIntent",
+          "required": true,
+          "quickReplies": [
+            {
+              "id": "legalDuty",
+              "label": "Legal Duty (Jury Duty, etc.)",
+              "factPatch": {
+                "status": "active",
+                "assignmentType": "lineholder",
+                "pickupType": "none",
+                "premiumType": "none",
+                "interactionRelationship": "none",
+                "contactWindow": "pre-posted",
+                "processingCountsKnown": true,
+                "beforeReport": true,
+                "afterReport": false,
+                "eventTiming": "scheduled",
+                "rerouteOccurred": false,
+                "reassignmentOccurred": false,
+                "tripTouched": false,
+                "leaveType": "legalDuty",
+                "sickUsed": false,
+                "sameDayInteraction": false,
+                "questionIntent": "legalDutyNotification"
+              },
+              "replyMessage": "Legal duty leave requires immediate notification and a copy of summons; typically a CNO suffices."
+            },
+            {
+              "id": "sickLeave",
+              "label": "Sick Leave",
+              "factPatch": {
+                "status": "active",
+                "assignmentType": "lineholder",
+                "pickupType": "none",
+                "premiumType": "none",
+                "interactionRelationship": "none",
+                "contactWindow": "immediate",
+                "processingCountsKnown": true,
+                "beforeReport": true,
+                "afterReport": false,
+                "eventTiming": "unscheduled",
+                "rerouteOccurred": false,
+                "reassignmentOccurred": false,
+                "tripTouched": false,
+                "leaveType": "sick",
+                "sickUsed": true,
+                "sameDayInteraction": false,
+                "questionIntent": "sickLeaveNotification"
+              },
+              "replyMessage": "Sick leave notification usually requires immediate contact, often by phone, but check current procedures."
+            },
+            {
+              "id": "otherEvent",
+              "label": "Other Event (Please Specify)",
+              "factPatch": {
+                "status": "active",
+                "assignmentType": "lineholder",
+                "pickupType": "none",
+                "premiumType": "none",
+                "interactionRelationship": "none",
+                "contactWindow": "immediate",
+                "processingCountsKnown": false,
+                "beforeReport": false,
+                "afterReport": false,
+                "eventTiming": "unscheduled",
+                "rerouteOccurred": false,
+                "reassignmentOccurred": false,
+                "tripTouched": false,
+                "leaveType": "other",
+                "sickUsed": false,
+                "sameDayInteraction": false,
+                "questionIntent": "OE notification for other event"
+              },
+              "replyMessage": "Please specify the event type so I can provide the correct OE notification method."
+            }
+          ]
+        }
+      ],
+      "caveats": [
+        "Truth guard downgraded unsupported strong claim(s)."
+      ]
+    },
+    "supportCards": [
+      {
+        "label": "10. 2",
+        "sourceId": "pwa",
+        "section": "10. 2",
+        "quoteSnippet": "a. will be paid the rate applicable to the LCP or LVP's position and longevity, per\nSection 3 B., plus 30% of the rate of the highest paying aircraft type in the\nCompany's fleet for the greater of the actual or scheduled block time of a flight\nsegment(s) when the FSP performs LCP or LVP duties on such rotation:\n1) on which the FSP was scheduled to be an operating crewmember, or\n2) which occurred during a reserve on-call day\nb. who is removed from a rotation(s) on which the FSP was scheduled to be an\noperating crewmember to perform LCP or LVP duties will be paid the greater of the\ndollar value of the:\n1) schedule credit of the rotation(s) removed, or\n2) actual credit of the rotation(s) flown, on which the FSP performs LCP or LVP\nduties computed at the rate determined under Section 10 D. 2. a.\nNote: An LCP removed from their line to perform line checks will be paid under\nSection 10 D. 2. b. 1) or 2)\nc. will be paid 5:00 per day (pay and credit) for the following known absences: all\nmeetings, FSP classroom training, FSP simulator or procedures training, office days\nand travel days to Standards Meetings and FSP training events.\nd. will be paid the same as a pilot for a day of CQ for simulator FCF training.\ne. may perform LCP or LVP duties in a position other than the position they hold. At\nthe Company's discretion, a pilot who has volunteered and was an LCP or LVP in\ntheir previous position, may serve as an LCP or LVP in their previous position. Such\nLCP or LVP will not be considered when determining the Company's compliance\nwith Section 22 C. for the previous position in which they are performing LCP or\nLVP duties.\nIn such a circumstance, the LCP or LVP will be paid under Section 10 D. 2. a., b., c.,\nor Section 10 D. 8. (whichever is applicable) based on the greater of the rate\napplicable to the position they hold, or the rate applicable to the position in which\nthey perform LCP or LVP duties, and as determined under Section 10 D. 2. a.\nNote one: When an LCP qualifying on another aircraft has commenced training on a\nnew aircraft, they will not conduct OE training on their previous equipment.\nNote two: PBS line construction value for office days/meetings can be found on the\nPBS calendar once the days are posted to the FSP's schedule.\nf. LLCPs will be paid an override of $1,000 per month. This override will be paid\nregardless of line check activity as long as the LLCP meets all currency requirements.\n3. Military Leave or Sick Leave\nIf absent from work due to military leave, sick leave for greater than 30 consecutive days\nor a full bid period the FSP must notify the Manager, Flight Training and Standards as\nsoon as practical. In addition, the FSP must notify Flight Standards when they return to\nwork. Upon notification of return to work, current automation will return a pilot to their\nassigned aircraft category, however not their FSP status. FSPs must be manually\nconverted to their appropriate FSP status in order to receive their override pay and or\nability to certify Flight Standards events.\nNote one: Military Leave provisons, under Section 13 D., applies to all pilots\nNote two: Sick Leave provisions, under Section 14 F. applies to all pilots\n4. Company Business Travel\na. FSPs are authorized Company Business travel to perform duties that start or end at\nstations other than their assigned base, to attend base meetings, office days, or FSP\ntraining (not to include line events).\n 10-16",
+        "ruleType": "contract"
+      },
+      {
+        "label": "2. 2",
+        "sourceId": "pwa",
+        "section": "Green Slip (inferred)",
+        "quoteSnippet": "Exception two: If a pilot holds a position with more than one rate when deadheading by\nair transportation on the last flight segment(s) of their rotation, the applicable rate will be\nthe rate for the aircraft model used on the last non-deadhead segment before the deadhead\non which the pilot performed, or was scheduled to perform, duty as a crew member.\n21. \"ARCOS\" means any automated notification system that offers a",
+        "ruleType": "contract"
+      },
+      {
+        "label": "2. 2",
+        "sourceId": "pwa",
+        "section": "Green Slip (inferred)",
+        "quoteSnippet": "Exception two: If a pilot holds a position with more than one rate when deadheading by\nair transportation on the last flight segment(s) of their rotation, the applicable rate will be\nthe rate for the aircraft model used on the last non-deadhead segment before the deadhead\non which the pilot performed, or was scheduled to perform, duty as a crew member.\n21. \"ARCOS\" means any automated notification system that offers a",
+        "ruleType": "contract"
+      }
+    ],
+    "debugPayload": {
+      "mode": "ai",
+      "parsedKeys": [
+        "detectedScenario",
+        "questionType",
+        "answerCompleteness",
+        "shortAnswer",
+        "confidence",
+        "needsClarification",
+        "clarifyingQuestion",
+        "clarifyingField",
+        "quickReplies",
+        "whyItApplies",
+        "contractSupport",
+        "extractedFacts",
+        "assumptions",
+        "scenarioBreakdown",
+        "payBreakdown",
+        "whatCouldChange",
+        "practicalBreakdown",
+        "followUpSuggestion"
+      ],
+      "missingRequiredFields": [],
+      "weakResponseGateFired": false,
+      "retrievedSnippetCount": 10,
+      "retrievedSections": [
+        "10. 2",
+        "1. 2",
+        "1. 2",
+        "10. 2",
+        "10. 2",
+        "Green Slip (inferred)",
+        "2. 2",
+        "5. 2",
+        "7. Vacations",
+        "7. Vacations"
+      ],
+      "knownInteractionRuleIds": [],
+      "routedGoverningSections": [],
+      "searchMode": "global",
+      "routingFallbackOccurred": false,
+      "governingSectionsSelected": [],
+      "governingSectionUsed": "pwa:10. 2",
+      "bottomLineMode": "generic",
+      "bottomLineReflectsGoverningRule": false,
+      "strongerRuleBasedAnswerAvailableButNotUsed": false,
+      "classificationLevelOnly": false,
+      "concreteRuleBasedAnswerAvailable": false,
+      "finalAnswerUsedConcreteRule": false,
+      "concreteInteractionRuleAvailable": false,
+      "finalAnswerUsedConcreteInteractionRule": false,
+      "answerStillGenericDespiteInteractionRule": false,
+      "missingGatingFacts": [],
+      "answerIsConditional": false,
+      "gatingQuestionUsed": "What specific type of event are you referring to for OE notification?",
+      "sectionExpansionUsed": false,
+      "crossReferencesFollowed": [],
+      "contextPacketSummary": {
+        "governingSections": [],
+        "exceptionsNotes": [],
+        "workedExamples": [],
+        "interactionRuleLinkedSections": [],
+        "compensationSupport": [],
+        "schedulerSupport": []
+      },
+      "governingSourcePriorityUsed": [
+        "PWA",
+        "Compensation Manual",
+        "Scheduler Manual",
+        "CrewTools Logic"
+      ],
+      "reasoningMode": "generic_retrieval_led",
+      "answerMode": "generic",
+      "retrievedSnippets": [
+        "10. 2: a. will be paid the rate applicable to the LCP or LVP's position and longevity, per\nSection 3 B., plus 30% of the rate of the highest paying aircraft type in the\nCompany's fleet for the greater of the actual or scheduled block time of a flight\nsegment(s) when the FSP performs LCP or LVP duties on such rotation:\n1) on which the FSP was scheduled to be an operating crewmember, or\n2) which occurred during a reserve on-call day\nb. who is removed from a rotation(s) on which the FSP was scheduled to be an\noperating crewmember to perform LCP or LVP duties will be paid the greater of the\ndollar value of the:\n1) schedule credit of the rotation(s) removed, or\n2) actual credit of the rotation(s) flown, on which the FSP performs LCP or LVP\nduties computed at the rate determined under Section 10 D. 2. a.\nNote: An LCP removed from their line to perform line checks will be paid under\nSection 10 D. 2. b. 1) or 2)\nc. will be paid 5:00 per day (pay and credit) for the following known absences: all\nmeetings, FSP classroom training, FSP simulator or procedures training, office days\nand travel days to Standards Meetings and FSP training events.\nd. will be paid the same as a pilot for a day of CQ for simulator FCF training.\ne. may perform LCP or LVP duties in a position other than the position they hold. At\nthe Company's discretion, a pilot who has volunteered and was an LCP or LVP in\ntheir previous position, may serve as an LCP or LVP in their previous position. Such\nLCP or LVP will not be considered when determining the Company's compliance\nwith Section 22 C. for the previous position in which they are performing LCP or\nLVP duties.\nIn such a circumstance, the LCP or LVP will be paid under Section 10 D. 2. a., b., c.,\nor Section 10 D. 8. (whichever is applicable) based on the greater of the rate\napplicable to the position they hold, or the rate applicable to the position in which\nthey perform LCP or LVP duties, and as determined under Section 10 D. 2. a.\nNote one: When an LCP qualifying on another aircraft has commenced training on a\nnew aircraft, they will not conduct OE training on their previous equipment.\nNote two: PBS line construction value for office days/meetings can be found on the\nPBS calendar once the days are posted to the FSP's schedule.\nf. LLCPs will be paid an override of $1,000 per month. This override will be paid\nregardless of line check activity as long as the LLCP meets all currency requirements.\n3. Military Leave or Sick Leave\nIf absent from work due to military leave, sick leave for greater than 30 consecutive days\nor a full bid period the FSP must notify the Manager, Flight Training and Standards as\nsoon as practical. In addition, the FSP must notify Flight Standards when they return to\nwork. Upon notification of return to work, current automation will return a pilot to their\nassigned aircraft category, however not their FSP status. FSPs must be manually\nconverted to their appropriate FSP status in order to receive their override pay and or\nability to certify Flight Standards events.\nNote one: Military Leave provisons, under Section 13 D., applies to all pilots\nNote two: Sick Leave provisions, under Section 14 F. applies to all pilots\n4. Company Business Travel\na. FSPs are authorized Company Business travel to perform duties that start or end at\nstations other than their assigned base, to attend base meetings, office days, or FSP\ntraining (not to include line events).\n 10-16",
+        "1. 2: SECTION 1\n 2\nSCOPE\n 4\nA. Recognition\n 6\n1. In accordance with the certification issued by the National Mediation Board in Case No.\nR-7191, 36 NMB No. 21, January 22, 2009, the Company recognizes the Air Line Pilots\nAssociation, International, as the duly designated and authorized representative of the\nFlight Deck Crewmembers in the service of the Company for the purposes of the Railway\nLabor Act, as amended.\n2. Nothing in this PWA will be construed to limit or deny any pilot hereunder any rights or\nprivileges to which such pilot may be entitled under the provisions of the Railway Labor\nAct, as amended.\n15\nB. Definitions\n17\n1. \"Affiliate\" means:\na. any subsidiary, parent or division of an entity,\nb. any other subsidiary, parent or division of either a parent or a subsidiary of an entity,\nor\nc. any entity that controls another entity, is controlled by another entity, or is under\ncommon control with another entity, in either case, whether directly or indirectly\nthrough the control of other entities.\n2. \"Americas Theater\" means flying on all routes between (a) a point in South America, and\n(b) a point in the United States.\n3. \"Atlantic Theater\" means flying on all routes between (a) a point in the United States,\nand (b) a point that is east of longitude 30� W and west of longitude 90� E.\n4. \"Category A operation\" means the operation of a flight segment by a Delta Connection\nCarrier:\na. that is a Company affiliate, or\nb. using the DL code under an agreement with Delta that is not a prorate agreement.\n5. \"Category C operation\" means the operation of a flight segment by a Delta Connection\nCarrier under the DL code pursuant to a prorate agreement with Delta.\n6. \"Circumstance over which the Company does not have control,\" for the purposes of\nSection 1 and Section 21, means a circumstance that includes, but is not limited to, a\nnatural disaster; labor dispute involving a work stoppage which impairs Company\noperations (provided such term does not apply to informational picketing or other lawful\nactivity designed to inform the public); grounding of a substantial number of the\nCompany's aircraft by a government agency; reduction in flying operations because of a\ndecrease in available fuel supply or other critical materials due to either governmental\naction or commercial suppliers being unable to provide sufficient fuel or other critical\nmaterials for the Company's operations; revocation of the Company's operating\ncertificate(s); war emergency; owner's delay in delivery of aircraft scheduled for\ndelivery; manufacturer's delay in delivery of new aircraft scheduled for delivery. The\nterm \"circumstance over which the Company does not have control\" will not include the",
+        "1. 2: price of fuel or other supplies; any delay by the manufacturer in the delivery of new\naircraft to the Company that is (a) known to the Company when it provides its detailed\nFleet and Network Plans to the Association in Q4 of any year prior to the year of the\nscheduled delivery, or (b) less than 45 days; the price of aircraft; the state of the\neconomy; the financial state of the Company; or the relative profitability or\nunprofitability of the Company's then-current operations.\nNote one: For purposes of this definition, Company refers only to Delta Air Lines, Inc.,\nand not any Company affiliate.\nNote two: The Company will give ALPA prior written notice of its intent to declare\n\"circumstances over which the Company does not have control,\" and its rationale.\n7. \"Code\" means the unique two-character designator code assigned to an airline by the\nInternational Air Transport Association (IATA). If IATA assigns or has assigned more\nthan one designator code for use by Delta, or Hawaiian or by a subsidiary of Delta, or\nHawaiian, then such additional designator code(s) will be included within the DL code,\nor HA code, respectively.\n8. \"Company\" means Delta Air Lines, Inc.\n9. \"Company affiliate\" means an affiliate of the Company.\n10. \"Company flying\" means all flying reserved under Section 1 C. for performance by\npilots.\n11. \"Control\" for the purposes of Section 1, will exist by entity A over entity B, only if A,\nwhether directly or indirectly through the control of other entities:\na. owns securities that constitute and/or are exchangeable into, exercisable for or\nconvertible into more than:\n1) 30 percent (49 percent with respect to the combined interest of the Company and\nCompany affiliates in a foreign air carrier) of B's outstanding common stock, or if\nstock in addition to common stock has voting power, then\n2) 30 percent (49 percent with respect to the combined interest of the Company and\nCompany affiliates in a foreign air carrier) of the voting power of all outstanding\nsecurities of B entitled to vote generally for the election of members of B's Board\nof Directors or similar governing body, or\nNote: For purposes of the definition of Global Partner, control by a foreign partner\n(as entity A within the definition of control under Section 1 B. 11.) will only exist\nover a controlled foreign air carrier affiliate (as entity B) under Section 1 B. 11. a. 1)\nand 2) if that foreign partner, whether directly or indirectly through the control of\nother entities, owns securities that constitute and/or are exchangeable into, exercisable\nfor or convertible into more than 49 percent of B's outstanding common stock or\nvoting power of all outstanding securities, as provided under Section 1 B. 11. a.\nControl by a foreign partner (as entity A within the definition of \"control\" under\nSection 1 B. 11.) whether directly or indirectly through the control of other entities,\nover a controlled foreign air carrier affiliate (as entity B) also exists if one or more of\nthe tests under Section 1 B. 11. b. - f. is satisfied.\nb. has the power or right to manage or direct the management of all or substantially all\nof B's air carrier operations, or\nc. has the power or right to designate or provide all or substantially all of B's officers, or\nd. has the power or right to determine B's markets or (if B is an air carrier) markets or\nflight schedules or to provide a majority of the following management services for B:",
+        "10. 2: Section 10 � Seniority List Instructors, Line Check Pilots & Line Validation Pilots",
+        "10. 2: 28. For each scheduled day of legal duty (e.g., Jury Duty) while in-department, an SLI will\nbe paid 5:18 at their pay rate under Section 10 B. 13. and SLIs who return to the line\nunder Section 10 B. 2. will be handled in accordance with Section 13 E.\n29. Theater Qualifications for SLIs\na. The Fleet Captain may determine a Captain SLI to be qualified in a specific theater.\nThis TQ determination will be made on a case-by-case basis with consideration of the\nSLI's line flying, Flight Standards and/or Training Department experience.\nb. When a TQ is so determined, the Fleet Manager will coordinate with Aircrew\nRecords to the qualification(s) placed on the SLI's DBMS record.\n10\nC. Non-Seniority List Instructors\n12\n1. An NSLI\na. will not participate in the training of a pilot, unless the NSLI has:\n1) at least 2,000 hours of experience as an airman (for NSLIs hired after June 21,\n2001 at least 2,000 hours of experience as an airman in Part 121 operations or\nequivalent commercial air carrier experience).\n2) an ATP Certificate\n3) FAA qualifications to provide simulator instruction on the pertinent aircraft.\nException: The above requirements will not apply to a furloughed pilot or to a\nformer NWA employee who was a qualified NWA Aircrew Training Instructor (ATI)\non the day prior to October 30, 2008.\nb. may serve as part of a crew complement in a flight simulator and/or level five or\nhigher FTD training, including service as part of the crew complement in an AQP\nquality assurance module (or equivalent non-jeopardy module).\nException: An NSLI may not serve as part of a crew complement during an\nevaluation.\nc. who has at least 500 hours as a Captain for the Company, or who was formerly a PCP\nfor the Company, may:\n1) perform pilot evaluations.\n2) serve as PCP for a pilot.\nd. will not:\n1) perform flight duty as a crewmember.\n2) serve as part of a crew complement during an evaluation.\n3) perform APD duties.\n36\nD. Line Check Pilots and Line Validation Pilots\n38\n1. An LCP will not conduct a PIC line check and/or proficiency check unless they have a\nminimum of:\na. 1,000 hours of flight experience as PIC for the Company, or\nb. 1,000 hours of flight experience as PIC and/or SIC on the aircraft type.\nException: LCP minimum requirements may be waived or modified in specific instances\nby mutual agreement between the Company and the MEC Chairman.\nNote: When an LCP qualifying on another aircraft has commenced training on a new\naircraft, they will not conduct OE training on their previous equipment.\n2. An FSP:",
+        "Green Slip (inferred): Exception two: If a pilot holds a position with more than one rate when deadheading by\nair transportation on the last flight segment(s) of their rotation, the applicable rate will be\nthe rate for the aircraft model used on the last non-deadhead segment before the deadhead\non which the pilot performed, or was scheduled to perform, duty as a crew member.\n21. \"ARCOS\" means any automated notification system that offers a",
+        "2. 2: or\nb. alteration of a pilot's rotation or portion thereof to:\n1) delete a previously scheduled flight segment(s), and/or\n2) add a flight segment(s) under Section 23 N. 24. or O. 18.;\nand\nc. notification to the pilot, after the airborne departure of his first flight segment, of such\nalteration.\nNote: An alteration in the departure, enroute or arrival time of a scheduled flight segment\ndoes not constitute a reroute.\n24",
+        "5. 2: Note: A pilot's request for lodging under Section 5 E. 1. b. will comply with the\nprocess established by Flight Training Planning in coordination with the MEC Hotel\nCommittee Chairman.\nc. at their base upon request, provided:\n1) the pilot reports for duty and is assigned recovery flying under Section 23 K. 1.,\n2) the time between the notification of the replacement flying and the scheduled\ndeparture time is at least ",
+        "7. Vacations: 1\n Period Posting Deadline Bid Closing Bids Awarded\n Primary January 1st January 8th January 12th\n Secondary January 12th January 19th January 23rd\n Tertiary January 23rd January 30th February 3rd\n Quaternary February 3rd February 10th February 14th\n Quinary February 14th February 21st February 25th\n 2\n3. A pilot will bid their vacation based on the category the pilot:\na. holds on January 31st, or\nb. is scheduled to ",
+        "7. Vacations: b. accept pay, under Section 7 G. 3. b., in lieu of such vacation not taken.\n8. A pilot who flies into their vacation period due to a reroute or late operations may, at\ntheir option, place the lost vacation day(s) at the end of the affected vacation period\n(without a reduction from their vacation bank hours for any rotation removed to\naccommodate such placement of lost vacation days), or add the lost vacation day(s) "
+      ],
+      "groundingSource": "retrieved_contract_snippets",
+      "usedRetrievedSupport": true,
+      "externalAllowed": false,
+      "externalUsed": false,
+      "externalSnippetCount": 0,
+      "externalLabels": [],
+      "hasPwaIndex": true,
+      "hasCompensationIndex": true,
+      "hasSchedulerIndex": true,
+      "retrievalSourcesUsed": [
+        "PWA",
+        "Compensation Manual",
+        "Scheduler Manual",
+        "Retrieved contract snippets"
+      ],
+      "sourcesUsed": [
+        "PWA",
+        "Compensation Manual",
+        "Scheduler Manual"
+      ],
+      "pwaSectionsUsed": [
+        "10. 2",
+        "1. 2",
+        "2. Duration"
+      ],
+      "compensationChunksUsed": [
+        "Section 13 E"
+      ],
+      "schedulerChunksUsed": [
+        "Section 8",
+        "Section 23",
+        "Section 12"
+      ],
+      "structuredRowsUsed": [],
+      "missingSourceWarnings": [],
+      "aiSynthesisUsed": true,
+      "OPENAI_API_KEYPresent": true,
+      "modelClientCalled": true,
+      "modelClientSucceeded": true,
+      "aiSynthesisAttempted": true,
+      "aiSynthesisRejected": false,
+      "laneEnforced": true,
+      "expectedTool": "multi_source_scenario_packet",
+      "retrievalAttempted": true,
+      "laneExecutionResult": "success",
+      "documentShortcutUsed": false,
+      "fallbackUsed": false,
+      "fallthroughPrevented": true,
+      "retryAttempts": [],
+      "sourceAvailability": {
+        "hasPwaIndex": true,
+        "hasCompensationIndex": true,
+        "hasSchedulerIndex": true,
+        "compensationRowsAvailable": 432
+      },
+      "verifierRan": true,
+      "verifierPassed": true,
+      "verifierWarnings": [
+        "Strong claim language was downgraded because the attached support did not explicitly ground it."
+      ],
+      "verifierFailureReasons": [],
+      "verifierAdjustedAnswer": true,
+      "finalSafetyPipelineRan": true,
+      "truthGuardRan": true,
+      "definitionApplicationGuardRan": true,
+      "strongClaimsDetected": [
+        "Pilot must notify Company of OE event per contract or manual guidance."
+      ],
+      "strongClaimsSupported": [],
+      "strongClaimsDowngraded": [
+        "Pilot must notify Company of OE event per contract or manual guidance."
+      ],
+      "definitionSectionUsed": false,
+      "operationalSectionUsed": false,
+      "definitionOverrodeOperation": false,
+      "definitionBasedAnswer": false,
+      "applicationClaimDetected": false,
+      "applicationClaimSupported": false,
+      "applicationClaimDowngraded": false,
+      "answerDowngradedToCaution": true,
+      "downgradeReasons": [
+        "verifier_adjusted_answer",
+        "unsupported_strong_claim"
+      ],
+      "answerReferencedSections": [],
+      "supportInjectedFromAnswer": false,
+      "supportMissingForReferencedSection": false,
+      "xDayScenario": false,
+      "xDayAnchorFound": false,
+      "governingSectionIncludesXDay": false,
+      "shortCallDutyScenario": false,
+      "shortCallDutyAnchorFound": false,
+      "governingSectionIncludesDutyLegality": false,
+      "supportRerankerRan": true,
+      "supportQualityGateRan": true,
+      "supportCandidatesBefore": 18,
+      "supportCandidatesAfter": 4,
+      "supportTopScores": [
+        {
+          "section": "10. 2",
+          "score": 90
+        },
+        {
+          "section": "Green Slip (inferred)",
+          "score": 90
+        },
+        {
+          "section": "Green Slip (inferred)",
+          "score": 90
+        },
+        {
+          "section": "2. 2",
+          "score": 90
+        }
+      ],
+      "supportWeakMatchWarning": false,
+      "supportMatchedTerms": [
+        "notification"
+      ],
+      "supportMatchedSections": [],
+      "supportMatchedAnswerTerms": [
+        "notification"
+      ],
+      "supportMatchedAnswerSections": [],
+      "retrievalSilverSlipAnchorsFound": [],
+      "retrievalGreenSlipAnchorsFound": [
+        "Green Slip (inferred)"
+      ],
+      "retrievalComparisonMode": false,
+      "silverSlipPrimarySupportFound": false,
+      "greenSlipComparisonSupportFound": false,
+      "silverSlipSupportMissing": false,
+      "supportCardsFilteredOut": 1,
+      "supportDroppedReasons": [],
+      "supportPrimaryAnchorMissing": false,
+      "primarySupportForcedByExactAnchor": false,
+      "visibleSupportAnchorPromoted": false,
+      "visibleSupportOriginalSection": [
+        "10. 2",
+        "Green Slip (inferred)",
+        "Green Slip (inferred)",
+        "2. 2"
+      ],
+      "visibleSupportPromotedSection": [
+        "10. 2",
+        "Green Slip (inferred)",
+        "Green Slip (inferred)",
+        "2. 2"
+      ],
+      "supportFinalRankingReason": "quality_gate_kept only cards matching answer anchors or strong question anchors",
+      "finalVisibleSupportSections": [
+        "10. 2",
+        "Green Slip (inferred)",
+        "Green Slip (inferred)"
+      ],
+      "finalVisibleSupportPromotionApplied": false,
+      "intentType": "contract_scenario",
+      "selectedLane": "contract_scenario_retrieval",
+      "requiredFieldsFound": [
+        "question"
+      ],
+      "missingFields": [],
+      "toolsUsed": [
+        "intent_router",
+        "question_scope_guard",
+        "section_aware_retrieval",
+        "openai_contract_synthesis"
+      ],
+      "scenarioProceedWithPartialContext": true,
+      "evidenceParsingAttempted": true,
+      "evidenceParsingSucceeded": false,
+      "evidenceParsingForcedFallback": false,
+      "evidenceParsingIgnoredReason": "Ignored question_scope fallback because the original question already contained enough scenario information to continue safely.",
+      "retrievalPassCounts": {
+        "primary": 8,
+        "expanded": 10,
+        "linked": 7
+      }
+    },
+    "userFeedback": "support_wrong",
+    "correctedAnswer": null,
+    "expectedSource": null,
+    "draft": {
+      "id": "beta-feedback-1777178894411",
+      "question": "I am asking about OE notification for another type of event.",
+      "expectedLane": "contract_scenario_retrieval",
+      "expectedSupportAnchors": [
+        {
+          "source": "PWA",
+          "terms": [
+            "asking",
+            "about",
+            "notification",
+            "another",
+            "type",
+            "event."
+          ],
+          "required": true,
+          "role": "primary"
+        }
+      ],
+      "mustInclude": [
+        "I am asking about OE notification for another type of event."
+      ],
+      "mustNotInclude": [
+        "10. 2",
+        "Green Slip (inferred)",
+        "Green Slip (inferred)"
+      ],
+      "riskLevel": "medium",
+      "category": "beta_reported"
+    }
+  },
+  {
+    "submittedAt": "2026-04-26T04:56:37.760Z",
+    "question": "What is the current requirement for OE notification? Is it a phone call, or can it be done by CNO? It used to have to be a phone call.  I’m curious where ALPA landed on this. Used to be they could use CNO while you were still in the sim and after you were done it was phone contact. But we also had an agreement that they had to give you a ‘reasonable’ amount of time to prepare if you were already done in the sim, and that’s now been reduced to 30 hours. Unless you’ve been out of the sim for 10 days, then it goes to 48 hours, proffer down to 30. They cover notification in detail in the SRH for Section 23 stuff, they really need to clarify this in the TRH.",
+    "answer": {
+      "status": "needs_clarification",
+      "scenarioLabel": "OE notification timing and method",
+      "shortAnswer": "Currently, OE notification can be done via CNO; a phone call is not strictly required. Notification timing is generally 30 hours before the event unless you have been out of the sim for 10 days or more, then it extends to 48 hours, with a proffer back down to 30 hours.",
+      "plainEnglishExplanation": "The key issue is the timing and method of notification, with current practice allowing CNO and defined timing windows based on days out of sim.",
+      "confidence": "low",
+      "supportLevel": "mixed",
+      "assumptions": [
+        "No recent formal PWA section explicitly overrides SRH guidance on OE notification.",
+        "ALPA's current stance aligns with SRH and past agreements.",
+        "Notification timing rules apply as described in the question context.",
+        "Final safety pipeline downgraded this answer to caution."
+      ],
+      "evidenceSummary": [
+        "No scenario family matched with high confidence."
+      ],
+      "references": [
+        {
+          "label": "Preference Qualifiers If Needed to Fly or for Short Call",
+          "sourceId": "scheduler_manual",
+          "section": "SECTION 23 S",
+          "quoteSnippet": "Lower Days-of-Availability Grouping (23 S. 1. a. Note two Exception)\nIn addition, a reserve pilot may preference a trip that is equal to their days-of-availability or to\ntheir days-of-availability minus one. This provision will be available any time that the number of\npilots with the same days-of-availability is equal to the number of open trips of that length, plus\none, including the pilot in question.\nFor example, ",
+          "ruleType": "scheduler_practice"
+        },
+        {
+          "label": "When Have You Been Contacted?",
+          "sourceId": "scheduler_manual",
+          "section": "SECTION 23 S",
+          "quoteSnippet": "When Have You Been Contacted?\nA pilot's contact and response obligations can be broken down into several categories. A pilot has not been\ncontacted concerning their schedule unless they have spoken personally with a Company representative,\nand/or has acknowledged a message via telephone, IVR, iCrew, ARCOS, or the Crew Auto Notification\nSystem (CNO).\nA reserve pilot:\n� on long call or short call must respond to an att",
+          "ruleType": "scheduler_practice"
+        },
+        {
+          "label": "Section 23",
+          "sourceId": "scheduler_manual",
+          "section": "SECTION 23 S",
+          "quoteSnippet": "o If there is an offer window for your batch, you will be able to adjust your preferences, if\ndesired\n� If you have selected auto-acknowledge on and off duty\no This will only be awarded if the trip reports at least 12 hours after the award\nIf you are ON duty, you will receive notification via email and call-out\nIf you are OFF duty, you will not receive an email notification or a call\no A notification call out will be",
+          "ruleType": "scheduler_practice"
+        }
+      ],
+      "whatCouldChangeThisAnswer": [
+        "A formal ALPA agreement or PWA update explicitly requiring phone call notification only.",
+        "Changes in SRH or TRH clarifying or altering notification timing or method.",
+        "Company operational changes affecting notification technology or timing."
+      ],
+      "breakItDown": [],
+      "answerCompleteness": "provisional",
+      "scenarioBreakdown": [
+        "Pilot is scheduled for OE.",
+        "Notification is sent either by CNO or phone call depending on current ALPA agreement.",
+        "If pilot has been out of sim less than 10 days, notification must be at least 30 hours before OE.",
+        "If pilot has been out of sim 10 days or more, notification timing extends to 48 hours, then proffered down to 30 hours.",
+        "Pilot must have reasonable time to prepare, historically defined as 30 hours now."
+      ],
+      "payBreakdown": [
+        "Not applicable to pay; this is a notification timing and method question."
+      ],
+      "clarifyingQuestions": [
+        {
+          "id": "ai-clarification",
+          "prompt": "Have there been any recent formal updates or ALPA agreements explicitly changing OE notification methods or timing beyond the SRH guidance?",
+          "factField": "questionIntent",
+          "required": true,
+          "quickReplies": [
+            {
+              "id": "phoneCallOnly",
+              "label": "Notification must be by phone call only",
+              "factPatch": {
+                "status": "active",
+                "assignmentType": "OE",
+                "pickupType": "none",
+                "premiumType": "none",
+                "interactionRelationship": "none",
+                "contactWindow": "phoneOnly",
+                "processingCountsKnown": true,
+                "beforeReport": true,
+                "afterReport": false,
+                "eventTiming": "pre-event",
+                "rerouteOccurred": false,
+                "reassignmentOccurred": false,
+                "tripTouched": false,
+                "leaveType": "none",
+                "sickUsed": false,
+                "sameDayInteraction": false,
+                "questionIntent": "notificationMethod"
+              },
+              "replyMessage": "Assuming the old rule still applies, notification must be by phone call only."
+            },
+            {
+              "id": "CNOAllowed",
+              "label": "Notification can be by CNO",
+              "factPatch": {
+                "status": "active",
+                "assignmentType": "OE",
+                "pickupType": "none",
+                "premiumType": "none",
+                "interactionRelationship": "none",
+                "contactWindow": "CNOAllowed",
+                "processingCountsKnown": true,
+                "beforeReport": true,
+                "afterReport": false,
+                "eventTiming": "pre-event",
+                "rerouteOccurred": false,
+                "reassignmentOccurred": false,
+                "tripTouched": false,
+                "leaveType": "none",
+                "sickUsed": false,
+                "sameDayInteraction": false,
+                "questionIntent": "notificationMethod"
+              },
+              "replyMessage": "Assuming current practice, notification can be done via CNO."
+            },
+            {
+              "id": "notificationTiming30Hours",
+              "label": "Notification timing is 30 hours",
+              "factPatch": {
+                "status": "active",
+                "assignmentType": "OE",
+                "pickupType": "none",
+                "premiumType": "none",
+                "interactionRelationship": "none",
+                "contactWindow": "30Hours",
+                "processingCountsKnown": true,
+                "beforeReport": true,
+                "afterReport": false,
+                "eventTiming": "pre-event",
+                "rerouteOccurred": false,
+                "reassignmentOccurred": false,
+                "tripTouched": false,
+                "leaveType": "none",
+                "sickUsed": false,
+                "sameDayInteraction": false,
+                "questionIntent": "notificationTiming"
+              },
+              "replyMessage": "Notification timing is generally 30 hours before the event."
+            },
+            {
+              "id": "notificationTiming48HoursAfter10DaysOut",
+              "label": "Notification timing is 48 hours if out of sim 10+ days",
+              "factPatch": {
+                "status": "active",
+                "assignmentType": "OE",
+                "pickupType": "none",
+                "premiumType": "none",
+                "interactionRelationship": "none",
+                "contactWindow": "48HoursAfter10DaysOut",
+                "processingCountsKnown": true,
+                "beforeReport": true,
+                "afterReport": false,
+                "eventTiming": "pre-event",
+                "rerouteOccurred": false,
+                "reassignmentOccurred": false,
+                "tripTouched": false,
+                "leaveType": "none",
+                "sickUsed": false,
+                "sameDayInteraction": false,
+                "questionIntent": "notificationTiming"
+              },
+              "replyMessage": "If you have been out of the sim for 10 days or more, notification timing extends to 48 hours, then proffers down to 30 hours."
+            }
+          ]
+        }
+      ],
+      "caveats": [
+        "Truth guard downgraded unsupported strong claim(s)."
+      ]
+    },
+    "supportCards": [
+      {
+        "label": "Preference Qualifiers If Needed to Fly or for Short Call",
+        "sourceId": "scheduler_manual",
+        "section": "SECTION 23 S",
+        "quoteSnippet": "Lower Days-of-Availability Grouping (23 S. 1. a. Note two Exception)\nIn addition, a reserve pilot may preference a trip that is equal to their days-of-availability or to\ntheir days-of-availability minus one. This provision will be available any time that the number of\npilots with the same days-of-availability is equal to the number of open trips of that length, plus\none, including the pilot in question.\nFor example, ",
+        "ruleType": "scheduler_practice"
+      },
+      {
+        "label": "When Have You Been Contacted?",
+        "sourceId": "scheduler_manual",
+        "section": "SECTION 23 S",
+        "quoteSnippet": "When Have You Been Contacted?\nA pilot's contact and response obligations can be broken down into several categories. A pilot has not been\ncontacted concerning their schedule unless they have spoken personally with a Company representative,\nand/or has acknowledged a message via telephone, IVR, iCrew, ARCOS, or the Crew Auto Notification\nSystem (CNO).\nA reserve pilot:\n� on long call or short call must respond to an att",
+        "ruleType": "scheduler_practice"
+      },
+      {
+        "label": "Section 23",
+        "sourceId": "scheduler_manual",
+        "section": "SECTION 23 S",
+        "quoteSnippet": "o If there is an offer window for your batch, you will be able to adjust your preferences, if\ndesired\n� If you have selected auto-acknowledge on and off duty\no This will only be awarded if the trip reports at least 12 hours after the award\nIf you are ON duty, you will receive notification via email and call-out\nIf you are OFF duty, you will not receive an email notification or a call\no A notification call out will be",
+        "ruleType": "scheduler_practice"
+      }
+    ],
+    "debugPayload": {
+      "mode": "ai",
+      "parsedKeys": [
+        "detectedScenario",
+        "questionType",
+        "answerCompleteness",
+        "shortAnswer",
+        "confidence",
+        "needsClarification",
+        "clarifyingQuestion",
+        "clarifyingField",
+        "quickReplies",
+        "whyItApplies",
+        "contractSupport",
+        "extractedFacts",
+        "assumptions",
+        "scenarioBreakdown",
+        "payBreakdown",
+        "whatCouldChange",
+        "practicalBreakdown",
+        "followUpSuggestion"
+      ],
+      "missingRequiredFields": [],
+      "weakResponseGateFired": false,
+      "retrievedSnippetCount": 10,
+      "retrievedSections": [
+        "SECTION 23 S",
+        "SECTION 23 S",
+        "SECTION 23 S",
+        "SECTION 23 S",
+        "SECTION 23 S",
+        "SECTION 23 S",
+        "SECTION 23 S",
+        "SECTION 23 S",
+        "SECTION 23 S",
+        "SECTION 23 S"
+      ],
+      "knownInteractionRuleIds": [],
+      "routedGoverningSections": [],
+      "searchMode": "global",
+      "routingFallbackOccurred": false,
+      "governingSectionsSelected": [],
+      "governingSectionUsed": "scheduler_manual:SECTION 23 S",
+      "bottomLineMode": "generic",
+      "bottomLineReflectsGoverningRule": false,
+      "strongerRuleBasedAnswerAvailableButNotUsed": false,
+      "classificationLevelOnly": false,
+      "concreteRuleBasedAnswerAvailable": false,
+      "finalAnswerUsedConcreteRule": false,
+      "concreteInteractionRuleAvailable": false,
+      "finalAnswerUsedConcreteInteractionRule": false,
+      "answerStillGenericDespiteInteractionRule": false,
+      "missingGatingFacts": [],
+      "answerIsConditional": false,
+      "gatingQuestionUsed": "Have there been any recent formal updates or ALPA agreements explicitly changing OE notification methods or timing beyond the SRH guidance?",
+      "sectionExpansionUsed": false,
+      "crossReferencesFollowed": [],
+      "contextPacketSummary": {
+        "governingSections": [],
+        "exceptionsNotes": [],
+        "workedExamples": [],
+        "interactionRuleLinkedSections": [],
+        "compensationSupport": [],
+        "schedulerSupport": []
+      },
+      "governingSourcePriorityUsed": [
+        "PWA",
+        "Compensation Manual",
+        "Scheduler Manual",
+        "CrewTools Logic"
+      ],
+      "reasoningMode": "generic_retrieval_led",
+      "answerMode": "generic",
+      "retrievedSnippets": [
+        "SECTION 23 S: Note two: A reserve pilot awarded a GS rotation in which all duty periods of the\nrotation are scheduled to operate on on-call days may request that one X-day that\ncoincides with a day on which the pilot does not have a duty period within the GS\nrotation be moved to the first day of the GS rotation.\nc. A long call reserve pilot who is awarded a GS rotation with a report that is within 18\nhours of the first attempted c",
+        "SECTION 23 S: When Have You Been Contacted?\nA pilot's contact and response obligations can be broken down into several categories. A pilot has not been\ncontacted concerning their schedule unless they have spoken personally with a Company representative,\nand/or has acknowledged a message via telephone, IVR, iCrew, ARCOS, or the Crew Auto Notification\nSystem (CNO).\nA reserve pilot:\n� on long call or short call must respond to an att",
+        "SECTION 23 S: ARCOS (23 Z.)\nARCOS is the automated roster callout system that Delta uses for processing of same/next/second-\nday white slip (WS) and green slip (GS) awards, both in and out of base. The system allows the\nscheduler to contact multiple pilots from the Trip Coverage report at one time via an automated\ncaller, first to proffer each a number of available trips and then to award those pilots accepting\nsuch a proffer the ",
+        "SECTION 23 S: o If there is an offer window for your batch, you will be able to adjust your preferences, if\ndesired\n� If you have selected auto-acknowledge on and off duty\no This will only be awarded if the trip reports at least 12 hours after the award\nIf you are ON duty, you will receive notification via email and call-out\nIf you are OFF duty, you will not receive an email notification or a call\no A notification call out will be",
+        "SECTION 23 S: either while on duty, while not on duty, or both. However, this applies only for trips that are\nscheduled to report more than 12 hours from notification of the award. Like beyond-next-day\nPCS awards, you will be expected to maintain awareness of trip coverage if you select this option.\nSuppose you are awarded a rotation that is scheduled to report 12 or more hours in the future\nusing this option. ARCOS will not notif",
+        "SECTION 23 S: Lower Days-of-Availability Grouping (23 S. 1. a. Note two Exception)\nIn addition, a reserve pilot may preference a trip that is equal to their days-of-availability or to\ntheir days-of-availability minus one. This provision will be available any time that the number of\npilots with the same days-of-availability is equal to the number of open trips of that length, plus\none, including the pilot in question.\nFor example, ",
+        "SECTION 23 S: Green Slips and Green Slips with Conflict (23 Q. & 23 U.)\nGS awards are used to cover rotations when WS requests and available reserve pilots have been\nexhausted. GSWC requests have a lower priority under Section 23. N. and O. and are awarded after all\noptions for GS and IA (without conflict) have been exhausted.\nA regular pilot who has flown a GS rotation:\n� will receive double pay, no credit for the portion of thei",
+        "SECTION 23 S: � A rotation that conflicts with a GSWC rotation is removed with no recovery obligation.\n� A pilot who is awarded a GSWC will receive single pay and credit for the rotation removed and\nsingle pay, no credit, for the rotation flown. A number of pay examples are included in Section\n23 U.\n� A pilot who is awarded a GSWC will be eligible to be awarded/assigned an additional rotation(s)\nthat operates during the period of ",
+        "SECTION 23 S: Inverse Assignment and Inverse Assignment with Conflict (IA and IAWC) (23 R.)\nIA and IAWC are same-day or next-day assignments made by Crew Scheduling after other options have\nbeen exhausted. These rotations are assigned in inverse seniority order without regard for length of\nrotation among:\n� Reserve pilots for whom the rotation would fly into X-days\n� Reserve pilots for whom the rotation would begin on X-days\n� Reg",
+        "SECTION 23 S: This X-day move could be approved. A 30/168 violation already existed, and this move does not result\nin more than 13 days on call in a row.\nMoving X-Day(s) Following Conversion To FRMS Short Call\nSection 23 S. 5. c. Exception one of the PWA provides that a reserve pilot in a widebody category\nthat operates FRMS rotations may be assigned short call on the first on-call day following a block\nof days off, so long as the"
+      ],
+      "groundingSource": "retrieved_contract_snippets",
+      "usedRetrievedSupport": true,
+      "externalAllowed": false,
+      "externalUsed": false,
+      "externalSnippetCount": 0,
+      "externalLabels": [],
+      "hasPwaIndex": true,
+      "hasCompensationIndex": true,
+      "hasSchedulerIndex": true,
+      "retrievalSourcesUsed": [
+        "PWA",
+        "Compensation Manual",
+        "Scheduler Manual",
+        "Retrieved contract snippets"
+      ],
+      "sourcesUsed": [
+        "PWA",
+        "Compensation Manual",
+        "Scheduler Manual"
+      ],
+      "pwaSectionsUsed": [
+        "1. 2",
+        "Section 14 E",
+        "Section 14 E and Example Three",
+        "Section 4 F.7.a"
+      ],
+      "compensationChunksUsed": [
+        "Section 23 L",
+        "Section 4 F"
+      ],
+      "schedulerChunksUsed": [
+        "Section 23",
+        "Section 12"
+      ],
+      "structuredRowsUsed": [],
+      "missingSourceWarnings": [],
+      "aiSynthesisUsed": true,
+      "OPENAI_API_KEYPresent": true,
+      "modelClientCalled": true,
+      "modelClientSucceeded": true,
+      "aiSynthesisAttempted": true,
+      "aiSynthesisRejected": false,
+      "laneEnforced": true,
+      "expectedTool": "multi_source_scenario_packet",
+      "retrievalAttempted": true,
+      "laneExecutionResult": "success",
+      "documentShortcutUsed": false,
+      "fallbackUsed": false,
+      "fallthroughPrevented": true,
+      "retryAttempts": [],
+      "sourceAvailability": {
+        "hasPwaIndex": true,
+        "hasCompensationIndex": true,
+        "hasSchedulerIndex": true,
+        "compensationRowsAvailable": 432
+      },
+      "verifierRan": true,
+      "verifierPassed": true,
+      "verifierWarnings": [
+        "Strong claim language was downgraded because the attached support did not explicitly ground it."
+      ],
+      "verifierFailureReasons": [],
+      "verifierAdjustedAnswer": true,
+      "finalSafetyPipelineRan": true,
+      "truthGuardRan": true,
+      "definitionApplicationGuardRan": true,
+      "strongClaimsDetected": [
+        "If pilot has been out of sim less than 10 days, notification must be at least 30 hours before OE.",
+        "Pilot must have reasonable time to prepare, historically defined as 30 hours now."
+      ],
+      "strongClaimsSupported": [],
+      "strongClaimsDowngraded": [
+        "If pilot has been out of sim less than 10 days, notification must be at least 30 hours before OE.",
+        "Pilot must have reasonable time to prepare, historically defined as 30 hours now."
+      ],
+      "definitionSectionUsed": true,
+      "operationalSectionUsed": true,
+      "definitionOverrodeOperation": false,
+      "definitionBasedAnswer": true,
+      "applicationClaimDetected": true,
+      "applicationClaimSupported": true,
+      "applicationClaimDowngraded": false,
+      "answerDowngradedToCaution": true,
+      "downgradeReasons": [
+        "verifier_adjusted_answer",
+        "unsupported_strong_claim"
+      ],
+      "answerReferencedSections": [],
+      "supportInjectedFromAnswer": false,
+      "supportMissingForReferencedSection": false,
+      "xDayScenario": false,
+      "xDayAnchorFound": false,
+      "governingSectionIncludesXDay": false,
+      "shortCallDutyScenario": false,
+      "shortCallDutyAnchorFound": true,
+      "governingSectionIncludesDutyLegality": false,
+      "supportRerankerRan": true,
+      "supportQualityGateRan": true,
+      "supportCandidatesBefore": 18,
+      "supportCandidatesAfter": 4,
+      "supportTopScores": [
+        {
+          "section": "SECTION 23 S",
+          "score": 510
+        },
+        {
+          "section": "SECTION 23 S",
+          "score": 510
+        },
+        {
+          "section": "SECTION 23 S",
+          "score": 510
+        },
+        {
+          "section": "SECTION 23 S",
+          "score": 510
+        }
+      ],
+      "supportWeakMatchWarning": false,
+      "supportMatchedTerms": [
+        "notification"
+      ],
+      "supportMatchedSections": [
+        "SECTION 23 S"
+      ],
+      "supportMatchedAnswerTerms": [
+        "notification"
+      ],
+      "supportMatchedAnswerSections": [
+        "SECTION 23 S"
+      ],
+      "retrievalSilverSlipAnchorsFound": [],
+      "retrievalGreenSlipAnchorsFound": [
+        "Green Slip (inferred)"
+      ],
+      "retrievalComparisonMode": false,
+      "silverSlipPrimarySupportFound": false,
+      "greenSlipComparisonSupportFound": false,
+      "silverSlipSupportMissing": false,
+      "supportCardsFilteredOut": 1,
+      "supportDroppedReasons": [],
+      "supportPrimaryAnchorMissing": false,
+      "primarySupportForcedByExactAnchor": true,
+      "primarySupportAnchorUsed": "SECTION 23 S",
+      "visibleSupportAnchorPromoted": false,
+      "visibleSupportOriginalSection": [
+        "SECTION 23 S",
+        "SECTION 23 S",
+        "SECTION 23 S",
+        "SECTION 23 S"
+      ],
+      "visibleSupportPromotedSection": [
+        "SECTION 23 S",
+        "SECTION 23 S",
+        "SECTION 23 S",
+        "SECTION 23 S"
+      ],
+      "supportFinalRankingReason": "quality_gate_kept only cards matching answer anchors or strong question anchors",
+      "finalVisibleSupportSections": [
+        "SECTION 23 S",
+        "SECTION 23 S",
+        "SECTION 23 S"
+      ],
+      "finalVisibleSupportPromotionApplied": false,
+      "intentType": "contract_scenario",
+      "selectedLane": "contract_scenario_retrieval",
+      "requiredFieldsFound": [
+        "question"
+      ],
+      "missingFields": [],
+      "toolsUsed": [
+        "intent_router",
+        "question_scope_guard",
+        "section_aware_retrieval",
+        "openai_contract_synthesis"
+      ],
+      "scenarioProceedWithPartialContext": true,
+      "evidenceParsingAttempted": true,
+      "evidenceParsingSucceeded": false,
+      "evidenceParsingForcedFallback": false,
+      "evidenceParsingIgnoredReason": "Ignored question_scope fallback because the original question already contained enough scenario information to continue safely.",
+      "retrievalPassCounts": {
+        "primary": 8,
+        "expanded": 10,
+        "linked": 4
+      }
+    },
+    "userFeedback": "support_wrong",
+    "correctedAnswer": null,
+    "expectedSource": "training reference hancbook potentailly",
+    "draft": {
+      "id": "beta-feedback-1777179397757",
+      "question": "What is the current requirement for OE notification? Is it a phone call, or can it be done by CNO? It used to have to be a phone call.  I’m curious where ALPA landed on this. Used to be they could use CNO while you were still in the sim and after you were done it was phone contact. But we also had an agreement that they had to give you a ‘reasonable’ amount of time to prepare if you were already done in the sim, and that’s now been reduced to 30 hours. Unless you’ve been out of the sim for 10 days, then it goes to 48 hours, proffer down to 30. They cover notification in detail in the SRH for Section 23 stuff, they really need to clarify this in the TRH.",
+      "expectedLane": "contract_scenario_retrieval",
+      "expectedSupportAnchors": [
+        {
+          "source": "Scheduler Manual",
+          "section": "SECTION 23 S",
+          "terms": [
+            "what",
+            "current",
+            "requirement",
+            "notification",
+            "phone",
+            "call"
+          ],
+          "required": true,
+          "role": "primary"
+        }
+      ],
+      "mustInclude": [
+        "training reference hancbook potentailly What is the current requirement for OE notification? Is it a phone call",
+        "or can it be done by CNO? It used to have to be a phone call.  I’m curious where ALPA landed on this. Used to be they could use CNO while you were still in the sim and after you were done it was phone contact. But we also had an agreement that they had to give you a ‘reasonable’ amount of time to prepare if you were already done in the sim",
+        "and that’s now been reduced to 30 hours. Unless you’ve been out of the sim for 10 days",
+        "then it goes to 48 hours",
+        "proffer down to 30. They cover notification in detail in the SRH for Section 23 stuff",
+        "they really need to clarify this in the TRH."
+      ],
+      "mustNotInclude": [
+        "SECTION 23 S",
+        "SECTION 23 S",
+        "SECTION 23 S"
+      ],
+      "riskLevel": "medium",
+      "category": "beta_reported"
+    }
+  },
+  {
+    "submittedAt": "2026-04-26T04:56:45.526Z",
+    "question": "What is the current requirement for OE notification? Is it a phone call, or can it be done by CNO? It used to have to be a phone call.  I’m curious where ALPA landed on this. Used to be they could use CNO while you were still in the sim and after you were done it was phone contact. But we also had an agreement that they had to give you a ‘reasonable’ amount of time to prepare if you were already done in the sim, and that’s now been reduced to 30 hours. Unless you’ve been out of the sim for 10 days, then it goes to 48 hours, proffer down to 30. They cover notification in detail in the SRH for Section 23 stuff, they really need to clarify this in the TRH.",
+    "answer": {
+      "status": "needs_clarification",
+      "scenarioLabel": "OE notification timing and method",
+      "shortAnswer": "Currently, OE notification can be done via CNO; a phone call is not strictly required. Notification timing is generally 30 hours before the event unless you have been out of the sim for 10 days or more, then it extends to 48 hours, with a proffer back down to 30 hours.",
+      "plainEnglishExplanation": "The key issue is the timing and method of notification, with current practice allowing CNO and defined timing windows based on days out of sim.",
+      "confidence": "low",
+      "supportLevel": "mixed",
+      "assumptions": [
+        "No recent formal PWA section explicitly overrides SRH guidance on OE notification.",
+        "ALPA's current stance aligns with SRH and past agreements.",
+        "Notification timing rules apply as described in the question context.",
+        "Final safety pipeline downgraded this answer to caution."
+      ],
+      "evidenceSummary": [
+        "No scenario family matched with high confidence."
+      ],
+      "references": [
+        {
+          "label": "Preference Qualifiers If Needed to Fly or for Short Call",
+          "sourceId": "scheduler_manual",
+          "section": "SECTION 23 S",
+          "quoteSnippet": "Lower Days-of-Availability Grouping (23 S. 1. a. Note two Exception)\nIn addition, a reserve pilot may preference a trip that is equal to their days-of-availability or to\ntheir days-of-availability minus one. This provision will be available any time that the number of\npilots with the same days-of-availability is equal to the number of open trips of that length, plus\none, including the pilot in question.\nFor example, ",
+          "ruleType": "scheduler_practice"
+        },
+        {
+          "label": "When Have You Been Contacted?",
+          "sourceId": "scheduler_manual",
+          "section": "SECTION 23 S",
+          "quoteSnippet": "When Have You Been Contacted?\nA pilot's contact and response obligations can be broken down into several categories. A pilot has not been\ncontacted concerning their schedule unless they have spoken personally with a Company representative,\nand/or has acknowledged a message via telephone, IVR, iCrew, ARCOS, or the Crew Auto Notification\nSystem (CNO).\nA reserve pilot:\n� on long call or short call must respond to an att",
+          "ruleType": "scheduler_practice"
+        },
+        {
+          "label": "Section 23",
+          "sourceId": "scheduler_manual",
+          "section": "SECTION 23 S",
+          "quoteSnippet": "o If there is an offer window for your batch, you will be able to adjust your preferences, if\ndesired\n� If you have selected auto-acknowledge on and off duty\no This will only be awarded if the trip reports at least 12 hours after the award\nIf you are ON duty, you will receive notification via email and call-out\nIf you are OFF duty, you will not receive an email notification or a call\no A notification call out will be",
+          "ruleType": "scheduler_practice"
+        }
+      ],
+      "whatCouldChangeThisAnswer": [
+        "A formal ALPA agreement or PWA update explicitly requiring phone call notification only.",
+        "Changes in SRH or TRH clarifying or altering notification timing or method.",
+        "Company operational changes affecting notification technology or timing."
+      ],
+      "breakItDown": [],
+      "answerCompleteness": "provisional",
+      "scenarioBreakdown": [
+        "Pilot is scheduled for OE.",
+        "Notification is sent either by CNO or phone call depending on current ALPA agreement.",
+        "If pilot has been out of sim less than 10 days, notification must be at least 30 hours before OE.",
+        "If pilot has been out of sim 10 days or more, notification timing extends to 48 hours, then proffered down to 30 hours.",
+        "Pilot must have reasonable time to prepare, historically defined as 30 hours now."
+      ],
+      "payBreakdown": [
+        "Not applicable to pay; this is a notification timing and method question."
+      ],
+      "clarifyingQuestions": [
+        {
+          "id": "ai-clarification",
+          "prompt": "Have there been any recent formal updates or ALPA agreements explicitly changing OE notification methods or timing beyond the SRH guidance?",
+          "factField": "questionIntent",
+          "required": true,
+          "quickReplies": [
+            {
+              "id": "phoneCallOnly",
+              "label": "Notification must be by phone call only",
+              "factPatch": {
+                "status": "active",
+                "assignmentType": "OE",
+                "pickupType": "none",
+                "premiumType": "none",
+                "interactionRelationship": "none",
+                "contactWindow": "phoneOnly",
+                "processingCountsKnown": true,
+                "beforeReport": true,
+                "afterReport": false,
+                "eventTiming": "pre-event",
+                "rerouteOccurred": false,
+                "reassignmentOccurred": false,
+                "tripTouched": false,
+                "leaveType": "none",
+                "sickUsed": false,
+                "sameDayInteraction": false,
+                "questionIntent": "notificationMethod"
+              },
+              "replyMessage": "Assuming the old rule still applies, notification must be by phone call only."
+            },
+            {
+              "id": "CNOAllowed",
+              "label": "Notification can be by CNO",
+              "factPatch": {
+                "status": "active",
+                "assignmentType": "OE",
+                "pickupType": "none",
+                "premiumType": "none",
+                "interactionRelationship": "none",
+                "contactWindow": "CNOAllowed",
+                "processingCountsKnown": true,
+                "beforeReport": true,
+                "afterReport": false,
+                "eventTiming": "pre-event",
+                "rerouteOccurred": false,
+                "reassignmentOccurred": false,
+                "tripTouched": false,
+                "leaveType": "none",
+                "sickUsed": false,
+                "sameDayInteraction": false,
+                "questionIntent": "notificationMethod"
+              },
+              "replyMessage": "Assuming current practice, notification can be done via CNO."
+            },
+            {
+              "id": "notificationTiming30Hours",
+              "label": "Notification timing is 30 hours",
+              "factPatch": {
+                "status": "active",
+                "assignmentType": "OE",
+                "pickupType": "none",
+                "premiumType": "none",
+                "interactionRelationship": "none",
+                "contactWindow": "30Hours",
+                "processingCountsKnown": true,
+                "beforeReport": true,
+                "afterReport": false,
+                "eventTiming": "pre-event",
+                "rerouteOccurred": false,
+                "reassignmentOccurred": false,
+                "tripTouched": false,
+                "leaveType": "none",
+                "sickUsed": false,
+                "sameDayInteraction": false,
+                "questionIntent": "notificationTiming"
+              },
+              "replyMessage": "Notification timing is generally 30 hours before the event."
+            },
+            {
+              "id": "notificationTiming48HoursAfter10DaysOut",
+              "label": "Notification timing is 48 hours if out of sim 10+ days",
+              "factPatch": {
+                "status": "active",
+                "assignmentType": "OE",
+                "pickupType": "none",
+                "premiumType": "none",
+                "interactionRelationship": "none",
+                "contactWindow": "48HoursAfter10DaysOut",
+                "processingCountsKnown": true,
+                "beforeReport": true,
+                "afterReport": false,
+                "eventTiming": "pre-event",
+                "rerouteOccurred": false,
+                "reassignmentOccurred": false,
+                "tripTouched": false,
+                "leaveType": "none",
+                "sickUsed": false,
+                "sameDayInteraction": false,
+                "questionIntent": "notificationTiming"
+              },
+              "replyMessage": "If you have been out of the sim for 10 days or more, notification timing extends to 48 hours, then proffers down to 30 hours."
+            }
+          ]
+        }
+      ],
+      "caveats": [
+        "Truth guard downgraded unsupported strong claim(s)."
+      ]
+    },
+    "supportCards": [
+      {
+        "label": "Preference Qualifiers If Needed to Fly or for Short Call",
+        "sourceId": "scheduler_manual",
+        "section": "SECTION 23 S",
+        "quoteSnippet": "Lower Days-of-Availability Grouping (23 S. 1. a. Note two Exception)\nIn addition, a reserve pilot may preference a trip that is equal to their days-of-availability or to\ntheir days-of-availability minus one. This provision will be available any time that the number of\npilots with the same days-of-availability is equal to the number of open trips of that length, plus\none, including the pilot in question.\nFor example, ",
+        "ruleType": "scheduler_practice"
+      },
+      {
+        "label": "When Have You Been Contacted?",
+        "sourceId": "scheduler_manual",
+        "section": "SECTION 23 S",
+        "quoteSnippet": "When Have You Been Contacted?\nA pilot's contact and response obligations can be broken down into several categories. A pilot has not been\ncontacted concerning their schedule unless they have spoken personally with a Company representative,\nand/or has acknowledged a message via telephone, IVR, iCrew, ARCOS, or the Crew Auto Notification\nSystem (CNO).\nA reserve pilot:\n� on long call or short call must respond to an att",
+        "ruleType": "scheduler_practice"
+      },
+      {
+        "label": "Section 23",
+        "sourceId": "scheduler_manual",
+        "section": "SECTION 23 S",
+        "quoteSnippet": "o If there is an offer window for your batch, you will be able to adjust your preferences, if\ndesired\n� If you have selected auto-acknowledge on and off duty\no This will only be awarded if the trip reports at least 12 hours after the award\nIf you are ON duty, you will receive notification via email and call-out\nIf you are OFF duty, you will not receive an email notification or a call\no A notification call out will be",
+        "ruleType": "scheduler_practice"
+      }
+    ],
+    "debugPayload": {
+      "mode": "ai",
+      "parsedKeys": [
+        "detectedScenario",
+        "questionType",
+        "answerCompleteness",
+        "shortAnswer",
+        "confidence",
+        "needsClarification",
+        "clarifyingQuestion",
+        "clarifyingField",
+        "quickReplies",
+        "whyItApplies",
+        "contractSupport",
+        "extractedFacts",
+        "assumptions",
+        "scenarioBreakdown",
+        "payBreakdown",
+        "whatCouldChange",
+        "practicalBreakdown",
+        "followUpSuggestion"
+      ],
+      "missingRequiredFields": [],
+      "weakResponseGateFired": false,
+      "retrievedSnippetCount": 10,
+      "retrievedSections": [
+        "SECTION 23 S",
+        "SECTION 23 S",
+        "SECTION 23 S",
+        "SECTION 23 S",
+        "SECTION 23 S",
+        "SECTION 23 S",
+        "SECTION 23 S",
+        "SECTION 23 S",
+        "SECTION 23 S",
+        "SECTION 23 S"
+      ],
+      "knownInteractionRuleIds": [],
+      "routedGoverningSections": [],
+      "searchMode": "global",
+      "routingFallbackOccurred": false,
+      "governingSectionsSelected": [],
+      "governingSectionUsed": "scheduler_manual:SECTION 23 S",
+      "bottomLineMode": "generic",
+      "bottomLineReflectsGoverningRule": false,
+      "strongerRuleBasedAnswerAvailableButNotUsed": false,
+      "classificationLevelOnly": false,
+      "concreteRuleBasedAnswerAvailable": false,
+      "finalAnswerUsedConcreteRule": false,
+      "concreteInteractionRuleAvailable": false,
+      "finalAnswerUsedConcreteInteractionRule": false,
+      "answerStillGenericDespiteInteractionRule": false,
+      "missingGatingFacts": [],
+      "answerIsConditional": false,
+      "gatingQuestionUsed": "Have there been any recent formal updates or ALPA agreements explicitly changing OE notification methods or timing beyond the SRH guidance?",
+      "sectionExpansionUsed": false,
+      "crossReferencesFollowed": [],
+      "contextPacketSummary": {
+        "governingSections": [],
+        "exceptionsNotes": [],
+        "workedExamples": [],
+        "interactionRuleLinkedSections": [],
+        "compensationSupport": [],
+        "schedulerSupport": []
+      },
+      "governingSourcePriorityUsed": [
+        "PWA",
+        "Compensation Manual",
+        "Scheduler Manual",
+        "CrewTools Logic"
+      ],
+      "reasoningMode": "generic_retrieval_led",
+      "answerMode": "generic",
+      "retrievedSnippets": [
+        "SECTION 23 S: Note two: A reserve pilot awarded a GS rotation in which all duty periods of the\nrotation are scheduled to operate on on-call days may request that one X-day that\ncoincides with a day on which the pilot does not have a duty period within the GS\nrotation be moved to the first day of the GS rotation.\nc. A long call reserve pilot who is awarded a GS rotation with a report that is within 18\nhours of the first attempted c",
+        "SECTION 23 S: When Have You Been Contacted?\nA pilot's contact and response obligations can be broken down into several categories. A pilot has not been\ncontacted concerning their schedule unless they have spoken personally with a Company representative,\nand/or has acknowledged a message via telephone, IVR, iCrew, ARCOS, or the Crew Auto Notification\nSystem (CNO).\nA reserve pilot:\n� on long call or short call must respond to an att",
+        "SECTION 23 S: ARCOS (23 Z.)\nARCOS is the automated roster callout system that Delta uses for processing of same/next/second-\nday white slip (WS) and green slip (GS) awards, both in and out of base. The system allows the\nscheduler to contact multiple pilots from the Trip Coverage report at one time via an automated\ncaller, first to proffer each a number of available trips and then to award those pilots accepting\nsuch a proffer the ",
+        "SECTION 23 S: o If there is an offer window for your batch, you will be able to adjust your preferences, if\ndesired\n� If you have selected auto-acknowledge on and off duty\no This will only be awarded if the trip reports at least 12 hours after the award\nIf you are ON duty, you will receive notification via email and call-out\nIf you are OFF duty, you will not receive an email notification or a call\no A notification call out will be",
+        "SECTION 23 S: either while on duty, while not on duty, or both. However, this applies only for trips that are\nscheduled to report more than 12 hours from notification of the award. Like beyond-next-day\nPCS awards, you will be expected to maintain awareness of trip coverage if you select this option.\nSuppose you are awarded a rotation that is scheduled to report 12 or more hours in the future\nusing this option. ARCOS will not notif",
+        "SECTION 23 S: Lower Days-of-Availability Grouping (23 S. 1. a. Note two Exception)\nIn addition, a reserve pilot may preference a trip that is equal to their days-of-availability or to\ntheir days-of-availability minus one. This provision will be available any time that the number of\npilots with the same days-of-availability is equal to the number of open trips of that length, plus\none, including the pilot in question.\nFor example, ",
+        "SECTION 23 S: Green Slips and Green Slips with Conflict (23 Q. & 23 U.)\nGS awards are used to cover rotations when WS requests and available reserve pilots have been\nexhausted. GSWC requests have a lower priority under Section 23. N. and O. and are awarded after all\noptions for GS and IA (without conflict) have been exhausted.\nA regular pilot who has flown a GS rotation:\n� will receive double pay, no credit for the portion of thei",
+        "SECTION 23 S: � A rotation that conflicts with a GSWC rotation is removed with no recovery obligation.\n� A pilot who is awarded a GSWC will receive single pay and credit for the rotation removed and\nsingle pay, no credit, for the rotation flown. A number of pay examples are included in Section\n23 U.\n� A pilot who is awarded a GSWC will be eligible to be awarded/assigned an additional rotation(s)\nthat operates during the period of ",
+        "SECTION 23 S: Inverse Assignment and Inverse Assignment with Conflict (IA and IAWC) (23 R.)\nIA and IAWC are same-day or next-day assignments made by Crew Scheduling after other options have\nbeen exhausted. These rotations are assigned in inverse seniority order without regard for length of\nrotation among:\n� Reserve pilots for whom the rotation would fly into X-days\n� Reserve pilots for whom the rotation would begin on X-days\n� Reg",
+        "SECTION 23 S: This X-day move could be approved. A 30/168 violation already existed, and this move does not result\nin more than 13 days on call in a row.\nMoving X-Day(s) Following Conversion To FRMS Short Call\nSection 23 S. 5. c. Exception one of the PWA provides that a reserve pilot in a widebody category\nthat operates FRMS rotations may be assigned short call on the first on-call day following a block\nof days off, so long as the"
+      ],
+      "groundingSource": "retrieved_contract_snippets",
+      "usedRetrievedSupport": true,
+      "externalAllowed": false,
+      "externalUsed": false,
+      "externalSnippetCount": 0,
+      "externalLabels": [],
+      "hasPwaIndex": true,
+      "hasCompensationIndex": true,
+      "hasSchedulerIndex": true,
+      "retrievalSourcesUsed": [
+        "PWA",
+        "Compensation Manual",
+        "Scheduler Manual",
+        "Retrieved contract snippets"
+      ],
+      "sourcesUsed": [
+        "PWA",
+        "Compensation Manual",
+        "Scheduler Manual"
+      ],
+      "pwaSectionsUsed": [
+        "1. 2",
+        "Section 14 E",
+        "Section 14 E and Example Three",
+        "Section 4 F.7.a"
+      ],
+      "compensationChunksUsed": [
+        "Section 23 L",
+        "Section 4 F"
+      ],
+      "schedulerChunksUsed": [
+        "Section 23",
+        "Section 12"
+      ],
+      "structuredRowsUsed": [],
+      "missingSourceWarnings": [],
+      "aiSynthesisUsed": true,
+      "OPENAI_API_KEYPresent": true,
+      "modelClientCalled": true,
+      "modelClientSucceeded": true,
+      "aiSynthesisAttempted": true,
+      "aiSynthesisRejected": false,
+      "laneEnforced": true,
+      "expectedTool": "multi_source_scenario_packet",
+      "retrievalAttempted": true,
+      "laneExecutionResult": "success",
+      "documentShortcutUsed": false,
+      "fallbackUsed": false,
+      "fallthroughPrevented": true,
+      "retryAttempts": [],
+      "sourceAvailability": {
+        "hasPwaIndex": true,
+        "hasCompensationIndex": true,
+        "hasSchedulerIndex": true,
+        "compensationRowsAvailable": 432
+      },
+      "verifierRan": true,
+      "verifierPassed": true,
+      "verifierWarnings": [
+        "Strong claim language was downgraded because the attached support did not explicitly ground it."
+      ],
+      "verifierFailureReasons": [],
+      "verifierAdjustedAnswer": true,
+      "finalSafetyPipelineRan": true,
+      "truthGuardRan": true,
+      "definitionApplicationGuardRan": true,
+      "strongClaimsDetected": [
+        "If pilot has been out of sim less than 10 days, notification must be at least 30 hours before OE.",
+        "Pilot must have reasonable time to prepare, historically defined as 30 hours now."
+      ],
+      "strongClaimsSupported": [],
+      "strongClaimsDowngraded": [
+        "If pilot has been out of sim less than 10 days, notification must be at least 30 hours before OE.",
+        "Pilot must have reasonable time to prepare, historically defined as 30 hours now."
+      ],
+      "definitionSectionUsed": true,
+      "operationalSectionUsed": true,
+      "definitionOverrodeOperation": false,
+      "definitionBasedAnswer": true,
+      "applicationClaimDetected": true,
+      "applicationClaimSupported": true,
+      "applicationClaimDowngraded": false,
+      "answerDowngradedToCaution": true,
+      "downgradeReasons": [
+        "verifier_adjusted_answer",
+        "unsupported_strong_claim"
+      ],
+      "answerReferencedSections": [],
+      "supportInjectedFromAnswer": false,
+      "supportMissingForReferencedSection": false,
+      "xDayScenario": false,
+      "xDayAnchorFound": false,
+      "governingSectionIncludesXDay": false,
+      "shortCallDutyScenario": false,
+      "shortCallDutyAnchorFound": true,
+      "governingSectionIncludesDutyLegality": false,
+      "supportRerankerRan": true,
+      "supportQualityGateRan": true,
+      "supportCandidatesBefore": 18,
+      "supportCandidatesAfter": 4,
+      "supportTopScores": [
+        {
+          "section": "SECTION 23 S",
+          "score": 510
+        },
+        {
+          "section": "SECTION 23 S",
+          "score": 510
+        },
+        {
+          "section": "SECTION 23 S",
+          "score": 510
+        },
+        {
+          "section": "SECTION 23 S",
+          "score": 510
+        }
+      ],
+      "supportWeakMatchWarning": false,
+      "supportMatchedTerms": [
+        "notification"
+      ],
+      "supportMatchedSections": [
+        "SECTION 23 S"
+      ],
+      "supportMatchedAnswerTerms": [
+        "notification"
+      ],
+      "supportMatchedAnswerSections": [
+        "SECTION 23 S"
+      ],
+      "retrievalSilverSlipAnchorsFound": [],
+      "retrievalGreenSlipAnchorsFound": [
+        "Green Slip (inferred)"
+      ],
+      "retrievalComparisonMode": false,
+      "silverSlipPrimarySupportFound": false,
+      "greenSlipComparisonSupportFound": false,
+      "silverSlipSupportMissing": false,
+      "supportCardsFilteredOut": 1,
+      "supportDroppedReasons": [],
+      "supportPrimaryAnchorMissing": false,
+      "primarySupportForcedByExactAnchor": true,
+      "primarySupportAnchorUsed": "SECTION 23 S",
+      "visibleSupportAnchorPromoted": false,
+      "visibleSupportOriginalSection": [
+        "SECTION 23 S",
+        "SECTION 23 S",
+        "SECTION 23 S",
+        "SECTION 23 S"
+      ],
+      "visibleSupportPromotedSection": [
+        "SECTION 23 S",
+        "SECTION 23 S",
+        "SECTION 23 S",
+        "SECTION 23 S"
+      ],
+      "supportFinalRankingReason": "quality_gate_kept only cards matching answer anchors or strong question anchors",
+      "finalVisibleSupportSections": [
+        "SECTION 23 S",
+        "SECTION 23 S",
+        "SECTION 23 S"
+      ],
+      "finalVisibleSupportPromotionApplied": false,
+      "intentType": "contract_scenario",
+      "selectedLane": "contract_scenario_retrieval",
+      "requiredFieldsFound": [
+        "question"
+      ],
+      "missingFields": [],
+      "toolsUsed": [
+        "intent_router",
+        "question_scope_guard",
+        "section_aware_retrieval",
+        "openai_contract_synthesis"
+      ],
+      "scenarioProceedWithPartialContext": true,
+      "evidenceParsingAttempted": true,
+      "evidenceParsingSucceeded": false,
+      "evidenceParsingForcedFallback": false,
+      "evidenceParsingIgnoredReason": "Ignored question_scope fallback because the original question already contained enough scenario information to continue safely.",
+      "retrievalPassCounts": {
+        "primary": 8,
+        "expanded": 10,
+        "linked": 4
+      }
+    },
+    "userFeedback": "support_wrong",
+    "correctedAnswer": null,
+    "expectedSource": null,
+    "draft": {
+      "id": "beta-feedback-1777179405524",
+      "question": "What is the current requirement for OE notification? Is it a phone call, or can it be done by CNO? It used to have to be a phone call.  I’m curious where ALPA landed on this. Used to be they could use CNO while you were still in the sim and after you were done it was phone contact. But we also had an agreement that they had to give you a ‘reasonable’ amount of time to prepare if you were already done in the sim, and that’s now been reduced to 30 hours. Unless you’ve been out of the sim for 10 days, then it goes to 48 hours, proffer down to 30. They cover notification in detail in the SRH for Section 23 stuff, they really need to clarify this in the TRH.",
+      "expectedLane": "contract_scenario_retrieval",
+      "expectedSupportAnchors": [
+        {
+          "source": "Scheduler Manual",
+          "section": "SECTION 23 S",
+          "terms": [
+            "what",
+            "current",
+            "requirement",
+            "notification",
+            "phone",
+            "call"
+          ],
+          "required": true,
+          "role": "primary"
+        }
+      ],
+      "mustInclude": [
+        "What is the current requirement for OE notification? Is it a phone call",
+        "or can it be done by CNO? It used to have to be a phone call.  I’m curious where ALPA landed on this. Used to be they could use CNO while you were still in the sim and after you were done it was phone contact. But we also had an agreement that they had to give you a ‘reasonable’ amount of time to prepare if you were already done in the sim",
+        "and that’s now been reduced to 30 hours. Unless you’ve been out of the sim for 10 days",
+        "then it goes to 48 hours",
+        "proffer down to 30. They cover notification in detail in the SRH for Section 23 stuff",
+        "they really need to clarify this in the TRH."
+      ],
+      "mustNotInclude": [
+        "SECTION 23 S",
+        "SECTION 23 S",
+        "SECTION 23 S"
+      ],
+      "riskLevel": "medium",
+      "category": "beta_reported"
+    }
+  }
+]

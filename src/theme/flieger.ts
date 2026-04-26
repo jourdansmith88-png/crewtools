@@ -4,6 +4,7 @@ export type FliegerPalette = {
   background: string;
   surface: string;
   surfaceRaised: string;
+  surfaceRecessed: string;
   inputBackground: string;
   border: string;
   borderStrong: string;
@@ -27,11 +28,12 @@ export const fliegerDarkPalette: FliegerPalette = {
   background: "#242A30",
   surface: "#2B3239",
   surfaceRaised: "#343C44",
-  inputBackground: "#303840",
+  surfaceRecessed: "#3C4650",
+  inputBackground: "#3C4650",
   border: "#46515C",
   borderStrong: "#5B6670",
   textPrimary: "#F2E9DC",
-  textSecondary: "#D7DEE4",
+  textSecondary: "#F2E9DC",
   textMuted: "#C3CBD2",
   label: "#66D9F2",
   green: "#00FF66",
@@ -39,7 +41,7 @@ export const fliegerDarkPalette: FliegerPalette = {
   red: "#FF3030",
   redBorder: "#A92B2B",
   cream: "#F2E9DC",
-  badgeNeutral: "#20262C",
+  badgeNeutral: "#343C44",
   badgeNeutralBorder: "#5B6670",
   accent: "#66D9F2",
   accentSoft: "rgba(102, 217, 242, 0.14)",
@@ -50,11 +52,12 @@ export const fliegerLightPalette: FliegerPalette = {
   background: "#B8C0C8",
   surface: "#C6CDD4",
   surfaceRaised: "#D2D8DE",
-  inputBackground: "#D8DDE2",
+  surfaceRecessed: "#E1E6EA",
+  inputBackground: "#E1E6EA",
   border: "#7E8993",
   borderStrong: "#5F6B76",
   textPrimary: "#111820",
-  textSecondary: "#243744",
+  textSecondary: "#111820",
   textMuted: "#344552",
   label: "#007FA3",
   green: "#00FF66",
@@ -62,7 +65,7 @@ export const fliegerLightPalette: FliegerPalette = {
   red: "#FF3030",
   redBorder: "#A92B2B",
   cream: "#F2E9DC",
-  badgeNeutral: "#AEB7C0",
+  badgeNeutral: "#D2D8DE",
   badgeNeutralBorder: "#5F6B76",
   accent: "#007FA3",
   accentSoft: "rgba(0, 127, 163, 0.12)",

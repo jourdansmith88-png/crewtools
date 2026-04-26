@@ -27,6 +27,8 @@ export function DecisionRow({
   onPress,
 }: DecisionRowProps) {
   const palette = getFliegerPalette();
+  const isDark = palette.textPrimary === "#F2E9DC";
+  const rowSurface = isDark ? "#303840" : "#D2D8DE";
 
   const tone = variant === "canHold" || variant === "current" ? "green" : variant === "notHoldable" ? "red" : "neutral";
   const statusColor =
@@ -47,6 +49,8 @@ export function DecisionRow({
       : variant === "notHoldable"
         ? "rgba(255,48,48,0.25)"
         : "rgba(17,24,32,0.08)";
+  const signalGlowOpacity =
+    variant === "close" ? (isDark ? 0.14 : 0.08) : isDark ? 0.28 : 0.18;
   const badgeShadowColor =
     variant === "canHold" || variant === "current"
       ? palette.green
@@ -60,18 +64,44 @@ export function DecisionRow({
       tone={tone}
       style={{
         gap: 12,
-        backgroundColor: palette.surfaceRaised,
+        backgroundColor: rowSurface,
         borderColor: signalBorderColor,
         borderWidth: 2.8,
         shadowColor: signalGlow,
-        shadowOpacity: variant === "close" ? 0.1 : 0.22,
-        shadowRadius: 6,
-        shadowOffset: { width: 0, height: 0 },
-        elevation: variant === "close" ? 2 : 4,
+        shadowOpacity: signalGlowOpacity,
+        shadowRadius: isDark ? 6 : 4,
+        shadowOffset: { width: 0, height: isDark ? 3 : 2 },
+        elevation: variant === "close" ? 2 : 5,
         position: "relative",
         overflow: "visible",
       }}
     >
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          top: 1.5,
+          left: 1.5,
+          right: 1.5,
+          height: 1,
+          borderTopLeftRadius: 12,
+          borderTopRightRadius: 12,
+          backgroundColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.6)",
+        }}
+      />
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          left: 1.5,
+          right: 1.5,
+          bottom: 1.5,
+          height: 1,
+          borderBottomLeftRadius: 12,
+          borderBottomRightRadius: 12,
+          backgroundColor: isDark ? "rgba(0,0,0,0.5)" : "rgba(0,0,0,0.08)",
+        }}
+      />
       <View
         pointerEvents="none"
         style={{
@@ -120,22 +150,27 @@ export function DecisionRow({
             minWidth: 94,
             paddingHorizontal: 10,
             paddingVertical: 8,
-            backgroundColor: tone === "neutral" ? palette.badgeNeutral : palette.surfaceRaised,
+            backgroundColor:
+              tone === "green"
+                ? (isDark ? "rgba(0,255,102,0.12)" : "rgba(0,255,102,0.18)")
+                : tone === "red"
+                  ? (isDark ? "rgba(255,48,48,0.12)" : "rgba(255,48,48,0.16)")
+                  : palette.surfaceRaised,
             borderColor: signalBorderColor,
             borderWidth: 2.2,
             shadowColor: badgeShadowColor,
-            shadowOpacity: 0.18,
-            shadowRadius: 4,
-            shadowOffset: { width: 0, height: 0 },
-            elevation: 2,
+            shadowOpacity: tone === "neutral" ? 0.12 : isDark ? 0.24 : 0.16,
+            shadowRadius: isDark ? 4 : 3,
+            shadowOffset: { width: 0, height: 2 },
+            elevation: 3,
           }}
         >
           <View style={{ alignItems: "center", justifyContent: "center", gap: 2 }}>
             <Text
               style={{
                 color: palette.textPrimary,
-                fontSize: 20,
-                lineHeight: 21,
+                fontSize: 19,
+                lineHeight: 20,
                 fontWeight: "900",
                 fontFamily: fliegerTypography.familyValue,
                 fontVariant: ["tabular-nums"],
@@ -169,7 +204,7 @@ export function DecisionRow({
           borderColor: palette.borderStrong,
           borderRadius: 12,
           overflow: "hidden",
-          backgroundColor: palette.surfaceRaised,
+          backgroundColor: palette.surface,
         }}
       >
         {statPairs.map((pair, index) => (
@@ -219,8 +254,8 @@ export function DecisionRow({
       {footer ? (
         <Text
           style={{
-            fontSize: 13,
-            lineHeight: 18,
+            fontSize: 14,
+            lineHeight: 19,
             color: palette.textMuted,
             fontFamily: fliegerTypography.familyBody,
           }}

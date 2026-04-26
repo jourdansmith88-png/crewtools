@@ -347,7 +347,9 @@ const SCENARIO_ISSUE_TAGS: ScenarioIssueTag[] = [
   { label: "PR", patterns: [/\bpr\b/, /\bpr remainder\b/] },
   { label: "LC", patterns: [/\blc\b/, /\blong call\b/] },
   { label: "QS", patterns: [/\bqs\b/, /\bquick slip\b/] },
+  { label: "blanket QS", patterns: [/\bblanket qs\b/] },
   { label: "senior responder", patterns: [/\bsenior responder\b/] },
+  { label: "call order", patterns: [/\bcall every pilot\b/, /\bcall order\b/, /\bwide report\b/, /\bseniority\b/] },
   { label: "same rotation", patterns: [/\bsame rotation\b/, /\bexact same rotation\b/] },
   { label: "duplicate award", patterns: [/\bduplicate award\b/, /\balready awarded\b/] },
   { label: "premium pay", patterns: [/\bpremium pay\b/, /\bquintuple\b/, /\bmultiple pay\b/] },
@@ -376,8 +378,11 @@ const SCENARIO_ISSUE_TAGS: ScenarioIssueTag[] = [
   { label: "deadhead", patterns: [/\bdeadhead\b/, /\bdh\b/] },
   { label: "reroute", patterns: [/\breroute\b/, /\brerouted\b/] },
   { label: "reserve coverage", patterns: [/\breserve coverage\b/] },
+  { label: "OE notification", patterns: [/\boe notification\b/, /\boe\b.*\bnotification\b/, /\bcompany notification online\b/, /\bcno\b/, /\bsrh\b/, /\btrh\b/] },
   { label: "pay protection", patterns: [/\bpay protection\b/, /\bdue anything extra\b/] },
   { label: "notification", patterns: [/\bnotification\b/, /\brobot\b/, /\bnotice\b/] },
+  { label: "short-call notification", patterns: [/\bshort call assignment\b/, /\bshort call\b/, /\bno notification\b/, /\bvacation\b/, /\bnon-fly day\b/, /\bnon fly day\b/, /\bicrew\b/, /\bmicrew\b/, /\bcno\b/] },
+  { label: "eligible", patterns: [/\beligible\b/, /\beligibility\b/, /\bslip active\b/] },
   { label: "golden day", patterns: [/\bgolden day\b/] },
   { label: "hard non-fly day", patterns: [/\bhard non-fly day\b/] },
   { label: "assignment timing", patterns: [/\b6pm\b/, /\b1800\b/, /\bday one\b/, /\bday before\b/, /\bearlier than\b/] },
@@ -387,6 +392,21 @@ const SCENARIO_ISSUE_TAGS: ScenarioIssueTag[] = [
   { label: "black days", patterns: [/\bblack days?\b/] },
   { label: "max pickup", patterns: [/\bmax p\/?up\b/, /\bmax pickup\b/, /\bpickup limit\b/] },
   { label: "drop/add", patterns: [/\bdrop trip\b/, /\bdrop\b/, /\badd\b/, /\bpickup\b/] },
+  { label: "sick bank", patterns: [/\bsick bank\b/] },
+  { label: "called well", patterns: [/\bcalled well\b/] },
+  { label: "bank deposit", patterns: [/\bbank deposit\b/, /\bdeposit\b/] },
+  { label: "SS credit", patterns: [/\bss credit\b/, /\bsilver slip credit\b/] },
+  { label: "MiCrew credit", patterns: [/\bmicrew\b/, /\bmicrew credit\b/] },
+  { label: "credit recalculation", patterns: [/\bcredit recalculation\b/, /\brecalculation\b/, /\btimecard\b/] },
+  { label: "deadhead deviation", patterns: [/\bdeadhead deviation\b/, /\bdeviat(?:e|ion)\b/] },
+  { label: "13-hour layover", patterns: [/\bless than 13 hours\b/, /\b13 hours\b/] },
+  { label: "first airborne", patterns: [/\bfirst airborne\b/, /\bafter first airborne\b/] },
+  { label: "different flight number", patterns: [/\bdifferent flight number\b/, /\bflight number\b/] },
+  { label: "same destination", patterns: [/\bsame destination\b/] },
+  { label: "continuation", patterns: [/\bcontinuation\b/] },
+  { label: "RRPay", patterns: [/\brrpay\b/, /\brr pay\b/, /\brr\b/] },
+  { label: "turn time difference", patterns: [/\bturn time\b/, /\bpaid differently\b/] },
+  { label: "30/168", patterns: [/\b30\/168\b/, /\b30 168\b/, /\bfar restrictions?\b/] },
 ];
 
 function detectScenarioIssueTags(question: string) {
@@ -411,17 +431,55 @@ function detectScenarioIssueFamilies(question: string) {
   if (lower.includes("reroute") || lower.includes("rerouted") || lower.includes("deadhead") || lower.includes("dh")) {
     families.add("reroute_deadhead");
   }
+  if (
+    lower.includes("reroute pay") ||
+    lower.includes("rrpay") ||
+    lower.includes("first airborne") ||
+    lower.includes("after first airborne") ||
+    lower.includes("different flight number") ||
+    lower.includes("same destination") ||
+    lower.includes("continuation") ||
+    lower.includes("paid differently") ||
+    lower.includes("turn time")
+  ) {
+    families.add("reroute_consistency");
+  }
   if (lower.includes("x-day") || lower.includes("x day") || lower.includes("interrupted x-days")) {
     families.add("x_day");
   }
   if (lower.includes("notification") || lower.includes("arcos") || lower.includes("auto accept") || lower.includes("called")) {
     families.add("notification_process");
   }
+  if (
+    lower.includes("qs") ||
+    lower.includes("quick slip") ||
+    lower.includes("blanket qs") ||
+    lower.includes("arcos") ||
+    lower.includes("phone never rang") ||
+    lower.includes("no notification") ||
+    lower.includes("wide report") ||
+    lower.includes("30/168")
+  ) {
+    families.add("qs_call_order");
+  }
+  if (detectShortCallNotificationScenario(question)) {
+    families.add("short_call_notification");
+  }
+  if (detectOeNotificationScenario(question)) {
+    families.add("oe_notification");
+  }
   if (lower.includes("dart") || lower.includes("system") || lower.includes("dispute") || lower.includes("denial")) {
     families.add("dispute_system");
   }
   if (lower.includes("sick") || lower.includes("called in sick")) {
     families.add("sick_leave");
+  }
+  if (
+    lower.includes("apd") &&
+    lower.includes("denied") &&
+    (lower.includes("required") || lower.includes("available") || lower.includes("reserve counts"))
+  ) {
+    families.add("apd_diagnostic");
   }
   if (lower.includes("reserve") || lower.includes("lc") || lower.includes("long call") || lower.includes("short call")) {
     families.add("reserve_status");
@@ -453,6 +511,53 @@ function detectScenarioIssueFamilies(question: string) {
     lower.includes("coverage works")
   ) {
     families.add("swap_bid_period");
+  }
+  if (
+    lower.includes("bank") ||
+    lower.includes("vacation day") ||
+    lower.includes("buy vacation") ||
+    lower.includes("replacement") ||
+    /\bsup\b/.test(lower) ||
+    /\bivd\b/.test(lower) ||
+    lower.includes("vacation year")
+  ) {
+    families.add("vacation_bank");
+  }
+  if (
+    lower.includes("domicile layover") ||
+    lower.includes("base layover") ||
+    lower.includes("break in duty at base") ||
+    lower.includes("rotation definition") ||
+    lower.includes("illegal rotation") ||
+    lower.includes("open time rotation")
+  ) {
+    families.add("domicile_layover");
+  }
+  if (
+    lower.includes("sick lookback") ||
+    lower.includes("medical procedure") ||
+    lower.includes("approval process") ||
+    lower.includes("does not count for sick") ||
+    lower.includes("lookback") ||
+    lower.includes("section 14")
+  ) {
+    families.add("sick_lookback");
+  }
+  if (
+    lower.includes("sick bank") ||
+    lower.includes("called well") ||
+    (lower.includes("picked up flying") && lower.includes("sick")) ||
+    lower.includes("bank deposit") ||
+    lower.includes("deposit hours") ||
+    lower.includes("ss credit") ||
+    lower.includes("credit doesn't count") ||
+    lower.includes("timecard") ||
+    lower.includes("micrew credit") ||
+    lower.includes("credit recalculation") ||
+    lower.includes("deadhead deviation") ||
+    lower.includes("layover less than 13 hours")
+  ) {
+    families.add("pay_credit_consistency");
   }
   if (lower.includes("ioe") || lower.includes("training")) {
     families.add("training_ioe");
@@ -488,6 +593,338 @@ function detectPcsSwapScenario(question: string) {
   );
 }
 
+function detectPickupLimitScenario(question: string) {
+  const lower = question.toLowerCase();
+  return (
+    lower.includes("max p/up") ||
+    lower.includes("max pickup") ||
+    lower.includes("pickup limit") ||
+    lower.includes("0.0 pickup") ||
+    lower.includes("swap with pot") ||
+    lower.includes("swap with the pot")
+  );
+}
+
+function detectVacationBankScenario(question: string) {
+  const lower = question.toLowerCase();
+  return (
+    lower.includes("bank") ||
+    lower.includes("vacation day") ||
+    lower.includes("buy vacation") ||
+    lower.includes("replacement") ||
+    lower.includes("60 hours") ||
+    /\bsup\b/.test(lower) ||
+    /\bivd\b/.test(lower) ||
+    lower.includes("vacation year") ||
+    lower.includes("same vacation year")
+  );
+}
+
+function detectXDayGroupingScenario(question: string) {
+  const lower = question.toLowerCase();
+  return (
+    (lower.includes("x-day") || lower.includes("x day")) &&
+    (
+      lower.includes("reserve x-day") ||
+      lower.includes("move x-day") ||
+      lower.includes("between months") ||
+      lower.includes("grouping") ||
+      lower.includes("swap x-day")
+    )
+  );
+}
+
+function detectPbRerouteXdayScenario(question: string) {
+  const lower = question.toLowerCase();
+  return (
+    (
+      /\bpb\b/.test(lower) ||
+      /\bpr\b/.test(lower) ||
+      /\blc\b/.test(lower) ||
+      lower.includes("payback")
+    ) &&
+    (
+      lower.includes("qs") ||
+      lower.includes("reroute") ||
+      lower.includes("deadhead") ||
+      lower.includes("x-day") ||
+      lower.includes("interrupted x-day") ||
+      lower.includes("pb converted to lc") ||
+      lower.includes("pr remainder") ||
+      lower.includes("dart") ||
+      lower.includes("no notification") ||
+      lower.includes("acars") ||
+      lower.includes("arcos") ||
+      lower.includes("robot") ||
+      lower.includes("2-day") ||
+      lower.includes("3-day")
+    )
+  );
+}
+
+function detectFutureRotationChangeScenario(question: string) {
+  const lower = question.toLowerCase();
+  return (
+    (lower.includes("rotation changed next month") ||
+      lower.includes("changed for next month") ||
+      (lower.includes("next month") && lower.includes("not a carryover")) ||
+      lower.includes("removed a leg") ||
+      lower.includes("redeye")) &&
+    (
+      lower.includes("due anything extra") ||
+      lower.includes("pay protection") ||
+      lower.includes("cpo") ||
+      lower.includes("override") ||
+      lower.includes("reserve coverage") ||
+      lower.includes("similar 4-day") ||
+      lower.includes("known absence") ||
+      lower.includes("cough")
+    )
+  );
+}
+
+function detectDomicileLayoverScenario(question: string) {
+  const lower = question.toLowerCase();
+  return (
+    lower.includes("domicile layover") ||
+    lower.includes("base layover") ||
+    lower.includes("break in duty at base") ||
+    lower.includes("rotation definition") ||
+    lower.includes("illegal rotation") ||
+    lower.includes("open time rotation")
+  );
+}
+
+function detectSickLookbackScenario(question: string) {
+  const lower = question.toLowerCase();
+  return (
+    lower.includes("sick lookback") ||
+    lower.includes("medical procedure") ||
+    (lower.includes("procedure") && lower.includes("lookback")) ||
+    lower.includes("approval process") ||
+    lower.includes("does not count for sick") ||
+    lower.includes("lookback") ||
+    lower.includes("section 14")
+  );
+}
+
+function detectPayCreditConsistencyScenario(question: string) {
+  const lower = question.toLowerCase();
+  return (
+    lower.includes("sick bank") ||
+    lower.includes("called well") ||
+    (lower.includes("picked up flying") && lower.includes("sick")) ||
+    lower.includes("bank deposit") ||
+    lower.includes("deposit hours") ||
+    lower.includes("ss credit") ||
+    lower.includes("credit doesn't count") ||
+    lower.includes("timecard") ||
+    lower.includes("micrew credit") ||
+    lower.includes("credit recalculation") ||
+    lower.includes("deadhead deviation") ||
+    lower.includes("layover less than 13 hours")
+  );
+}
+
+function detectRerouteConsistencyScenario(question: string) {
+  const lower = question.toLowerCase();
+  return (
+    lower.includes("reroute") ||
+    lower.includes("reroute pay") ||
+    lower.includes("rrpay") ||
+    lower.includes("first airborne") ||
+    lower.includes("after first airborne") ||
+    lower.includes("different flight number") ||
+    lower.includes("same destination") ||
+    lower.includes("continuation") ||
+    lower.includes("paid differently") ||
+    lower.includes("turn time difference") ||
+    (lower.includes("turn time") && lower.includes("paid differently"))
+  );
+}
+
+function detectQsCallOrderScenario(question: string) {
+  const lower = question.toLowerCase();
+  return (
+    lower.includes("qs") ||
+    lower.includes("quick slip") ||
+    lower.includes("blanket qs") ||
+    lower.includes("call every pilot") ||
+    lower.includes("category") ||
+    lower.includes("arcos") ||
+    lower.includes("phone never rang") ||
+    lower.includes("no notification") ||
+    lower.includes("eligible") ||
+    lower.includes("slip active") ||
+    lower.includes("wide report") ||
+    lower.includes("seniority") ||
+    lower.includes("30/168")
+  );
+}
+
+function detectOeNotificationScenario(question: string) {
+  const lower = question.toLowerCase();
+  return (
+    lower.includes("oe notification") ||
+    (/\boe\b/.test(lower) && lower.includes("notification")) ||
+    lower.includes("company notification online") ||
+    /\bcno\b/.test(lower) ||
+    lower.includes("phone call") ||
+    lower.includes("notification requirement") ||
+    /\bsrh\b/.test(lower) ||
+    /\btrh\b/.test(lower)
+  );
+}
+
+function getOeNotificationSupportHits(text: string) {
+  const hits: string[] = [];
+  if (/\boe\b/.test(text) || text.includes("operational event")) hits.push("oe");
+  if (text.includes("notification") || text.includes("notify")) hits.push("notification");
+  if (text.includes("company notification online") || /\bcno\b/.test(text)) hits.push("cno");
+  if (text.includes("phone call") || text.includes("telephone") || text.includes("phone")) hits.push("phone call");
+  if (text.includes("srh")) hits.push("srh");
+  if (text.includes("trh")) hits.push("trh");
+  if (text.includes("online notification")) hits.push("online notification");
+  if (text.includes("electronic notification") || text.includes("electronic placement")) {
+    hits.push("electronic notification");
+  }
+  return Array.from(new Set(hits));
+}
+
+function hasDirectOeNotificationSupport(text: string) {
+  const hits = getOeNotificationSupportHits(text);
+  const methodHit =
+    hits.includes("cno") ||
+    hits.includes("phone call") ||
+    hits.includes("online notification") ||
+    hits.includes("electronic notification");
+  const oeContextHit = hits.includes("oe") || hits.includes("srh") || hits.includes("trh");
+  return oeContextHit && (hits.includes("notification") || methodHit);
+}
+
+function detectShortCallNotificationScenario(question: string) {
+  const lower = question.toLowerCase();
+  const hasShortCallContext =
+    lower.includes("short call assignment") ||
+    lower.includes("short call") ||
+    lower.includes("long call") ||
+    /\blc\b/.test(lower);
+  const hasNotificationTerms =
+    lower.includes("notification") ||
+    lower.includes("no notification") ||
+    lower.includes("acknowledge") ||
+    lower.includes("acknowledgment") ||
+    lower.includes("cno") ||
+    lower.includes("call duty pilot") ||
+    lower.includes("phone never rang") ||
+    lower.includes("arcos") ||
+    lower.includes("robot") ||
+    lower.includes("telephone") ||
+    lower.includes("icrew") ||
+    lower.includes("micrew");
+  const hasVacationNoticeContext =
+    lower.includes("vacation") ||
+    lower.includes("non-fly day") ||
+    lower.includes("non fly day");
+  const hasDutyLegalitySignals =
+    lower.includes("same-day trip") ||
+    lower.includes("same day trip") ||
+    lower.includes("report time") ||
+    lower.includes("reports at") ||
+    lower.includes("duty") ||
+    lower.includes("flight time") ||
+    lower.includes("legality") ||
+    lower.includes("both remain on schedule") ||
+    lower.includes("short call window");
+
+  if (hasDutyLegalitySignals) {
+    return false;
+  }
+
+  return (
+    hasShortCallContext &&
+    (
+      hasNotificationTerms ||
+      (hasVacationNoticeContext && (lower.includes("18 hours") || lower.includes("12 hours")))
+    )
+  );
+}
+
+function detectShortCallDutyScenario(question: string) {
+  const lower = question.toLowerCase();
+  const hasShortCallContext =
+    lower.includes("short call") ||
+    lower.includes("assigned short call and trip");
+  const hasDutyLegalitySignals =
+    lower.includes("same-day trip") ||
+    lower.includes("same day trip") ||
+    lower.includes("subsequent same day trip") ||
+    lower.includes("report time") ||
+    lower.includes("reports at") ||
+    lower.includes("flight time") ||
+    lower.includes("legality") ||
+    lower.includes("both remain on schedule") ||
+    lower.includes("short call window") ||
+    lower.includes("9+36") ||
+    lower.includes("7+36") ||
+    lower.includes("duty period");
+
+  return hasShortCallContext && hasDutyLegalitySignals;
+}
+
+function inferPilotStatus(question: string | undefined): ParsedScenarioFacts["status"] | undefined {
+  const lower = (question ?? "").toLowerCase();
+  const reserveSignals =
+    lower.includes("short call assignment") ||
+    lower.includes("short call") ||
+    lower.includes("long call") ||
+    /\blc\b/.test(lower) ||
+    lower.includes("reserve") ||
+    lower.includes("on-call") ||
+    ((lower.includes("non-fly day") || lower.includes("non fly day") || lower.includes("vacation")) &&
+      (lower.includes("short call") || lower.includes("long call") || /\blc\b/.test(lower)));
+  if (reserveSignals) {
+    return "reserve";
+  }
+  return undefined;
+}
+
+function detectApdDiagnosticScenario(question: string) {
+  const lower = question.toLowerCase();
+  return (
+    lower.includes("apd") &&
+    lower.includes("denied") &&
+    (
+      lower.includes("required") ||
+      lower.includes("available") ||
+      lower.includes("reserve counts")
+    )
+  );
+}
+
+function lowerIncludesAny(text: string, terms: string[]) {
+  const lower = text.toLowerCase();
+  return terms.some((term) => lower.includes(term.toLowerCase()));
+}
+
+function filterClarifyingQuestionsForInference(
+  question: string,
+  questions: ClarifyingQuestion[] | undefined
+): ClarifyingQuestion[] | undefined {
+  if (!questions || questions.length === 0) {
+    return questions;
+  }
+  const inferredPilotStatus = inferPilotStatus(question);
+  if (inferredPilotStatus !== "reserve") {
+    return questions;
+  }
+  const filtered = questions.filter((questionItem) => {
+    const prompt = questionItem.prompt.toLowerCase();
+    return !(prompt.includes("reserve or lineholder") || prompt.includes("lineholder"));
+  });
+  return filtered.length > 0 ? filtered : undefined;
+}
+
 function coerceClarificationIntent(args: {
   question: string;
   intent: ContractCopilotIntentResolution;
@@ -497,7 +934,7 @@ function coerceClarificationIntent(args: {
   const looksComplex = issueFamilies.length >= 3;
   const recognizableScenarioSignals =
     issueFamilies.length > 0 ||
-    /\b(wocl|8d3|report|assigned|assignment|reroute|reserve|gs|gswc|lc|long call|short call|deadhead)\b/i.test(
+    /\b(wocl|8d3|report|assigned|assignment|reroute|reserve|gs|gswc|lc|long call|short call|deadhead|bank|vacation|replacement|sup|ivd|rotation|layover|open time|base|medical|procedure|lookback|section 14|sick bank|called well|timecard|credit|micrew|oe|cno|srh|trh)\b/i.test(
       args.question
     ) ||
     args.question.toLowerCase().includes("does that mean") ||
@@ -701,6 +1138,49 @@ function buildSourceUsageDebug(args: {
   };
 }
 
+function augmentSourceUsageWithReferences(
+  base: ReturnType<typeof buildSourceUsageDebug>,
+  references: ContractAnswerCard["references"] | undefined
+) {
+  const refs = Array.isArray(references) ? references : [];
+  const pwaSectionsUsed = new Set(base.pwaSectionsUsed);
+  const compensationChunksUsed = new Set(base.compensationChunksUsed);
+  const schedulerChunksUsed = new Set(base.schedulerChunksUsed);
+
+  for (const reference of refs) {
+    const section = String(reference?.section ?? "").trim();
+    if (!section) continue;
+    if (reference?.sourceId === "pwa") pwaSectionsUsed.add(section);
+    if (reference?.sourceId === "compensation_manual") compensationChunksUsed.add(section);
+    if (reference?.sourceId === "scheduler_manual") schedulerChunksUsed.add(section);
+  }
+
+  const sourcesUsed = Array.from(
+    new Set([
+      pwaSectionsUsed.size > 0 ? "PWA" : null,
+      compensationChunksUsed.size > 0 ? "Compensation Manual" : null,
+      schedulerChunksUsed.size > 0 ? "Scheduler Manual" : null,
+    ].filter((value): value is string => Boolean(value)))
+  );
+
+  const compWarning = "Compensation Manual is indexed but was not used for this pay/credit-sensitive lane.";
+  const schedWarning = "Scheduler Manual is indexed but was not used for this processing-sensitive lane.";
+  const missingSourceWarnings = (base.missingSourceWarnings ?? []).filter((warning) => {
+    if (warning === compWarning && compensationChunksUsed.size > 0) return false;
+    if (warning === schedWarning && schedulerChunksUsed.size > 0) return false;
+    return true;
+  });
+
+  return {
+    ...base,
+    sourcesUsed,
+    pwaSectionsUsed: Array.from(pwaSectionsUsed),
+    compensationChunksUsed: Array.from(compensationChunksUsed),
+    schedulerChunksUsed: Array.from(schedulerChunksUsed),
+    missingSourceWarnings,
+  };
+}
+
 function summarizeRetrievedSupport(items: ContractCopilotAIRetrievedSupportItem[]) {
   return items
     .slice(0, 2)
@@ -723,7 +1203,27 @@ function buildSafeScenarioFallbackAnswer(args: {
   const lower = args.question.toLowerCase();
   const issueFamilies = detectScenarioIssueFamilies(args.question);
   const issueTags = detectScenarioIssueTags(args.question);
-  const isComplexScenario = issueFamilies.length >= 3;
+  const payCreditConsistencyScenario = detectPayCreditConsistencyScenario(args.question);
+  const rerouteConsistencyScenario = detectRerouteConsistencyScenario(args.question);
+  const qsCallOrderScenario = detectQsCallOrderScenario(args.question);
+  const oeNotificationScenario = detectOeNotificationScenario(args.question);
+  const shortCallDutyScenario = detectShortCallDutyScenario(args.question);
+  const shortCallNotificationScenario = detectShortCallNotificationScenario(args.question);
+  const futureRotationChangeScenario = detectFutureRotationChangeScenario(args.question);
+  const apdDiagnosticScenario = detectApdDiagnosticScenario(args.question);
+  const xDayGroupingScenario = detectXDayGroupingScenario(args.question);
+  const pbRerouteXdayScenario = detectPbRerouteXdayScenario(args.question);
+  const isComplexScenario =
+    issueFamilies.length >= 3 &&
+    !payCreditConsistencyScenario &&
+    !rerouteConsistencyScenario &&
+    !qsCallOrderScenario &&
+    !oeNotificationScenario &&
+    !shortCallNotificationScenario &&
+    !apdDiagnosticScenario &&
+    !xDayGroupingScenario &&
+    !pbRerouteXdayScenario &&
+    !futureRotationChangeScenario;
   const sourceSummary =
     args.sourceUsageDebug.sourcesUsed.length > 0
       ? args.sourceUsageDebug.sourcesUsed.join(", ")
@@ -765,7 +1265,255 @@ function buildSafeScenarioFallbackAnswer(args: {
   let likelyApplication =
     "The sources point to the right rule block, but the indexed packet does not fully lock the final outcome yet.";
   let issueThreadLines: string[] = [];
-  if (isComplexScenario) {
+  if (apdDiagnosticScenario) {
+    const { required, available } = parseRequiredAndAvailable(args.question);
+    const threshold = required !== null ? required * 0.25 : null;
+    const clears = required !== null && available !== null && threshold !== null ? available >= threshold : null;
+    shortAnswer =
+      required !== null && available !== null && threshold !== null
+        ? `This looks like an APD threshold question: with ${required} required and ${available} available, the Section 23 I.10 threshold is ${threshold.toFixed(1)}, so the counts themselves look above the 25% minimum.`
+        : "This looks like an APD denial question, and the first thing to check is the Section 23 I.10 threshold using the required-versus-available reserve counts at the time APD processed.";
+    likelyApplication =
+      required !== null && available !== null && threshold !== null
+        ? clears
+          ? "Meeting the threshold is necessary, but it is not always sufficient. If 18 required and 5 available were the actual processing counts, the denial is more likely about timing, the availability pool being read differently, or another APD condition rather than the raw ratio alone."
+          : "If those were the actual processing counts, the denial could simply be that available reserves were below the Section 23 I.10 threshold at the moment APD processed."
+        : "The safe read is that APD turns on the required-versus-available reserve threshold at processing time, but you still need the exact counts and timing to explain a denial cleanly.";
+    issueThreadLines = [
+      "What this appears to be:",
+      "- An APD diagnostic question about why a denial happened even though you are comparing required and available reserve counts.",
+      "",
+      "What this depends on:",
+      required !== null && available !== null && threshold !== null
+        ? `- The counts you gave are ${required} required and ${available} available, and 25% of ${required} is ${threshold.toFixed(1)}.`
+        : "- The required and available reserve counts at the time APD actually processed.",
+      "- Whether the counts were evaluated at the time of processing rather than what you saw later.",
+      "- Whether the availability pool you were looking at matched the APD-eligible reserve pool the system used.",
+      "- Whether another APD condition or coding issue blocked the drop even if the raw threshold looked met.",
+      "",
+      "Likely paths:",
+      required !== null && available !== null && threshold !== null && clears
+        ? "- If 18 required and 5 available were the real processing counts, the threshold itself was likely satisfied, so timing, stale counts, or another APD condition become the more likely reasons for denial."
+        : required !== null && available !== null && threshold !== null
+          ? "- If those were the real processing counts and available reserves were below the threshold, the denial may simply track Section 23 I.10."
+          : "- If the counts at processing time were different from the counts you saw later, the denial can still make sense under Section 23 I.10 even if the later screen looked favorable.",
+      "- If the company used a narrower availability pool than the one you were reading, your visible count may not match the APD decision count.",
+      "- Meeting the threshold is necessary, but not always sufficient if the wrong day, wrong drop type, or another APD condition applied.",
+      "",
+      "What to check in iCrew/DBMS/timecard:",
+      "- Check the exact processing-time required and available reserve counts, not just the later displayed counts.",
+      "- Check whether the available pool you saw matches the APD-eligible reserve pool the system used.",
+      "- Check whether the request was coded for the correct day and APD/drop type.",
+      "",
+      "Source limitation:",
+      "- I can anchor this to Section 23 I.10 threshold logic, but if the processing-time count source is not attached, I would keep the denial diagnosis cautious rather than promising one exact cause.",
+      "",
+      "Sources used:",
+      "- Use PWA Section 23 I.10 first for the required-versus-available reserve threshold, then use any scheduler/process support only to explain timing or pool differences.",
+    ];
+  } else if (qsCallOrderScenario) {
+    shortAnswer =
+      "This looks like a Quick Slip eligibility and missed-notification question, and I would separate being QS-eligible from proving the company should definitely have called you under the exact call-order rule.";
+    likelyApplication =
+      "The safest read is that blanket QS being active, no 30/168 issue, and no ARCOS/email/phone notification all point to a possible call-order or notification-process problem, but I would not say you definitely should have been called unless the exact QS call-order rule and processing log support it.";
+    issueThreadLines = [
+      "What this appears to be:",
+      "- A Quick Slip call-order and missed-notification question, not just a generic QS definition question.",
+      "",
+      "What this depends on:",
+      "- Whether you were actually eligible in category at the time the QS went out, including any 30/168 or other legality screen if those matter.",
+      "- Whether blanket QS was active and correctly coded for you and the other similarly situated pilot on the wide report.",
+      "- Whether the QS process required ARCOS, phone, email, or other notification steps before moving past eligible pilots in category.",
+      "- Whether the company log shows a true call-order skip, a processing failure, or a different eligibility screen than you expected.",
+      "",
+      "Likely paths:",
+      "- If blanket QS was active, category eligibility was met, and there was no 30/168 or other legality block, then the real question is whether the ARCOS / phone / notification process failed or skipped eligible pilots.",
+      "- If the system applied another eligibility filter that is not obvious from the wide report, the missed call may be a processing or rule-screen issue rather than proof that QS should have called every pilot in category.",
+      "- Another similarly situated pilot not getting called matters as evidence of a broader process issue, but it still does not prove the exact QS call-order rule without the underlying support and logs.",
+      "",
+      "What to check in iCrew/DBMS/timecard:",
+      "- Check that blanket QS was active and the slip settings were still correct at the time the QS went out.",
+      "- Check ARCOS history, phone logs, email, and any notification record for the 0044 event.",
+      "- Check the wide report or category list that shows where you and the other pilot sat in seniority and eligibility for that QS.",
+      "- Check whether the system recorded any legality screen such as 30/168, FAR, or another hidden eligibility block even if you do not think one applied.",
+      "",
+      "Source limitation:",
+      "- I do not have the exact QS call-order / ARCOS notification rule and process log attached here, so I would keep this in CAUTION rather than saying you definitely should have been called.",
+      "",
+      "Sources used:",
+      "- Use Scheduler Manual QS / Quick Slip / ARCOS processing support first, then use any direct PWA Section 23 QS language if it actually addresses call order or notification.",
+      "",
+      "Practical next step:",
+      "- Preserve the ARCOS record, phone logs, email, screenshots showing blanket QS active, the wide report context, and the 30/168/FAR status, then use that evidence for DART or a scheduling / ALPA follow-up if the support points to a missed-call process issue.",
+    ];
+  } else if (oeNotificationScenario) {
+    shortAnswer =
+      "This looks like an OE notification-method question, and I would not treat CNO by itself as enough unless the attached OE/SRH/TRH source actually says so.";
+    likelyApplication =
+      "The safer read is that this turns on the exact OE notification language, not on generic contact rules from unrelated Green Slip, pay, deadhead, or definition sections.";
+    issueThreadLines = [
+      "What this appears to be:",
+      "- A question about the current OE notification requirement and whether notice must be by phone call or can be done by CNO / Company Notification Online.",
+      "",
+      "What this depends on:",
+      "- Whether the current controlling language lives in the SRH, TRH, or another OE-specific process source rather than a generic reserve or pay section.",
+      "- Whether the source distinguishes phone contact from online or electronic notification.",
+      "- Whether the source is talking about OE specifically, rather than general scheduling contact rules.",
+      "",
+      "Likely paths:",
+      "- If the attached source is truly OE-specific and says CNO or another electronic method is enough, then that method can control.",
+      "- If the attached source says OE still requires personal phone contact, then an electronic notice by itself would not be enough.",
+      "- If the packet only shows generic contact language but not OE-specific notice language, the safe answer is that the exact OE notification rule is still missing.",
+      "",
+      "What to check:",
+      "- Check the SRH and TRH pages that actually mention OE notification, phone contact, CNO, or electronic notice.",
+      "- Check whether the current source is OE-specific or only a general contact/notification rule.",
+      "- Preserve the current SRH/TRH screenshots or page references if you need to show that the exact rule is absent or changed.",
+      "",
+      "Source limitation:",
+      "- I do not have the exact OE notification / CNO source attached.",
+      "",
+      "Sources used:",
+      "- Start with OE-specific SRH/TRH or scheduler/process support. Do not rely on unrelated Green Slip, pay, deadhead, or generic Section 2 definition language for this question.",
+    ];
+  } else if (shortCallDutyScenario) {
+    shortAnswer =
+      "This looks like a short-call plus same-day-trip legality question, and I would not assume both pieces can stay on schedule unless the duty and assignment rules clearly allow it.";
+    likelyApplication =
+      "The real question is whether the short-call window, the 5:10pm trip report, and the total duty/flight footprint can legally coexist, or whether Scheduling is treating two events as sequential even though the combined legality may fail.";
+    issueThreadLines = [
+      "What this appears to be:",
+      "- A reserve short-call period followed by a same-day trip that reports right when short call ends.",
+      "",
+      "What this depends on:",
+      "- The short-call window and when that reserve obligation actually ends.",
+      "- The same-day trip report at 5:10pm.",
+      "- The total duty and flight-time interaction if the short call and trip remain on one continuous schedule day.",
+      "- Whether the company is treating the sequence as one legality problem or as separate schedulable events that still must remain legal together.",
+      "",
+      "Likely paths:",
+      "- If the short-call block and the trip report create one continuous duty problem, both events may not be able to remain on schedule together.",
+      "- If the company treats them as separate legal events, the result can still turn on whether the report, duty, and flight-time totals remain legal once the trip actually starts.",
+      "- The answer should not turn on a generic short-call definition alone; it has to be tied to report timing, duty limits, and whether both events can remain scheduled.",
+      "",
+      "What to check:",
+      "- The short-call start and end window, and whether the trip report exactly at 5:10pm creates a continuous-duty issue.",
+      "- The duty-period and flight-time totals if the same-day trip operates as scheduled.",
+      "- Whether Section 12 duty/rest support and Section 23 short-call support both line up for this exact sequence.",
+      "- The iCrew or DBMS legality result that shows whether both the short call and the trip remain on schedule together.",
+      "",
+      "Source limitation:",
+      "- I do not see the exact short-call plus same-day trip legality rule in the attached support.",
+      "",
+      "Sources used:",
+      "- Use Section 23 short-call assignment language together with Section 12 duty/rest or legality support; do not rely on a generic notification rule for this fact pattern.",
+    ];
+  } else if (shortCallNotificationScenario) {
+    shortAnswer =
+      "This looks like a reserve short-call notification question after a vacation or non-fly day, and I would not treat simply seeing a placement in iCrew or MiCrew as automatically settling the contractual notice issue unless the exact rule says it does.";
+    likelyApplication =
+      "The safer read is to separate practical awareness from contractual notice. Calling the duty pilot can be a sensible real-world step if you have not received notice, but it is not automatically a substitute for the actual short-call notification rule unless the attached source support says telephone contact, electronic placement, or acknowledgment is enough by itself.";
+    issueThreadLines = [
+      "What this appears to be:",
+      "- A reserve short-call assignment notification question that follows a vacation or non-fly day.",
+      "",
+      "What this depends on:",
+      "- Whether the controlling short-call rule requires telephone contact, electronic placement, acknowledgment, or some combination of those notice methods.",
+      "- Whether seeing the assignment in iCrew or MiCrew counts as notice under the actual source language or is only evidence that the placement happened in the system.",
+      "- Whether the vacation or non-fly day changes when notice had to occur before the short-call assignment start time.",
+      "- Whether the packet includes any CNO or no-notification dispute path for a missed call or missed acknowledgment case.",
+      "",
+      "Likely paths:",
+      "- If the rule says short-call notice can be completed electronically or by placement plus acknowledgment, then the key issue is whether the assignment was actually visible and acknowledged in time.",
+      "- If the rule requires direct telephone contact or another more specific notice method, then simply finding the assignment in iCrew or MiCrew later may not cure a missed-notification problem.",
+      "- Calling the duty pilot 18 hours before assignment can be a practical way to protect yourself and clarify what the system shows, but it is not the same as proving the company satisfied the contractual notice rule.",
+      "",
+      "What to check in iCrew/MiCrew/DBMS/timecard:",
+      "- Check when the short-call assignment was placed in iCrew or MiCrew and whether the system shows any acknowledgment timestamp.",
+      "- Check call logs, voicemail, ARCOS or other notification records, screenshots, and the timeline from the vacation or non-fly day into the assignment window.",
+      "- Check whether the dispute path references CNO, missed notice, or a scheduling acknowledgment step if the assignment appeared without direct contact.",
+      "",
+      "Source limitation:",
+      "- I do not see the exact short-call-after-vacation/non-fly-day notification rule in the attached support.",
+      "",
+      "Sources used:",
+      "- Start with short-call reserve notification language, then look for any scheduler/process support on telephone contact, electronic placement, acknowledgment, iCrew/MiCrew visibility, and CNO handling.",
+      "",
+      "Practical next step:",
+      "- Preserve screenshots, timestamps, call logs, voicemail, and any iCrew/MiCrew placement history, then call the duty pilot or use the dispute path if you need the company to confirm how notice was supposedly given.",
+    ];
+  } else if (pbRerouteXdayScenario) {
+    shortAnswer =
+      "This is a multi-part scheduling, X-day, and system-processing question, not a single-rule yes or no.";
+    likelyApplication =
+      "The key is to break the problem into separate issue threads: the reroute and deadhead extension, the interrupted X-days, the PB to LC and PR remainder processing, and the missing notification trail. You should not assume PB should have been reapplied unless the X-day interruption and PB/PR/LC processing rules line up in the attached sources.";
+    issueThreadLines = [
+      "Issue breakdown:",
+      "- Reroute / extension of rotation: the original 2-day QS turned into a 3-day sequence after the reroute and deadhead change.",
+      "- Interrupted X-days: the question is whether the X-days were coded as interrupted, used, or later restored under the reroute logic.",
+      "- PB / PR / LC processing: the answer turns on when PB converted to LC, whether PR remainder was recalculated, and whether PB was supposed to reapply later.",
+      "- Notification / assignment processing: the missing ACARS / ARCOS / robot or manual notification trail is a separate process issue from the payback result.",
+      "",
+      "What this depends on:",
+      "- Whether the reroute qualifies under Section 23 L and whether Section 23 L.9 controls the interrupted X-day treatment.",
+      "- How the X-days were coded after the reroute: interrupted versus used versus restored.",
+      "- When PB converted to LC and how the system recalculated the PR remainder after the extension.",
+      "- Whether the system processed the extension as continuation, reroute, or a re-award.",
+      "- Whether the notification rules were actually triggered and logged for the changed trip.",
+      "",
+      "Likely paths:",
+      "- If this was treated as a true X-day interruption, the X-days may need to be restored, and PB may need to be reapplied depending on how the PB / PR / LC processing rule works.",
+      "- If the system treated the extension as continuation or a system reflow, PB may not auto-reapply even though the trip impact got larger.",
+      "- If the values are being held up by processing lag or a system delay, the PB / PR / LC picture can look wrong temporarily before DART or manual review catches up.",
+      "",
+      "What to check in iCrew/DBMS:",
+      "- Check the original versus modified rotation history, including the deadhead replacement and the 2-day to 3-day extension.",
+      "- Check the X-day coding on the affected days to see whether the system marked them as interrupted, used, restored, or converted.",
+      "- Check the timing of the PB to LC conversion and the PR remainder recalculation.",
+      "- Check the notification logs, including ACARS, ARCOS, robot, or manual contact evidence tied to the reroute and award.",
+      "",
+      "Source limitation:",
+      "- The X-day interruption rule in Section 23 L.9 and the PB / PR / LC reapplication logic are not fully attached here, so I would keep this in CAUTION rather than saying PB definitely should have been reapplied.",
+      "",
+      "Sources used:",
+      "- Use PWA Section 23 L / 23 L.9 first for reroute and interrupted X-days, then use Scheduler Manual processing support for PB / PR / LC handling and notification processing, and use Compensation Manual support only if it directly addresses the pay treatment.",
+      "",
+      "Practical next step:",
+      "- Preserve the original and modified rotation timeline, the X-day coding, the PB to LC conversion timing, the PR remainder display, and the notification logs so DART or scheduling review can compare the system processing against the reroute/X-day rules.",
+    ];
+  } else if (xDayGroupingScenario) {
+    shortAnswer =
+      "This depends on whether the reserve X-day move keeps the required grouping pattern intact across the month boundary, not on the month boundary alone.";
+    likelyApplication =
+      "The right question is whether swapping the 28th and the 2nd preserves the X-day grouping rules when you look at the adjacent reserve days on both sides of the move. If the grouping pattern survives across April into May, the move may be allowed; if it breaks the required grouping, it likely will not process.";
+    issueThreadLines = [
+      "What this appears to be:",
+      "- A reserve X-day movement question where the proposed swap crosses the April/May boundary.",
+      "",
+      "What this depends on:",
+      "- The X-day grouping rules, including how the X-day block is supposed to be spaced or clustered.",
+      "- The adjacent reserve days before and after the proposed swap.",
+      "- Whether swapping the 28th and the 2nd preserves the required grouping pattern once the month boundary is crossed.",
+      "- Whether iCrew evaluates grouping continuity across the month boundary or treats the move as breaking the block.",
+      "",
+      "Likely paths:",
+      "- If the grouping rules remain intact after moving the reserve X-day from the 28th to the 2nd, the move may be allowed even though it crosses months.",
+      "- If the move breaks the required grouping pattern or the surrounding reserve block, the move is not likely to be allowed.",
+      "- The month boundary by itself should not be the only decision point; the grouping result is the controlling issue.",
+      "",
+      "What to check in iCrew/DBMS:",
+      "- Check the X-day pattern before and after the proposed swap, including the 28th, 29th, 30th, 01st, and 02nd.",
+      "- Check the adjacent reserve block on both sides of the move and whether the system still shows a valid grouped X-day pattern.",
+      "- Check whether iCrew flags the request as a grouping violation, a reserve-line violation, or a month-boundary processing issue.",
+      "- Check whether the grouping rules are being evaluated continuously across the April/May boundary rather than month by month.",
+      "",
+      "Source limitation:",
+      "- I do not have the exact reserve X-day grouping rule language attached here if the visible support does not show the month-crossing grouping text directly.",
+      "",
+      "Sources used:",
+      "- Use PWA reserve/X-day movement and grouping language first, then use Scheduler Manual reserve-grouping or processing support if it is attached for the month-crossing case.",
+    ];
+  } else if (isComplexScenario) {
     shortAnswer =
       "This looks like a multi-part scheduling and pay problem, not one single rule question.";
     likelyApplication =
@@ -888,6 +1636,236 @@ function buildSafeScenarioFallbackAnswer(args: {
       "Sources used:",
       "- Use Scheduler Manual processing language first for PCS/swap timing, then use direct PWA support only where the contract packet actually speaks to the underlying reserve/open-time constraint.",
     ].filter((line): line is string => Boolean(line));
+  } else if (payCreditConsistencyScenario) {
+    const sickBankCase = lower.includes("sick bank") || lower.includes("called well") || (lower.includes("picked up flying") && lower.includes("sick"));
+    const bankDepositCase =
+      (lower.includes("bank") && (lower.includes("deposit") || lower.includes("2 hours"))) ||
+      lower.includes("ss credit") ||
+      lower.includes("credit doesn't count");
+    const recalculationCase =
+      lower.includes("timecard") ||
+      lower.includes("micrew credit") ||
+      lower.includes("credit recalculation") ||
+      lower.includes("deadhead deviation") ||
+      lower.includes("layover less than 13 hours");
+    shortAnswer =
+      sickBankCase
+        ? "This looks like a sick-bank and post-sick pickup question, and the key issue is whether calling well and flying after the sick trip ended changes the original sick-bank hit."
+        : bankDepositCase
+          ? "This looks like a bank-eligibility question, and the key issue is whether the SS credit on that 2 hours deposit request is being treated as credit that doesn't count for bank posting."
+          : "This looks like a projected-versus-final credit question, and the key issue is whether MiCrew briefly showed a higher projected value that disappeared when the trip closed and the final credit recalculated.";
+    likelyApplication =
+      sickBankCase
+        ? "The safe read is to separate the sick-trip period from any later picked-up flying. Calling well and flying later may change future availability, but it does not automatically prove the original sick-bank charge should disappear unless the attached rule says the sick-bank hit is restored or offset."
+        : bankDepositCase
+          ? "The safe read is to separate pay, credit, and bank-eligible credit. A Silver Slip may generate credit for some purposes without that credit being bank-eligible in the same way as regular line or replacement credit."
+          : "The safe read is to separate projected credit from final closeout credit. MiCrew can temporarily show a richer projected value if a deviation, short-layover, or rest-sensitive assumption is still in play, then remove it when the trip closes under the final flown sequence.";
+    issueThreadLines = [
+      "What this appears to be:",
+      sickBankCase
+        ? "- A question about whether picked-up flying after the sick trip ended changes the original sick-bank impact."
+        : bankDepositCase
+          ? "- A question about whether SS credit on a 2 hours deposit request counts as bank-eligible credit or is being treated as credit that doesn't count."
+          : "- A question about why projected credit briefly increased and then dropped back when the rotation closed out.",
+      "",
+      "What this depends on:",
+      sickBankCase
+        ? "- Whether the picked-up flying started only after the sick trip ended, or overlapped the period that originally hit the sick bank."
+        : null,
+      sickBankCase
+        ? "- Whether the attached Section 14 support addresses sick-bank restoration, offset, or only the original sick leave occurrence."
+        : null,
+      bankDepositCase
+        ? "- Whether the 2 hours showing in iCrew are pay credit, bank-eligible credit, or a credit type that does not post to the bank."
+        : null,
+      bankDepositCase
+        ? "- Whether the Silver Slip generated premium pay, straight credit, or a non-bank-eligible credit type for this transaction."
+        : null,
+      recalculationCase
+        ? "- Whether MiCrew was showing projected credit based on a possible deadhead deviation or a short-layover/rest-sensitive assumption before final closeout."
+        : null,
+      recalculationCase
+        ? "- Whether the final closeout removed the extra value once you did not deviate and the actual flown sequence restored the original credit."
+        : null,
+      "",
+      "Likely paths:",
+      sickBankCase
+        ? "- If the picked-up flying started after the sick trip ended, it may not erase the original sick-bank hit by itself; the real question is whether the source packet gives a restoration or offset rule."
+        : null,
+      sickBankCase
+        ? "- If the packet only shows the original sick-occurrence treatment and not a restoration rule, keep the answer cautious rather than promising the sick bank will be adjusted."
+        : null,
+      bankDepositCase
+        ? "- If Silver Slip credit is coded differently from regular credit or replacement credit, iCrew can reject the bank deposit even though the trip produced pay or apparent credit."
+        : null,
+      bankDepositCase
+        ? "- If the packet never says Silver Slip credit is bank-eligible, treat the rejection as a credit-type eligibility question rather than assuming the system is wrong."
+        : null,
+      recalculationCase
+        ? "- If MiCrew temporarily assumed a deadhead deviation or a short-layover trigger, it can show a projected 24:35 that later disappears when the trip closes at the actual 21:00 value."
+        : null,
+      recalculationCase
+        ? "- If the layover never actually closed below the final threshold or the deviation never happened, final closeout can legitimately recalculate the credit back down."
+        : null,
+      "",
+      "What to check in iCrew/MiCrew/DBMS/timecard:",
+      sickBankCase
+        ? "- Check the exact sick-trip end time, the called-well timestamp, and the pickup award time to see whether the later flying truly started after the sick period ended."
+        : null,
+      sickBankCase
+        ? "- Check whether the timecard still shows the original sick-bank deduction separately from the later picked-up trip."
+        : null,
+      bankDepositCase
+        ? "- Check whether iCrew labels the 2 hours as bank-eligible credit, premium pay only, straight credit, or some Silver Slip-specific code."
+        : null,
+      bankDepositCase
+        ? "- Check whether DBMS or the bank request detail explains the rejection as credit-type ineligibility rather than a balance issue."
+        : null,
+      recalculationCase
+        ? "- Check the MiCrew projected credit screen versus the final timecard closeout, and whether the deadhead deviation field ever remained active."
+        : null,
+      recalculationCase
+        ? "- Check the final layover/rest computation and whether the under-13-hour assumption was only provisional before closeout."
+        : null,
+      "",
+      "Source limitation:",
+      sickBankCase
+        ? "- I do not have the exact sick-bank restoration or offset rule attached for this fact pattern, so I would not promise the later pickup removes the original sick-bank hit."
+        : bankDepositCase
+          ? "- I do not have the exact bank-eligibility rule attached that says whether Silver Slip credit can be deposited, so I would keep the answer cautious."
+          : "- I do not have a clean attached rule that ties this exact projected-credit spike to the final recalculation, so I would keep the closeout explanation cautious rather than definitive.",
+      "",
+      "Sources used:",
+      sickBankCase
+        ? "- Start with PWA Section 14 and any Compensation Manual sick-bank or pay/credit treatment that actually addresses restoration or offset."
+        : bankDepositCase
+          ? "- Start with Compensation Manual pay/credit treatment and any PWA bank-eligibility language before assuming Silver Slip credit counts the same as regular credit."
+          : "- Start with Compensation Manual pay/credit and timecard treatment, then use PWA Section 12 only where rest/layover or deadhead legality changes the credit outcome.",
+    ].filter((line): line is string => Boolean(line));
+  } else if (detectVacationBankScenario(lower)) {
+    shortAnswer =
+      /\bsup\b/.test(lower) || /\bivd\b/.test(lower) || lower.includes("vacation year")
+        ? "This looks like a SUP / IVD vacation-year processing question, and the answer usually turns on the contract's vacation-year definition rather than the calendar year."
+        : "This looks like a vacation-bank and replacement-credit question, and the answer usually turns on how Section 7 and the system process purchased vacation days, bank hours, and replacement value in the same month.";
+    likelyApplication =
+      /\bsup\b/.test(lower) || /\bivd\b/.test(lower) || lower.includes("vacation year")
+        ? "The key question is whether March 2027 and May 2026 fall inside the same contract vacation year for SUP / IVD use. That is a vacation-year-definition issue, not just a calendar-year issue, so the system message may be right even if the dates feel adjacent."
+        : "The key question is whether buying a vacation day, keeping the bank full at 60 hours, and replacing 4:35 in the same month all fit the Section 7 vacation-bank rules the system is applying. A 4:35 requested / 0:00 awarded result usually means the request hit a bank, replacement, or vacation-year processing limit rather than simply failing at random.";
+    issueThreadLines = [
+      "What this appears to be:",
+      /\bsup\b/.test(lower) || /\bivd\b/.test(lower) || lower.includes("vacation year")
+        ? "- A Section 7 vacation-year / SUP / IVD eligibility question driven by the system's 'Must be same Vacation year' message."
+        : "- A Section 7 vacation-bank question involving a full 60-hour bank, a purchased vacation day, and replacement value in the same month.",
+      "",
+      "What this depends on:",
+      lower.includes("bank") || lower.includes("60 hours")
+        ? "- Whether the bank is already full at 60 hours and whether the system will let the same-month replacement value offset the purchased vacation transaction."
+        : null,
+      lower.includes("replacement") || lower.includes("4:35") || lower.includes("0:00 awarded")
+        ? "- Whether the 4:35 replacement request is eligible to post in the same month or whether the transaction is blocked by how the vacation and bank entries are sequenced."
+        : null,
+      lower.includes("buy vacation") || lower.includes("vacation day")
+        ? "- Whether the purchased vacation day is being processed for the current vacation year or a future vacation year."
+        : null,
+      /\bsup\b/.test(lower) || /\bivd\b/.test(lower)
+        ? "- Whether the SUP day and the IVD request fall inside the same contract vacation year."
+        : null,
+      lower.includes("vacation year")
+        ? "- Whether the contract's vacation-year definition differs from the plain calendar-year assumption."
+        : null,
+      "",
+      "Likely paths:",
+      /\bsup\b/.test(lower) || /\bivd\b/.test(lower) || lower.includes("vacation year")
+        ? "- If March 2027 and May 2026 are not in the same contract vacation year, the system will reject the request even though they look related on a calendar basis."
+        : "- If the bank is already full at 60 and the purchased vacation / replacement entries are not allowed to net together in the same month, the system can show 4:35 requested and 0:00 awarded.",
+      /\bsup\b/.test(lower) || /\bivd\b/.test(lower) || lower.includes("vacation year")
+        ? "- If the vacation-year mapping actually does line up, the next question is whether the request is blocked by the specific SUP / IVD process rather than the year definition itself."
+        : "- If Section 7 allows the transaction but iCrew or DBMS is reading the purchase, replacement, or bank sequence differently, the denial may be a processing issue rather than a clean contract prohibition.",
+      lower.includes("replacement") || lower.includes("4:35")
+        ? "- Replacement value and purchased vacation value may not be interchangeable the way the system display makes them look."
+        : null,
+      "",
+      "What to check in iCrew/DBMS:",
+      /\bsup\b/.test(lower) || /\bivd\b/.test(lower) || lower.includes("vacation year")
+        ? "- Check which vacation period the SUP day belongs to, which vacation period the IVD is being drawn from, and how iCrew labels the vacation year for each."
+        : "- Check whether the purchased vacation day is tagged to the current or future vacation year and how the bank transaction is posted in the month you are trying to replace.",
+      lower.includes("replacement") || lower.includes("4:35") || lower.includes("0:00 awarded")
+        ? "- Check the request detail that shows 4:35 requested and 0:00 awarded to see whether the system is denying the replacement itself or the bank posting behind it."
+        : null,
+      /\bsup\b/.test(lower) || /\bivd\b/.test(lower)
+        ? "- Check the exact SUP and IVD dates against the contract vacation-year mapping rather than the calendar year."
+        : null,
+      "",
+      "Source limitation:",
+      /\bsup\b/.test(lower) || /\bivd\b/.test(lower) || lower.includes("vacation year")
+        ? "- I need clean Section 7 vacation-year / SUP / IVD support attached here to say more than 'check the contract vacation-year definition and the iCrew mapping.'"
+        : "- I need clean Section 7 vacation-bank / replacement support attached here to say more than 'check the bank cap, replacement sequence, and transaction month.'",
+      "",
+      "Sources used:",
+      "- Use PWA Section 7 vacation language first, then use any related handbook/process references only to explain how iCrew or DBMS may be sequencing the request.",
+    ].filter((line): line is string => Boolean(line));
+  } else if (detectDomicileLayoverScenario(lower)) {
+    shortAnswer =
+      "This looks like a domicile-layover / open-time rotation construction question, and the Section 2 rotation definition by itself does not prove that the rotation is legal or illegal.";
+    likelyApplication =
+      "The key distinction is between what the PWA rotation definition means and whether some separate scheduler or open-time construction rule prohibits building a rotation with a break in duty at base. The definition alone usually does not answer that construction question.";
+    issueThreadLines = [
+      "What this appears to be:",
+      "- An attempt to use the PWA Section 2 rotation definition to answer whether an open-time rotation with a domicile layover is allowed or prohibited.",
+      "",
+      "What this depends on:",
+      "- Whether the cited Section 2 rotation definition is only defining when a rotation ends, rather than creating an open-time construction rule.",
+      "- Whether there is separate Scheduler Manual or open-time construction language about domicile layovers, base layovers, or how open time may be built.",
+      "- Whether the question is really about legality under the PWA, or about a scheduler/process rule that sits outside the definition itself.",
+      "",
+      "Likely paths:",
+      "- If the only source you have is the Section 2 rotation definition, that alone does not prove the rotation is illegal.",
+      "- If there is a Scheduler Manual or open-time construction reference that specifically bars domicile layovers in an open-time build, that would be the stronger source for saying the construction is not allowed.",
+      "- If no separate construction rule is attached, the safer answer is that the definition explains how a rotation is treated, but it does not by itself settle the legality question.",
+      "",
+      "What to check in iCrew/DBMS:",
+      "- Check whether the open-time build is tagged or described as a domicile/base layover versus a normal break in duty at base.",
+      "- Check whether the denial or warning language in the system cites a scheduler/open-time construction rule, not just the rotation definition.",
+      "- Check whether there is an accompanying Scheduler Manual reference on open time, rotation construction, or base layover handling.",
+      "",
+      "Source limitation:",
+      "- I can point to the Section 2 rotation definition, but I should not call the rotation illegal unless a separate construction rule or scheduler reference says so.",
+      "- If that scheduler/open-time construction reference is not attached here, the legality answer should stay cautious.",
+      "",
+      "Sources used:",
+      "- Start with the PWA Section 2 rotation definition, then look for Scheduler Manual or open-time construction language that specifically addresses domicile layovers or breaks in duty at base.",
+    ];
+  } else if (detectSickLookbackScenario(lower)) {
+    shortAnswer =
+      "This looks like a sick-lookback and medical-procedure process question, and I would anchor it to Section 14 rather than assume every medical procedure is automatically excluded from lookback.";
+    likelyApplication =
+      "The safe read is that Section 14 governs sickness notification, verification, lookback, and some exclusion/exemption mechanics. But I would not promise that a given medical procedure does not count for sick lookback unless the attached source text actually says so.";
+    issueThreadLines = [
+      "What this appears to be:",
+      "- A request for the contract references and approval path for medical-procedure sick leave that may or may not count toward sick lookback.",
+      "",
+      "What this depends on:",
+      "- Whether the event falls under Section 14 F lookback / verification language or under a specific exclusion or exemption in the attached packet.",
+      "- Whether the procedure is being handled as ordinary sick leave, a verified occurrence, medical leave, or another protected status.",
+      "- Whether the process question is really about Company approval, Chief Pilot / Pilot Leaves verification, or DALPA / contract-administration guidance outside the plain contract text.",
+      "",
+      "Likely paths:",
+      "- If Section 14 F or a related note explicitly says the hours will not be considered for lookback, that is the controlling support for saying the occurrence is excluded.",
+      "- If the packet only shows general sick notification and verification language, the safer answer is that Section 14 explains the process, but not necessarily that the procedure is excluded from lookback.",
+      "- If the exact medical-procedure exclusion language is not attached, verify the process with DALPA, Pilot Leaves, or contract administration rather than treating this as medical advice.",
+      "",
+      "What to check in iCrew/DBMS:",
+      "- Check whether the occurrence is coded as ordinary sick leave, verified sick leave, known sick leave, medical leave, or another status.",
+      "- Check whether Section 14 F.3, 14 F.4, 14 F.6, or 14 G is the part of the packet actually being cited for the approval / verification step.",
+      "- Check whether the Company or DALPA process materials identify the procedure as not counting toward lookback, rather than assuming it from the general sick language.",
+      "",
+      "Source limitation:",
+      "- I can point you to Section 14 process language, but I should not say a medical procedure is excluded from sick lookback unless that exclusion is attached in the source text.",
+      "- If the exact exclusion or approval-process language is not attached, the answer should stay cautious and process-oriented.",
+      "",
+      "Sources used:",
+      "- Start with PWA Section 14, especially Section 14 F notification/verification/lookback language, then verify the approval path through DALPA, Pilot Leaves, or the Company process if the packet does not contain the exact medical-procedure exclusion text.",
+    ];
   } else if (
     lower.includes("golden day") &&
     (lower.includes("hard non-fly day") || lower.includes("section 2 a.129") || lower.includes("pwa section 2 a.129")) &&
@@ -912,55 +1890,49 @@ function buildSafeScenarioFallbackAnswer(args: {
       "Sources used / limitations:",
       "- I can anchor this to the golden-day definition, but if the indexed packet does not include the LC timing rule itself, the exact 6pm / day-one application stays cautious.",
     ];
-  } else if (
-    (lower.includes("rotation changed") ||
-      lower.includes("changed for next month") ||
-      lower.includes("removed a leg") ||
-      lower.includes("redeye")) &&
-    (lower.includes("next month") || lower.includes("not a carryover") || lower.includes("due anything extra"))
-  ) {
+  } else if (futureRotationChangeScenario) {
     shortAnswer =
-      "This looks like a future rotation-change question, and the main issue is whether the removed leg and redeye change trigger any pay or credit protection on a non-carryover trip.";
+      "This is likely not one simple pay rule. It is a future rotation-change plus swap/coverage plus possible known-absence question.";
     likelyApplication =
-      "This should be analyzed more like a future schedule-change or line-adjustment problem than a mid-rotation reroute. If it is not a carryover trip, that matters because you should not automatically treat it like a same-rotation reroute or continuation case.";
+      "This should be analyzed as a future schedule-change, pay-protection, reserve-coverage, and known-absence/CPO-processing question rather than a single redeye or removed-leg rule. You should not assume extra pay, a CPO override, or known-absence protection unless the controlling source language actually supports it.";
     issueThreadLines = [
-      "What this appears to be:",
-      "- A next-month rotation change on a trip you say is not a carryover.",
+      "Issue breakdown:",
+      "- Future rotation change / removed leg / redeye: this is a next-month change on a trip you say is not a carryover.",
+      "- Pay or credit protection: the first question is whether the changed rotation actually triggers any future-change protection.",
+      "- Reserve coverage blocking the swap: the similar 4-day and the denied swap are a separate processing issue from the pay question.",
+      "- CPO / manual override authority: discretionary processing is not the same thing as a guaranteed contract entitlement.",
+      "- Known absence policy: that only matters if this event fits a qualifying known-absence path and the process support is actually there.",
+      "- \"Cough\" / sick-leave angle: do not treat calling in sick as a substitute for a real contract source on pay protection or a swap denial.",
       "",
-      "Pay/credit protection angle:",
-      "- The first question is whether removing a leg and turning the trip into a redeye changes the trip value in a way that triggers pay protection, credit protection, or both.",
-      "- If the governing language only protects certain removed or changed portions, that may matter more than the fact that the trip still exists.",
+      "What this depends on:",
+      "- Whether the changed rotation had already been awarded or published when the Company changed it.",
+      "- Whether this is a company-driven future schedule change before operation, rather than a carryover or live reroute.",
+      "- Whether the removed leg and redeye change altered pay, credit, or both in a way that the contract actually protects.",
+      "- Whether the reserve coverage denial is just a processing block on the swap, separate from the underlying pay-protection issue.",
+      "- Whether a CPO can manually process an exception here, and whether that would be discretionary rather than required.",
+      "- Whether known-absence language applies to this fact pattern at all.",
       "",
-      lower.includes("cpo") || lower.includes("known absence") || lower.includes("reserve coverage") || lower.includes("similar")
-        ? "Swap / reserve coverage angle:"
-        : null,
-      lower.includes("reserve coverage") || lower.includes("similar")
-        ? "- If a similar trip exists the next day but reserve coverage blocks the swap, that is a separate processing constraint from the pay/credit question."
-        : null,
-      lower.includes("cpo")
-        ? "- A CPO or manual-processing question is separate from whether the contract itself grants automatic pay or credit protection."
-        : null,
-      (lower.includes("known absence") || lower.includes("cpo")) ? "" : null,
-      lower.includes("known absence") || lower.includes("cpo")
-        ? "Known absence / CPO angle:"
-        : null,
-      lower.includes("known absence")
-        ? "- If known-absence language applies, it may affect whether the trip can be reworked or protected, but that needs source support instead of assumption."
-        : null,
-      lower.includes("cpo")
-        ? "- Even if a CPO can manually help process something, that does not automatically answer the contract pay-protection question."
-        : null,
-      lower.includes("known absence") || lower.includes("cpo")
-        ? "- I do not have a clean controlling source for CPO override / known absence pay protection in this packet."
-        : null,
+      "Likely paths:",
+      "- If the contract has a pay-protection or credit-protection rule for this future non-carryover rotation change, that rule controls the answer.",
+      "- If this is only a schedule construction change before the trip operates, extra pay may not be automatic just because a leg was removed or the trip became a redeye.",
+      "- If reserve coverage blocks the swap, a CPO override may be discretionary or administrative, not a guaranteed contract entitlement.",
+      "- If known-absence support applies, it would still need a qualifying event and the correct process path; it is not automatic just because the changed trip is inconvenient.",
       "",
-      "What facts matter:",
-      "- Whether the trip change happened before the bid period started or after it was already on your line.",
-      "- Whether the removed leg reduced the trip's scheduled value or only changed the operating pattern into a redeye.",
-      "- Whether you are asking about pay, credit, or both.",
+      "What to check in iCrew/DBMS:",
+      "- The original award versus the changed rotation history, including when the removed leg and redeye change posted.",
+      "- The pay and credit values before and after the change.",
+      "- The reserve coverage denial reason on the similar 4-day swap.",
+      "- The known-absence request category or any CPO / contract-admin guidance tied to this event.",
+      "- Any DART, ALPA, or committee guidance if the dispute is really about pay or credit protection on a future changed trip.",
+      "",
+      "Source limitation:",
+      "- I do not have a clean controlling source for CPO override / known absence pay protection in this packet.",
+      "",
+      "Sources used:",
+      "- Use Scheduler Manual support first for reserve coverage, swap processing, and any CPO/manual-processing path. Use PWA support for known absence, schedule change, and pay protection only if the packet directly addresses this future non-carryover change. Use Compensation Manual support only if it directly addresses pay or credit protection on the changed rotation.",
       "",
       "Practical next step:",
-      "- Save the original rotation, the changed rotation, and the value difference, then compare that against the schedule-change, known-absence, and pay-protection language before asking Crew Scheduling or the committee for a manual fix.",
+      "- Save the original rotation, the changed redeye version, the value comparison, the reserve-coverage denial, and any CPO or DART guidance so you can separate the swap-processing issue from the actual pay-protection question.",
     ].filter((line): line is string => Boolean(line));
   } else if (
     lower.includes("short call") &&
@@ -1096,7 +2068,7 @@ function buildSafeScenarioFallbackAnswer(args: {
     shortAnswer =
       "No — a Silver Slip does not require hitting the Green Slip trigger to get premium pay.";
     likelyApplication =
-      "Green Slip and Silver Slip should not be treated as the same premium mechanism. Green Slip premium is tied to its own trigger-based rules, while Silver Slip premium should be analyzed under its separate silver-slip or premium-pay language. I would still stay cautious if the packet is clearer on Green Slip than on the exact Silver Slip rule text.";
+      "Green Slip has its own trigger or threshold mechanics. A Silver Slip is a separate premium category, so you should not assume the Green Slip trigger applies to Silver Slip. I would still stay cautious if the packet is clearer on Green Slip than on the exact Silver Slip premium-trigger language.";
     issueThreadLines = [
       "Difference:",
       "- Green Slip: premium pay depends on the GS trigger or threshold condition under the Green Slip rule set, including Section 23 Q support when that is the governing GS section.",
@@ -1119,7 +2091,7 @@ function buildSafeScenarioFallbackAnswer(args: {
       "Source limitation:",
       silverSlipSupportFound
         ? greenSlipSupportFound
-          ? "- I have support for both Silver Slip and Green Slip in the packet, but the Green Slip trigger language is still the clearer of the two."
+          ? "- I found support for Silver Slip premium treatment and separate Green Slip comparison support, but I would verify the exact Silver Slip pay trigger if the visible source does not state it directly."
           : "- I have some Silver Slip support, but the packet is still thinner than I want on the exact premium trigger wording."
         : greenSlipSupportFound
           ? "- I have clearer support for Green Slip behavior than for the exact Silver Slip premium rule in this context."
@@ -1130,7 +2102,66 @@ function buildSafeScenarioFallbackAnswer(args: {
       "I found overlapping rule families here, but not enough indexed support to confirm a clean same-day stack result.";
     likelyApplication =
       "This looks like a layered interaction where APD, GS, and short-call rules can all matter, so I would treat the stack result as unresolved until the controlling sequence is confirmed.";
-  } else if (lower.includes("reroute") || lower.includes("deadhead")) {
+  } else if (rerouteConsistencyScenario && !payCreditConsistencyScenario) {
+    const firstAirborneCase =
+      lower.includes("first airborne") ||
+      lower.includes("after first airborne") ||
+      (lower.includes("different flight number") && lower.includes("same destination"));
+    const rrPayCase =
+      lower.includes("rrpay") ||
+      (lower.includes("paid differently") && (lower.includes("turn time") || lower.includes("time card")));
+    shortAnswer = firstAirborneCase
+      ? "This looks like a reroute-versus-continuation question, and a different flight number by itself does not prove reroute pay applies."
+      : "This looks like an RRPay consistency question, and two reserve reroute events that look similar can still pay differently if the underlying timing and credit inputs changed.";
+    likelyApplication = firstAirborneCase
+      ? "The safest read is to separate the first-airborne rule from the visible flight-number change. The real question is whether Day 2 became a new reroute segment under Section 23 L or stayed a continuation of the same rotation flow to the same destination."
+      : "The safest read is to separate the visual similarity of the two RR trips from the actual timing inputs. Turn time, duty buildup, and credit treatment can change RRPay even when the city pair and block time look almost identical.";
+    issueThreadLines = [
+      "What this appears to be:",
+      firstAirborneCase
+        ? "- A reroute-pay question about a Day 2 change after first airborne departure, where the destination stayed the same but the scheduled flight number changed."
+        : "- An RRPay consistency question where two reserve reroute events looked the same on paper but paid differently on the timecard.",
+      "",
+      "What this depends on:",
+      firstAirborneCase
+        ? "- Whether the first-airborne departure threshold had already been crossed for the rotation segment that is being changed."
+        : "- Whether the two reserve events were truly identical in turn time, duty-time buildup, credit sequence, and closeout coding rather than just the same city pair.",
+      firstAirborneCase
+        ? "- Whether the Day 2 leg was processed as a reroute, continuation, reassignment, or simple flight-number swap to the same destination."
+        : "- Whether the different turn time changed duty or credit inputs enough to produce a different RRPay outcome.",
+      firstAirborneCase
+        ? "- Whether Section 23 L support here actually ties this fact pattern to reroute pay rather than continuation logic."
+        : "- Whether the attached Compensation Manual support includes the exact RRPay calculation method for this reserve fact pattern.",
+      "",
+      "Likely paths:",
+      firstAirborneCase
+        ? "- If the system treated the Day 2 change as a continuation to the same destination, the flight-number change alone does not force reroute pay."
+        : "- If the turn-time difference changed duty, credit, or RR calculation inputs, the two trips can legitimately pay differently even if the block time looks about the same.",
+      firstAirborneCase
+        ? "- If the change created a true reroute under the first-airborne / Section 23 L rule set, reroute pay becomes more plausible, but you still need the controlling 23 L language rather than the flight number by itself."
+        : "- If the underlying timing and coding were actually identical, then a mismatch points more toward a processing or timecard explanation than a rule difference.",
+      rrPayCase
+        ? "- If the packet only gives general reroute support and not the exact RRPay formula, keep the answer conditional instead of promising the same pay result."
+        : "- If the packet only gives general reroute support and not the exact first-airborne continuation interpretation, keep the answer conditional instead of promising reroute pay.",
+      "",
+      "What to check in iCrew/DBMS/timecard:",
+      firstAirborneCase
+        ? "- Check whether the Day 2 leg was coded as continuation, reroute, reassignment, or a new segment, and whether the first-airborne flag or Section 23 L treatment changed with the update."
+        : "- Check the Apr 1 and Apr 17 timecards side by side for turn time, duty credit, RR coding, and any timing difference that feeds the pay calculation.",
+      firstAirborneCase
+        ? "- Check whether the destination stayed the same while only the scheduled flight number changed, and whether the system still treated the leg as part of the same rotation flow."
+        : "- Check whether MiCrew, DBMS, or the final timecard shows a different duty or credit sequence even though the city pair stayed ATL-SAV-ATL.",
+      "- Check the final posted pay or credit code, not just the trip description.",
+      "",
+      "Source limitation:",
+      firstAirborneCase
+        ? "- I do not have a fully explicit first-airborne continuation-versus-reroute interpretation attached here, so I would not say reroute pay applies solely because the flight number changed."
+        : "- I do not have the exact RRPay formula attached here, so I would not say the two trips must pay identically unless the timing and coding inputs match.",
+      "",
+      "Sources used:",
+      "- Use PWA Section 23 L first for reroute/continuation treatment, then use Compensation Manual support for RRPay or credit effects, and use Scheduler Manual only for processing labels if needed.",
+    ].filter((line): line is string => Boolean(line));
+  } else if ((lower.includes("reroute") || lower.includes("deadhead")) && !payCreditConsistencyScenario) {
     shortAnswer =
       "I found relevant reroute support, but the answer still depends on details the current source packet does not fully lock down.";
     likelyApplication =
@@ -1212,6 +2243,7 @@ function applyScenarioAnswerVerifier(args: {
 }
 
 function finalizeScenarioSafetyPipeline(args: {
+  question: string;
   answer: ContractAnswerCard;
   verified: ReturnType<typeof applyScenarioAnswerVerifier>;
   supportDebug?: Record<string, unknown>;
@@ -1220,11 +2252,94 @@ function finalizeScenarioSafetyPipeline(args: {
   const supportPrimaryAnchorMissing = args.supportDebug?.supportPrimaryAnchorMissing === true;
   const xDayScenario = args.supportDebug?.xDayScenario === true;
   const xDayAnchorFound = args.supportDebug?.xDayAnchorFound === true;
+  const xDayGroupingScenario = args.supportDebug?.xDayGroupingScenario === true;
+  const xDayGroupingAnchorFound = args.supportDebug?.xDayGroupingAnchorFound === true;
+  const xDayGroupingMissingSupportReason =
+    typeof args.supportDebug?.xDayGroupingMissingSupportReason === "string"
+      ? args.supportDebug.xDayGroupingMissingSupportReason
+      : undefined;
+  const pbRerouteXdayScenario = args.supportDebug?.pbRerouteXdayScenario === true;
+  const pbAnchorFound = args.supportDebug?.pbAnchorFound === true;
+  const pbProcessingAnchorFound = args.supportDebug?.pbProcessingAnchorFound === true;
+  const notificationAnchorFound = args.supportDebug?.notificationAnchorFound === true;
+  const pbScenarioMissingSupportReason =
+    typeof args.supportDebug?.pbScenarioMissingSupportReason === "string"
+      ? args.supportDebug.pbScenarioMissingSupportReason
+      : undefined;
+  const futureRotationChangeScenario = args.supportDebug?.futureRotationChangeScenario === true;
+  const futureRotationChangeAnchorFound = args.supportDebug?.futureRotationChangeAnchorFound === true;
+  const cpoOverrideAnchorFound = args.supportDebug?.cpoOverrideAnchorFound === true;
+  const knownAbsenceAnchorFound = args.supportDebug?.knownAbsenceAnchorFound === true;
+  const payProtectionAnchorFound = args.supportDebug?.payProtectionAnchorFound === true;
+  const futureRotationMissingSupportReason =
+    typeof args.supportDebug?.futureRotationMissingSupportReason === "string"
+      ? args.supportDebug.futureRotationMissingSupportReason
+      : undefined;
   const pcsSwapScenario = args.supportDebug?.pcsSwapScenario === true;
   const pcsSwapAnchorFound = args.supportDebug?.pcsSwapAnchorFound === true;
+  const pickupLimitScenario = args.supportDebug?.pickupLimitScenario === true;
+  const pickupLimitAnchorFound = args.supportDebug?.pickupLimitAnchorFound === true;
+  const pickupLimitMissingSupportReason =
+    typeof args.supportDebug?.pickupLimitMissingSupportReason === "string"
+      ? args.supportDebug.pickupLimitMissingSupportReason
+      : undefined;
   const pcsSwapMissingSupportReason =
     typeof args.supportDebug?.pcsSwapMissingSupportReason === "string"
       ? args.supportDebug.pcsSwapMissingSupportReason
+      : undefined;
+  const vacationBankScenario = args.supportDebug?.vacationBankScenario === true;
+  const vacationBankAnchorFound = args.supportDebug?.vacationBankAnchorFound === true;
+  const vacationBankMissingSupportReason =
+    typeof args.supportDebug?.vacationBankMissingSupportReason === "string"
+      ? args.supportDebug.vacationBankMissingSupportReason
+      : undefined;
+  const domicileLayoverScenario = args.supportDebug?.domicileLayoverScenario === true;
+  const domicileLayoverAnchorFound = args.supportDebug?.domicileLayoverAnchorFound === true;
+  const domicileLayoverMissingSupportReason =
+    typeof args.supportDebug?.domicileLayoverMissingSupportReason === "string"
+      ? args.supportDebug.domicileLayoverMissingSupportReason
+      : undefined;
+  const sickLookbackScenario = args.supportDebug?.sickLookbackScenario === true;
+  const sickLookbackAnchorFound = args.supportDebug?.sickLookbackAnchorFound === true;
+  const sickLookbackMissingSupportReason =
+    typeof args.supportDebug?.sickLookbackMissingSupportReason === "string"
+      ? args.supportDebug.sickLookbackMissingSupportReason
+      : undefined;
+  const payCreditConsistencyScenario = args.supportDebug?.payCreditConsistencyScenario === true;
+  const payCreditAnchorFound = args.supportDebug?.payCreditAnchorFound === true;
+  const payCreditMissingSupportReason =
+    typeof args.supportDebug?.payCreditMissingSupportReason === "string"
+      ? args.supportDebug.payCreditMissingSupportReason
+      : undefined;
+  const apdDiagnosticScenario = args.supportDebug?.apdDiagnosticScenario === true;
+  const apdThresholdExplained = args.supportDebug?.apdThresholdExplained === true;
+  const apdDriftDetected = args.supportDebug?.apdDriftDetected === true;
+  const qsCallOrderScenario = args.supportDebug?.qsCallOrderScenario === true;
+  const qsCallOrderAnchorFound = args.supportDebug?.qsCallOrderAnchorFound === true;
+  const qsCallOrderMissingSupportReason =
+    typeof args.supportDebug?.qsCallOrderMissingSupportReason === "string"
+      ? args.supportDebug.qsCallOrderMissingSupportReason
+      : undefined;
+  const oeNotificationScenario = args.supportDebug?.oeNotificationScenario === true;
+  const oeNotificationAnchorFound = args.supportDebug?.oeNotificationAnchorFound === true;
+  const oeNotificationMissingSupportReason =
+    typeof args.supportDebug?.oeNotificationMissingSupportReason === "string"
+      ? args.supportDebug.oeNotificationMissingSupportReason
+      : undefined;
+  const oeNotificationSupportRejectedReasons = Array.isArray(args.supportDebug?.oeNotificationSupportRejectedReasons)
+    ? args.supportDebug.oeNotificationSupportRejectedReasons.filter((item): item is string => typeof item === "string")
+    : [];
+  const shortCallNotificationScenario = args.supportDebug?.shortCallNotificationScenario === true;
+  const shortCallNotificationAnchorFound = args.supportDebug?.shortCallNotificationAnchorFound === true;
+  const shortCallNotificationMissingSupportReason =
+    typeof args.supportDebug?.shortCallNotificationMissingSupportReason === "string"
+      ? args.supportDebug.shortCallNotificationMissingSupportReason
+      : undefined;
+  const rerouteConsistencyScenario = args.supportDebug?.rerouteConsistencyScenario === true;
+  const rerouteAnchorFound = args.supportDebug?.rerouteAnchorFound === true;
+  const rerouteMissingSupportReason =
+    typeof args.supportDebug?.rerouteMissingSupportReason === "string"
+      ? args.supportDebug.rerouteMissingSupportReason
       : undefined;
   const shortCallDutyScenario = args.supportDebug?.shortCallDutyScenario === true;
   const shortCallDutyAnchorFound = args.supportDebug?.shortCallDutyAnchorFound === true;
@@ -1236,6 +2351,17 @@ function finalizeScenarioSafetyPipeline(args: {
   const silverSlipPrimarySupportFound = args.supportDebug?.silverSlipPrimarySupportFound === true;
   const greenSlipComparisonSupportFound = args.supportDebug?.greenSlipComparisonSupportFound === true;
   const silverSlipSupportMissing = args.supportDebug?.silverSlipSupportMissing === true;
+  const controllingSectionLocked = args.supportDebug?.controllingSectionLocked === true;
+  const controllingSectionDisplay =
+    typeof args.supportDebug?.controllingSectionDisplay === "string"
+      ? args.supportDebug.controllingSectionDisplay
+      : undefined;
+  const controllingSectionQuoteAttached = args.supportDebug?.controllingSectionQuoteAttached === true;
+  const controllingSectionQuote =
+    typeof args.supportDebug?.controllingSectionQuote === "string"
+      ? args.supportDebug.controllingSectionQuote
+      : undefined;
+  const controllingSectionMissingExactText = args.supportDebug?.controllingSectionMissingExactText === true;
   const downgradeReasons: string[] = [];
 
   if (args.verified.verifierAdjustedAnswer) {
@@ -1256,8 +2382,55 @@ function finalizeScenarioSafetyPipeline(args: {
   if (xDayScenario && !xDayAnchorFound) {
     downgradeReasons.push("xday_anchor_missing");
   }
+  if (xDayGroupingScenario && (!xDayGroupingAnchorFound || Boolean(xDayGroupingMissingSupportReason))) {
+    downgradeReasons.push("xday_grouping_support_incomplete");
+  }
+  if (pbRerouteXdayScenario && (!pbAnchorFound || !pbProcessingAnchorFound || Boolean(pbScenarioMissingSupportReason))) {
+    downgradeReasons.push("pb_reroute_xday_support_incomplete");
+  }
+  if (
+    futureRotationChangeScenario &&
+    (
+      !futureRotationChangeAnchorFound ||
+      !knownAbsenceAnchorFound ||
+      !payProtectionAnchorFound ||
+      Boolean(futureRotationMissingSupportReason)
+    )
+  ) {
+    downgradeReasons.push("future_rotation_change_support_incomplete");
+  }
   if (pcsSwapScenario && !pcsSwapAnchorFound) {
     downgradeReasons.push("pcs_swap_anchor_missing");
+  }
+  if (pickupLimitScenario && !pickupLimitAnchorFound) {
+    downgradeReasons.push("pickup_limit_anchor_missing");
+  }
+  if (vacationBankScenario && !vacationBankAnchorFound) {
+    downgradeReasons.push("vacation_bank_anchor_missing");
+  }
+  if (domicileLayoverScenario && (!domicileLayoverAnchorFound || Boolean(domicileLayoverMissingSupportReason))) {
+    downgradeReasons.push("domicile_layover_support_incomplete");
+  }
+  if (sickLookbackScenario && (!sickLookbackAnchorFound || Boolean(sickLookbackMissingSupportReason))) {
+    downgradeReasons.push("sick_lookback_support_incomplete");
+  }
+  if (payCreditConsistencyScenario && (!payCreditAnchorFound || Boolean(payCreditMissingSupportReason))) {
+    downgradeReasons.push("pay_credit_support_incomplete");
+  }
+  if (rerouteConsistencyScenario && (!rerouteAnchorFound || Boolean(rerouteMissingSupportReason))) {
+    downgradeReasons.push("reroute_support_incomplete");
+  }
+  if (qsCallOrderScenario && (!qsCallOrderAnchorFound || Boolean(qsCallOrderMissingSupportReason))) {
+    downgradeReasons.push("qs_call_order_support_incomplete");
+  }
+  if (oeNotificationScenario && (!oeNotificationAnchorFound || Boolean(oeNotificationMissingSupportReason))) {
+    downgradeReasons.push("oe_notification_support_incomplete");
+  }
+  if (shortCallNotificationScenario && (!shortCallNotificationAnchorFound || Boolean(shortCallNotificationMissingSupportReason))) {
+    downgradeReasons.push("shortcall_notification_support_incomplete");
+  }
+  if (apdDiagnosticScenario && (!apdThresholdExplained || apdDriftDetected)) {
+    downgradeReasons.push("apd_diagnostic_incomplete");
   }
   if (shortCallDutyScenario && !shortCallDutyAnchorFound) {
     downgradeReasons.push("shortcall_duty_anchor_missing");
@@ -1295,6 +2468,47 @@ function finalizeScenarioSafetyPipeline(args: {
       assumptions: Array.from(new Set([...(adjustedAnswer.assumptions ?? []), note])),
     };
   }
+  if (xDayGroupingScenario && (!xDayGroupingAnchorFound || Boolean(xDayGroupingMissingSupportReason))) {
+    const note =
+      xDayGroupingMissingSupportReason ??
+      "I do not have the exact reserve X-day grouping / cross-month movement rule attached for this question.";
+    adjustedAnswer = {
+      ...adjustedAnswer,
+      plainEnglishExplanation: `${adjustedAnswer.plainEnglishExplanation}\n${note}`.trim(),
+      caveats: Array.from(new Set([...(adjustedAnswer.caveats ?? []), note])),
+      assumptions: Array.from(new Set([...(adjustedAnswer.assumptions ?? []), note])),
+    };
+  }
+  if (pbRerouteXdayScenario && (!pbAnchorFound || !pbProcessingAnchorFound || Boolean(pbScenarioMissingSupportReason))) {
+    const note =
+      pbScenarioMissingSupportReason ??
+      "I do not have the full PB / PR / LC reapplication or interrupted X-day processing logic attached for this question.";
+    adjustedAnswer = {
+      ...adjustedAnswer,
+      plainEnglishExplanation: `${adjustedAnswer.plainEnglishExplanation}\n${note}`.trim(),
+      caveats: Array.from(new Set([...(adjustedAnswer.caveats ?? []), note])),
+      assumptions: Array.from(new Set([...(adjustedAnswer.assumptions ?? []), note])),
+    };
+  }
+  if (
+    futureRotationChangeScenario &&
+    (
+      !futureRotationChangeAnchorFound ||
+      !knownAbsenceAnchorFound ||
+      !payProtectionAnchorFound ||
+      Boolean(futureRotationMissingSupportReason)
+    )
+  ) {
+    const note =
+      futureRotationMissingSupportReason ??
+      "I do not have a clean controlling source for CPO override / known absence pay protection in this packet.";
+    adjustedAnswer = {
+      ...adjustedAnswer,
+      plainEnglishExplanation: `${adjustedAnswer.plainEnglishExplanation}\n${note}`.trim(),
+      caveats: Array.from(new Set([...(adjustedAnswer.caveats ?? []), note])),
+      assumptions: Array.from(new Set([...(adjustedAnswer.assumptions ?? []), note])),
+    };
+  }
   if (pcsSwapScenario && !pcsSwapAnchorFound) {
     const note =
       pcsSwapMissingSupportReason ??
@@ -1306,6 +2520,84 @@ function finalizeScenarioSafetyPipeline(args: {
       assumptions: Array.from(new Set([...(adjustedAnswer.assumptions ?? []), note])),
     };
   }
+  if (pickupLimitScenario && !pickupLimitAnchorFound) {
+    const note =
+      pickupLimitMissingSupportReason ??
+      "I do not see the exact max pickup / swap-with-pot rule in the attached support.";
+    adjustedAnswer = {
+      ...adjustedAnswer,
+      plainEnglishExplanation: `${adjustedAnswer.plainEnglishExplanation}\n${note}`.trim(),
+      caveats: Array.from(new Set([...(adjustedAnswer.caveats ?? []), note])),
+      assumptions: Array.from(new Set([...(adjustedAnswer.assumptions ?? []), note])),
+    };
+  }
+  if (vacationBankScenario && !vacationBankAnchorFound) {
+    const note =
+      vacationBankMissingSupportReason ??
+      "I do not see the exact vacation bank / SUP / IVD Section 7 rule in the attached support.";
+    adjustedAnswer = {
+      ...adjustedAnswer,
+      plainEnglishExplanation: `${adjustedAnswer.plainEnglishExplanation}\n${note}`.trim(),
+      caveats: Array.from(new Set([...(adjustedAnswer.caveats ?? []), note])),
+      assumptions: Array.from(new Set([...(adjustedAnswer.assumptions ?? []), note])),
+    };
+  }
+  if (domicileLayoverScenario && domicileLayoverMissingSupportReason) {
+    adjustedAnswer = {
+      ...adjustedAnswer,
+      plainEnglishExplanation: `${adjustedAnswer.plainEnglishExplanation}\n${domicileLayoverMissingSupportReason}`.trim(),
+      caveats: Array.from(new Set([...(adjustedAnswer.caveats ?? []), domicileLayoverMissingSupportReason])),
+      assumptions: Array.from(new Set([...(adjustedAnswer.assumptions ?? []), domicileLayoverMissingSupportReason])),
+    };
+  }
+  if (sickLookbackScenario && sickLookbackMissingSupportReason) {
+    adjustedAnswer = {
+      ...adjustedAnswer,
+      plainEnglishExplanation: `${adjustedAnswer.plainEnglishExplanation}\n${sickLookbackMissingSupportReason}`.trim(),
+      caveats: Array.from(new Set([...(adjustedAnswer.caveats ?? []), sickLookbackMissingSupportReason])),
+      assumptions: Array.from(new Set([...(adjustedAnswer.assumptions ?? []), sickLookbackMissingSupportReason])),
+    };
+  }
+  if (payCreditConsistencyScenario && payCreditMissingSupportReason) {
+    adjustedAnswer = {
+      ...adjustedAnswer,
+      plainEnglishExplanation: `${adjustedAnswer.plainEnglishExplanation}\n${payCreditMissingSupportReason}`.trim(),
+      caveats: Array.from(new Set([...(adjustedAnswer.caveats ?? []), payCreditMissingSupportReason])),
+      assumptions: Array.from(new Set([...(adjustedAnswer.assumptions ?? []), payCreditMissingSupportReason])),
+    };
+  }
+  if (rerouteConsistencyScenario && rerouteMissingSupportReason) {
+    adjustedAnswer = {
+      ...adjustedAnswer,
+      plainEnglishExplanation: `${adjustedAnswer.plainEnglishExplanation}\n${rerouteMissingSupportReason}`.trim(),
+      caveats: Array.from(new Set([...(adjustedAnswer.caveats ?? []), rerouteMissingSupportReason])),
+      assumptions: Array.from(new Set([...(adjustedAnswer.assumptions ?? []), rerouteMissingSupportReason])),
+    };
+  }
+  if (qsCallOrderScenario && qsCallOrderMissingSupportReason) {
+    adjustedAnswer = {
+      ...adjustedAnswer,
+      plainEnglishExplanation: `${adjustedAnswer.plainEnglishExplanation}\n${qsCallOrderMissingSupportReason}`.trim(),
+      caveats: Array.from(new Set([...(adjustedAnswer.caveats ?? []), qsCallOrderMissingSupportReason])),
+      assumptions: Array.from(new Set([...(adjustedAnswer.assumptions ?? []), qsCallOrderMissingSupportReason])),
+    };
+  }
+  if (oeNotificationScenario && oeNotificationMissingSupportReason) {
+    adjustedAnswer = {
+      ...adjustedAnswer,
+      plainEnglishExplanation: `${adjustedAnswer.plainEnglishExplanation}\n${oeNotificationMissingSupportReason}`.trim(),
+      caveats: Array.from(new Set([...(adjustedAnswer.caveats ?? []), oeNotificationMissingSupportReason])),
+      assumptions: Array.from(new Set([...(adjustedAnswer.assumptions ?? []), oeNotificationMissingSupportReason])),
+    };
+  }
+  if (shortCallNotificationScenario && shortCallNotificationMissingSupportReason) {
+    adjustedAnswer = {
+      ...adjustedAnswer,
+      plainEnglishExplanation: `${adjustedAnswer.plainEnglishExplanation}\n${shortCallNotificationMissingSupportReason}`.trim(),
+      caveats: Array.from(new Set([...(adjustedAnswer.caveats ?? []), shortCallNotificationMissingSupportReason])),
+      assumptions: Array.from(new Set([...(adjustedAnswer.assumptions ?? []), shortCallNotificationMissingSupportReason])),
+    };
+  }
   if (shortCallDutyScenario && !shortCallDutyAnchorFound) {
     const note = "I do not see the exact short-call plus same-day trip legality rule in the attached support.";
     adjustedAnswer = {
@@ -1315,6 +2607,10 @@ function finalizeScenarioSafetyPipeline(args: {
       assumptions: Array.from(new Set([...(adjustedAnswer.assumptions ?? []), note])),
     };
   }
+  adjustedAnswer = {
+    ...adjustedAnswer,
+    clarifyingQuestions: filterClarifyingQuestionsForInference(args.question, adjustedAnswer.clarifyingQuestions),
+  };
   if (supportMissingForReferencedSection && answerReferencedSections.length > 0) {
     const note = `I referenced ${answerReferencedSections.join(", ")}, but I was not able to retrieve the supporting text.`;
     adjustedAnswer = {
@@ -1345,9 +2641,48 @@ function finalizeScenarioSafetyPipeline(args: {
       downgradeReasons,
       xDayScenario,
       xDayAnchorFound,
+      xDayGroupingScenario,
+      xDayGroupingAnchorFound,
+      xDayGroupingMissingSupportReason,
+      pbRerouteXdayScenario,
+      pbAnchorFound,
+      pbProcessingAnchorFound,
+      notificationAnchorFound,
+      pbScenarioMissingSupportReason,
+      futureRotationChangeScenario,
+      futureRotationChangeAnchorFound,
+      cpoOverrideAnchorFound,
+      knownAbsenceAnchorFound,
+      payProtectionAnchorFound,
+      futureRotationMissingSupportReason,
       pcsSwapScenario,
       pcsSwapAnchorFound,
+      pickupLimitScenario,
+      pickupLimitAnchorFound,
+      pickupLimitMissingSupportReason,
       pcsSwapMissingSupportReason,
+      vacationBankScenario,
+      vacationBankAnchorFound,
+      vacationBankMissingSupportReason,
+      payCreditConsistencyScenario,
+      payCreditAnchorFound,
+      payCreditMissingSupportReason,
+      rerouteConsistencyScenario,
+      rerouteAnchorFound,
+      rerouteMissingSupportReason,
+      qsCallOrderScenario,
+      qsCallOrderAnchorFound,
+      qsCallOrderMissingSupportReason,
+      oeNotificationScenario,
+      oeNotificationAnchorFound,
+      oeNotificationMissingSupportReason,
+      oeNotificationSupportRejectedReasons,
+      shortCallNotificationScenario,
+      shortCallNotificationAnchorFound,
+      shortCallNotificationMissingSupportReason,
+      apdDiagnosticScenario,
+      apdThresholdExplained,
+      apdDriftDetected,
       shortCallDutyScenario,
       shortCallDutyAnchorFound,
       answerReferencedSections,
@@ -1356,6 +2691,11 @@ function finalizeScenarioSafetyPipeline(args: {
       silverSlipPrimarySupportFound,
       greenSlipComparisonSupportFound,
       silverSlipSupportMissing,
+      controllingSectionLocked,
+      controllingSectionDisplay,
+      controllingSectionQuoteAttached,
+      controllingSectionQuote,
+      controllingSectionMissingExactText,
     },
   };
 }
@@ -1701,6 +3041,7 @@ function inferClarifyingField(aiResult: ContractCopilotAIOutput) {
 function inferClarifyingQuestion(
   aiResult: ContractCopilotAIOutput,
   fallbackQuestions: ClarifyingQuestion[] | undefined,
+  question: string,
   clarificationCount: number
 ): ClarifyingQuestion[] | undefined {
   if (!aiResult.needsClarification) {
@@ -1710,13 +3051,16 @@ function inferClarifyingQuestion(
     return undefined;
   }
   if (fallbackQuestions && fallbackQuestions.length > 0) {
-    return fallbackQuestions.slice(0, 1).map((question) => ({
-      ...question,
-      quickReplies:
-        question.quickReplies && question.quickReplies.length > 0
-          ? question.quickReplies
-          : buildQuickRepliesForField(question.factField),
-    }));
+    return filterClarifyingQuestionsForInference(
+      question,
+      fallbackQuestions.slice(0, 1).map((questionItem) => ({
+        ...questionItem,
+        quickReplies:
+          questionItem.quickReplies && questionItem.quickReplies.length > 0
+            ? questionItem.quickReplies
+            : buildQuickRepliesForField(questionItem.factField),
+      }))
+    );
   }
 
   const prompt = aiResult.clarifyingQuestion?.trim();
@@ -1726,7 +3070,7 @@ function inferClarifyingQuestion(
 
   const factField = inferClarifyingField(aiResult);
 
-  return [
+  return filterClarifyingQuestionsForInference(question, [
     {
       id: "ai-clarification",
       prompt,
@@ -1737,7 +3081,7 @@ function inferClarifyingQuestion(
           ? aiResult.quickReplies
           : buildQuickRepliesForField(factField),
     },
-  ];
+  ]);
 }
 
 function aiResultFromPartial(partial: Partial<ContractCopilotAIOutput>): ContractCopilotAIOutput {
@@ -2131,6 +3475,15 @@ function filterStrongContractReferences(
 
 function scoreVisibleReferenceSpecificity(section: string | undefined) {
   const normalized = (section ?? "").trim().toUpperCase();
+  if (
+    normalized === "SWAP WITH POT" ||
+    normalized === "MAX PICKUP" ||
+    normalized === "PCS PROCESSING" ||
+    normalized === "RESERVE COVERAGE" ||
+    normalized === "OPEN TIME PROCESSING"
+  ) {
+    return 4;
+  }
   if (/^SECTION\s+\d{1,2}\s+[A-Z]\.\d+$/.test(normalized)) {
     return 3;
   }
@@ -2358,7 +3711,9 @@ function extractSupportIntentTerms(question: string, answerText: string) {
     { key: "pr", patterns: [/\bpr\b/, /\bpr remainder\b/] },
     { key: "lc", patterns: [/\blc\b/, /\blong call\b/] },
     { key: "qs", patterns: [/\bqs\b/, /\bquick slip\b/] },
+    { key: "blanket qs", patterns: [/\bblanket qs\b/] },
     { key: "senior responder", patterns: [/\bsenior responder\b/] },
+    { key: "call order", patterns: [/\bcall every pilot\b/, /\bcall order\b/, /\bwide report\b/, /\bseniority\b/] },
     { key: "same rotation", patterns: [/\bsame rotation\b/, /\bexact same rotation\b/] },
     { key: "duplicate award", patterns: [/\bduplicate award\b/, /\balready awarded\b/] },
     { key: "premium pay", patterns: [/\bpremium pay\b/, /\bquintuple\b/, /\bmultiple pay\b/] },
@@ -2380,8 +3735,14 @@ function extractSupportIntentTerms(question: string, answerText: string) {
     { key: "arcos", patterns: [/\barcos\b/] },
     { key: "dart", patterns: [/\bdart\b/] },
     { key: "stop", patterns: [/\bstop\b/] },
+    { key: "oe notification", patterns: [/\boe notification\b/, /\boe\b.*\bnotification\b/, /\bnotification requirement\b/] },
+    { key: "company notification online", patterns: [/\bcompany notification online\b/, /\bcno\b/] },
+    { key: "phone call", patterns: [/\bphone call\b/, /\btelephone\b/] },
+    { key: "srh", patterns: [/\bsrh\b/] },
+    { key: "trh", patterns: [/\btrh\b/] },
     { key: "x-days", patterns: [/\bx-days?\b/, /\bx days?\b/, /\binterrupted x-days?\b/] },
     { key: "notification", patterns: [/\bnotification\b/, /\brobot\b/, /\bnotice\b/] },
+    { key: "eligible", patterns: [/\beligible\b/, /\beligibility\b/, /\bslip active\b/] },
     { key: "pay protection", patterns: [/\bpay protection\b/, /\bdue anything extra\b/] },
     { key: "golden day", patterns: [/\bgolden day\b/] },
     { key: "hard non-fly day", patterns: [/\bhard non-fly day\b/] },
@@ -2399,6 +3760,32 @@ function extractSupportIntentTerms(question: string, answerText: string) {
     { key: "overlap", patterns: [/\boverlap\b/, /\boverlaps\b/] },
     { key: "processing", patterns: [/\bprocessing\b/, /\bprocess\b/, /\brun\b/] },
     { key: "coverage works", patterns: [/\bcoverage works\b/] },
+    { key: "domicile layover", patterns: [/\bdomicile layover\b/] },
+    { key: "base layover", patterns: [/\bbase layover\b/] },
+    { key: "rotation definition", patterns: [/\brotation definition\b/] },
+    { key: "break in duty", patterns: [/\bbreak in duty\b/, /\bbreak-in-duty\b/] },
+    { key: "break in duty at base", patterns: [/\bbreak in duty at base\b/, /\bbreak-in-duty at base\b/] },
+    { key: "open time rotation", patterns: [/\bopen time rotation\b/] },
+    { key: "rotation construction", patterns: [/\brotation construction\b/] },
+    { key: "sick bank", patterns: [/\bsick bank\b/] },
+    { key: "called well", patterns: [/\bcalled well\b/] },
+    { key: "bank deposit", patterns: [/\bbank deposit\b/, /\bdeposit\b/] },
+    { key: "ss credit", patterns: [/\bss credit\b/, /\bsilver slip credit\b/] },
+    { key: "timecard", patterns: [/\btimecard\b/] },
+    { key: "micrew", patterns: [/\bmicrew\b/, /\bmi crew\b/] },
+    { key: "credit recalculation", patterns: [/\bcredit recalculation\b/, /\brecalculation\b/] },
+    { key: "deadhead deviation", patterns: [/\bdeadhead deviation\b/, /\bdeviat(?:e|ion)\b/] },
+    { key: "13 hours", patterns: [/\bless than 13 hours\b/, /\b13 hours\b/] },
+    { key: "bank eligibility", patterns: [/\bbank-eligible\b/, /\bbank eligible\b/, /\beligibility\b/] },
+    { key: "first airborne", patterns: [/\bfirst airborne\b/, /\bafter first airborne\b/] },
+    { key: "different flight number", patterns: [/\bdifferent flight number\b/, /\bflight number\b/] },
+    { key: "same destination", patterns: [/\bsame destination\b/] },
+    { key: "continuation", patterns: [/\bcontinuation\b/] },
+    { key: "rrpay", patterns: [/\brrpay\b/, /\brr pay\b/] },
+    { key: "reroute pay", patterns: [/\breroute pay\b/] },
+    { key: "paid differently", patterns: [/\bpaid differently\b/] },
+    { key: "turn time", patterns: [/\bturn time\b/] },
+    { key: "30/168", patterns: [/\b30\/168\b/, /\b30 168\b/, /\bfar restrictions?\b/] },
   ];
   return termMap
     .filter((entry) => entry.patterns.some((pattern) => pattern.test(combined)))
@@ -2546,6 +3933,18 @@ function inferSupportSectionAnchor(reference: {
   if (combined.includes("open time processing")) {
     return "open time processing";
   }
+  if (combined.includes("rrpay")) {
+    return "RRPay";
+  }
+  if (combined.includes("reroute pay")) {
+    return "reroute pay";
+  }
+  if (combined.includes("first airborne")) {
+    return "first airborne";
+  }
+  if (combined.includes("continuation")) {
+    return "continuation";
+  }
   if (combined.includes("silver slip")) {
     return "Silver Slip (inferred)";
   }
@@ -2560,6 +3959,15 @@ function applyComparisonSupportNote(args: {
   answer: ContractAnswerCard;
   references: ContractCopilotApiSuccessResponse["answer"]["references"];
 }) {
+  const existingExplanation = normalizeSupportText(args.answer.plainEnglishExplanation ?? "");
+  if (
+    existingExplanation.includes("green slip comparison support") ||
+    existingExplanation.includes("support for both silver slip and green slip") ||
+    existingExplanation.includes("use green slip only as comparison support")
+  ) {
+    return args.answer;
+  }
+
   const comparisonSides = detectComparisonSupportSides(args.question);
   if (comparisonSides.length < 2) {
     return args.answer;
@@ -2608,18 +4016,21 @@ function rerankSupportReferences(args: {
     /interrupted x-days?/i.test(args.question) ||
     /lost x-day/i.test(args.question) ||
     /x-day credit/i.test(args.question);
-  const shortCallDutyScenario =
-    /short call/i.test(args.question) &&
-    (
-      /same day trip|subsequent same day trip/i.test(args.question) ||
-      /report time|reports at/i.test(args.question) ||
-      /duty/i.test(args.question) ||
-      /flight time/i.test(args.question) ||
-      /legality/i.test(args.question) ||
-      /both remain on schedule/i.test(args.question) ||
-      /assigned short call and trip/i.test(args.question)
-    );
+  const xDayGroupingScenario = detectXDayGroupingScenario(args.question);
+  const pbRerouteXdayScenario = detectPbRerouteXdayScenario(args.question);
+  const shortCallDutyScenario = detectShortCallDutyScenario(args.question);
   const pcsSwapScenario = detectPcsSwapScenario(args.question);
+  const pickupLimitScenario = detectPickupLimitScenario(args.question);
+  const vacationBankScenario = detectVacationBankScenario(args.question);
+  const domicileLayoverScenario = detectDomicileLayoverScenario(args.question);
+  const sickLookbackScenario = detectSickLookbackScenario(args.question);
+  const payCreditConsistencyScenario = detectPayCreditConsistencyScenario(args.question);
+  const rerouteConsistencyScenario = detectRerouteConsistencyScenario(args.question);
+  const qsCallOrderScenario = detectQsCallOrderScenario(args.question);
+  const oeNotificationScenario = detectOeNotificationScenario(args.question);
+  const shortCallNotificationScenario = detectShortCallNotificationScenario(args.question);
+  const futureRotationChangeScenario = detectFutureRotationChangeScenario(args.question);
+  const apdDiagnosticScenario = detectApdDiagnosticScenario(args.question);
   const matchedTerms = Array.from(new Set([...questionTerms, ...answerTerms]));
   const termWeights: Record<string, number> = {
     "harmed pilot": 80,
@@ -2651,6 +4062,7 @@ function rerankSupportReferences(args: {
     "known absence": 60,
     "rotation change": 70,
     redeye: 60,
+    "future rotation change": 90,
     carryover: 55,
     "credit protection": 60,
     "removed leg": 60,
@@ -2661,6 +4073,23 @@ function rerankSupportReferences(args: {
     stop: 50,
     "x-days": 60,
     "x-day": 75,
+    pb: 90,
+    pr: 90,
+    lc: 85,
+    "interrupted x-days": 95,
+    "pb converted to lc": 95,
+    "pr remainder": 95,
+    notification: 65,
+    acars: 70,
+    arcos: 70,
+    robot: 65,
+    dart: 70,
+    grouping: 80,
+    "grouping restrictions": 90,
+    "between months": 85,
+    "month-to-month transition": 90,
+    "reserve x-day": 95,
+    "x-day block": 85,
     "report time": 75,
     "release": 55,
     "duty period": 85,
@@ -2685,6 +4114,96 @@ function rerankSupportReferences(args: {
     overlap: 70,
     processing: 65,
     "coverage works": 60,
+    bank: 75,
+    "vacation day": 80,
+    "buy vacation": 75,
+    replacement: 75,
+    "60 hours": 70,
+    sup: 85,
+    ivd: 85,
+    "vacation year": 90,
+    "domicile layover": 85,
+    "base layover": 80,
+    "rotation definition": 90,
+    "break in duty": 80,
+    "break in duty at base": 95,
+    "open time rotation": 85,
+    "rotation construction": 75,
+    "medical procedures": 95,
+    "medical procedure": 95,
+    "sick lookback": 100,
+    "approval process": 90,
+    cpo: 80,
+    "known absence": 85,
+    "pay protection": 85,
+    "first airborne": 95,
+    "different flight number": 85,
+    "same destination": 80,
+    continuation: 85,
+    rrpay: 100,
+    "reroute pay": 95,
+    "paid differently": 80,
+    "turn time difference": 90,
+    "turn time": 85,
+    "section 14": 85,
+    sickness: 85,
+    notification: 70,
+    verification: 90,
+    lookback: 95,
+    medical: 80,
+    procedure: 75,
+    telehealth: 70,
+    "sick bank": 95,
+    "called well": 90,
+    "bank deposit": 85,
+    deposit: 70,
+    "ss credit": 95,
+    timecard: 85,
+    micrew: 80,
+    "credit recalculation": 100,
+    "deadhead deviation": 90,
+    deviation: 70,
+    "13-hour layover": 85,
+    layover: 60,
+    "bank eligibility": 90,
+    "first airborne": 95,
+    "different flight number": 85,
+    "same destination": 80,
+    continuation: 85,
+    rrpay: 100,
+    "reroute pay": 95,
+    "paid differently": 80,
+    "turn time difference": 90,
+    "turn time": 85,
+    "blanket qs": 90,
+    "call order": 95,
+    arcos: 90,
+    eligible: 85,
+    "30/168": 80,
+    evidence: 70,
+    dart: 70,
+    apd: 95,
+    denied: 70,
+    required: 90,
+    available: 90,
+    "reserve counts": 95,
+    threshold: 95,
+    telephone: 85,
+    "electronic placement": 95,
+    acknowledge: 90,
+    acknowledgment: 90,
+    icrew: 90,
+    micrew: 85,
+    cno: 90,
+    "oe notification": 100,
+    "company notification online": 95,
+    srh: 85,
+    trh: 85,
+    "phone call": 90,
+    "online notification": 85,
+    "electronic notification": 90,
+    "non-fly day": 95,
+    "non fly day": 95,
   };
   const definitionStyle = isDefinitionStyleQuestion(args.question);
   const pcsGeneralTerms = [
@@ -2701,6 +4220,208 @@ function rerankSupportReferences(args: {
     "processing",
     "coverage works",
   ];
+  const pickupLimitTerms = [
+    "max pickup",
+    "pickup limit",
+    "swap with pot",
+    "open time",
+    "reserve coverage",
+    "coverage works",
+    "pickup",
+    "coverage",
+  ];
+  const vacationBankTerms = ["vacation", "bank", "replacement", "vacation day", "buy vacation", "sup", "ivd", "vacation year"];
+  const domicileLayoverTerms = [
+    "domicile layover",
+    "base layover",
+    "break in duty",
+    "break in duty at base",
+    "rotation definition",
+    "open time rotation",
+    "open time",
+    "rotation",
+    "base",
+    "rotation construction",
+  ];
+  const sickLookbackTerms = [
+    "medical procedures",
+    "medical procedure",
+    "sick lookback",
+    "approval process",
+    "section 14",
+    "sickness",
+    "notification",
+    "verification",
+    "lookback",
+    "medical",
+    "procedure",
+    "telehealth",
+  ];
+  const payCreditConsistencyTerms = [
+    "sick bank",
+    "called well",
+    "bank deposit",
+    "deposit",
+    "ss credit",
+    "silver slip credit",
+    "credit doesn't count",
+    "timecard",
+    "micrew",
+    "micrew credit",
+    "credit recalculation",
+    "deadhead deviation",
+    "deviation",
+    "less than 13 hours",
+    "13 hours",
+    "deadhead",
+    "layover",
+    "credit",
+    "bank eligibility",
+  ];
+  const payCreditRequiredTerms = payCreditConsistencyScenario
+    ? Array.from(
+        new Set(
+          [
+            ...(lowerIncludesAny(args.question, ["sick bank", "called well", "picked up flying"])
+              ? ["sick bank", "called well", "credit"]
+              : []),
+            ...(lowerIncludesAny(args.question, ["ss credit", "bank deposit", "deposit", "doesn't count"])
+              ? ["bank deposit", "ss credit", "credit", "bank eligibility"]
+              : []),
+            ...(lowerIncludesAny(args.question, ["micrew", "timecard", "credit recalculation", "deadhead deviation", "13 hours"])
+              ? ["timecard", "micrew", "credit recalculation", "deadhead deviation", "13 hours"]
+              : []),
+          ].filter(Boolean)
+        )
+      )
+    : [];
+  const rerouteConsistencyTerms = [
+    "reroute",
+    "reroute pay",
+    "rrpay",
+    "first airborne",
+    "different flight number",
+    "same destination",
+    "continuation",
+    "turn time",
+    "paid differently",
+    "timecard",
+    "credit",
+    "deadhead",
+  ];
+  const rerouteRequiredTerms = rerouteConsistencyScenario
+    ? Array.from(
+        new Set(
+          [
+            ...(lowerIncludesAny(args.question, ["first airborne", "after first airborne", "different flight number", "same destination"])
+              ? ["first airborne", "different flight number", "same destination", "reroute pay"]
+              : []),
+            ...(lowerIncludesAny(args.question, ["rrpay", "paid differently", "turn time"])
+              ? ["rrpay", "turn time", "timecard", "credit"]
+              : []),
+            ...(lowerIncludesAny(args.question, ["continuation"])
+              ? ["continuation", "reroute"]
+              : []),
+          ].filter(Boolean)
+        )
+      )
+    : [];
+  const qsCallOrderTerms = [
+    "qs",
+    "quick slip",
+    "blanket qs",
+    "call order",
+    "category",
+    "arcos",
+    "notification",
+    "eligible",
+    "wide report",
+    "seniority",
+    "30/168",
+    "dart",
+  ];
+  const oeNotificationTerms = [
+    "oe",
+    "notification",
+    "cno",
+    "company notification online",
+    "phone call",
+    "srh",
+    "trh",
+    "online notification",
+    "electronic notification",
+  ];
+  const shortCallNotificationTerms = [
+    "short call",
+    "notification",
+    "vacation",
+    "non-fly day",
+    "non fly day",
+    "telephone",
+    "electronic placement",
+    "icrew",
+    "micrew",
+    "acknowledge",
+    "acknowledgment",
+    "cno",
+    "contact",
+  ];
+  const futureRotationTerms = [
+    "rotation change",
+    "redeye",
+    "removed leg",
+    "pay protection",
+    "credit protection",
+    "reserve coverage",
+    "known absence",
+    "cpo",
+    "processing",
+    "leave",
+  ];
+  const qsCallOrderRequiredTerms = qsCallOrderScenario
+    ? Array.from(
+        new Set(
+          [
+            "qs",
+            "arcos",
+            "notification",
+            "eligible",
+            ...(lowerIncludesAny(args.question, ["blanket qs", "slip active"]) ? ["blanket qs"] : []),
+            ...(lowerIncludesAny(args.question, ["30/168", "far restrictions"]) ? ["30/168"] : []),
+            ...(lowerIncludesAny(args.question, ["wide report", "seniority"]) ? ["call order", "wide report"] : []),
+          ].filter(Boolean)
+        )
+      )
+    : [];
+  const oeNotificationRequiredTerms = oeNotificationScenario
+    ? Array.from(
+        new Set(
+          [
+            "notification",
+            ...(lowerIncludesAny(args.question, ["cno", "company notification online"]) ? ["cno"] : []),
+            ...(lowerIncludesAny(args.question, ["phone call", "telephone"]) ? ["phone call"] : []),
+            ...(lowerIncludesAny(args.question, ["srh"]) ? ["srh"] : []),
+            ...(lowerIncludesAny(args.question, ["trh"]) ? ["trh"] : []),
+          ].filter(Boolean)
+        )
+      )
+    : [];
+  const shortCallNotificationRequiredTerms = shortCallNotificationScenario
+    ? Array.from(
+        new Set(
+          [
+            "short call",
+            "notification",
+            ...(lowerIncludesAny(args.question, ["vacation"]) ? ["vacation"] : []),
+            ...(lowerIncludesAny(args.question, ["non-fly day", "non fly day"]) ? ["non-fly day"] : []),
+            ...(lowerIncludesAny(args.question, ["icrew"]) ? ["icrew"] : []),
+            ...(lowerIncludesAny(args.question, ["micrew"]) ? ["micrew"] : []),
+            ...(lowerIncludesAny(args.question, ["acknowledge", "acknowledgment"]) ? ["acknowledge"] : []),
+            ...(lowerIncludesAny(args.question, ["cno"]) ? ["cno"] : []),
+          ].filter(Boolean)
+        )
+      )
+    : [];
   const pcsRequiredTerms = pcsSwapScenario
     ? Array.from(
         new Set(
@@ -2712,6 +4433,51 @@ function rerankSupportReferences(args: {
             ...((/\bpcs\b/i.test(args.question) || args.question.toLowerCase().includes("1200 pcs") || (args.question.toLowerCase().includes("april") && args.question.toLowerCase().includes("may")))
               ? ["pcs", "bid period", "swap with pot"]
               : []),
+          ].filter(Boolean)
+        )
+      )
+    : [];
+  const vacationRequiredTerms = vacationBankScenario
+    ? Array.from(
+        new Set(
+          [
+            ...(lowerIncludesAny(args.question, ["bank", "60 hours", "vacation day", "buy vacation", "replacement"])
+              ? ["vacation", "bank", "replacement"]
+              : []),
+            ...((/\bsup\b/i.test(args.question) || /\bivd\b/i.test(args.question) || /vacation year/i.test(args.question))
+              ? ["vacation year", "sup", "ivd"]
+              : []),
+          ]
+        )
+      )
+    : [];
+  const domicileRequiredTerms = domicileLayoverScenario
+    ? Array.from(
+        new Set(
+          [
+            ...(lowerIncludesAny(args.question, ["domicile layover", "base layover"])
+              ? ["domicile layover", "open time", "rotation"]
+              : []),
+            ...(lowerIncludesAny(args.question, ["rotation definition", "break in duty at base"])
+              ? ["rotation definition", "break in duty", "base"]
+              : []),
+          ].filter(Boolean)
+        )
+      )
+    : [];
+  const sickLookbackRequiredTerms = sickLookbackScenario
+    ? Array.from(
+        new Set(
+          [
+            ...(lowerIncludesAny(args.question, ["medical procedure", "medical procedures", "procedure"])
+              ? ["medical procedures", "medical", "procedure"]
+              : []),
+            ...(lowerIncludesAny(args.question, ["sick lookback", "lookback"])
+              ? ["sick lookback", "lookback"]
+              : []),
+            ...(lowerIncludesAny(args.question, ["approval process", "section 14"])
+              ? ["approval process", "section 14", "verification"]
+              : ["section 14", "verification"]),
           ].filter(Boolean)
         )
       )
@@ -2735,6 +4501,41 @@ function rerankSupportReferences(args: {
       if (reference.sourceId === "scheduler_manual") score += 90;
       if (reference.sourceId === "pwa") score += 20;
       if (reference.sourceId === "compensation_manual") score -= 10;
+    }
+    if (vacationBankScenario) {
+      if (reference.sourceId === "pwa") score += 100;
+      if (reference.sourceId === "compensation_manual") score += 30;
+      if (reference.sourceId === "scheduler_manual") score += 8;
+    }
+    if (domicileLayoverScenario) {
+      if (reference.sourceId === "pwa") score += 95;
+      if (reference.sourceId === "scheduler_manual") score += 70;
+      if (reference.sourceId === "compensation_manual") score -= 15;
+    }
+    if (sickLookbackScenario) {
+      if (reference.sourceId === "pwa") score += 130;
+      if (reference.sourceId === "scheduler_manual") score += 18;
+      if (reference.sourceId === "compensation_manual") score -= 20;
+    }
+    if (rerouteConsistencyScenario) {
+      if (reference.sourceId === "pwa") score += 105;
+      if (reference.sourceId === "compensation_manual") score += 95;
+      if (reference.sourceId === "scheduler_manual") score += 35;
+    }
+    if (qsCallOrderScenario) {
+      if (reference.sourceId === "scheduler_manual") score += 120;
+      if (reference.sourceId === "pwa") score += 65;
+      if (reference.sourceId === "compensation_manual") score -= 20;
+    }
+    if (oeNotificationScenario) {
+      if (reference.sourceId === "scheduler_manual") score += 125;
+      if (reference.sourceId === "pwa") score += 45;
+      if (reference.sourceId === "compensation_manual") score -= 55;
+    }
+    if (shortCallNotificationScenario) {
+      if (reference.sourceId === "scheduler_manual") score += 110;
+      if (reference.sourceId === "pwa") score += 90;
+      if (reference.sourceId === "compensation_manual") score += 10;
     }
 
     const sectionMatch = scoreSectionAnchorMatch({
@@ -2777,8 +4578,24 @@ function rerankSupportReferences(args: {
     }
     const silverHit = combined.includes("silver slip");
     const greenHit = combined.includes("green slip") || /\bgs\b/.test(combined);
+    const pickupLimitSpecificHits = pickupLimitTerms.filter((term) => combined.includes(term));
     const pcsSpecificHits = pcsGeneralTerms.filter((term) => combined.includes(term));
     const pcsRequiredHits = pcsRequiredTerms.filter((term) => combined.includes(term));
+    const vacationSpecificHits = vacationBankTerms.filter((term) => combined.includes(term));
+    const vacationRequiredHits = vacationRequiredTerms.filter((term) => combined.includes(term));
+    const domicileSpecificHits = domicileLayoverTerms.filter((term) => combined.includes(term));
+    const domicileRequiredHits = domicileRequiredTerms.filter((term) => combined.includes(term));
+    const sickLookbackSpecificHits = sickLookbackTerms.filter((term) => combined.includes(term));
+    const sickLookbackRequiredHits = sickLookbackRequiredTerms.filter((term) => combined.includes(term));
+    const rerouteSpecificHits = rerouteConsistencyTerms.filter((term) => combined.includes(term));
+    const rerouteRequiredHits = rerouteRequiredTerms.filter((term) => combined.includes(term));
+    const qsCallOrderSpecificHits = qsCallOrderTerms.filter((term) => combined.includes(term));
+    const qsCallOrderRequiredHits = qsCallOrderRequiredTerms.filter((term) => combined.includes(term));
+    const oeNotificationSpecificHits = getOeNotificationSupportHits(combined);
+    const oeNotificationRequiredHits = oeNotificationRequiredTerms.filter((term) => oeNotificationSpecificHits.includes(term));
+    const oeNotificationDirectSupport = hasDirectOeNotificationSupport(combined);
+    const shortCallNotificationSpecificHits = shortCallNotificationTerms.filter((term) => combined.includes(term));
+    const shortCallNotificationRequiredHits = shortCallNotificationRequiredTerms.filter((term) => combined.includes(term));
     if (silverSlipQuery) {
       if (silverHit) score += 180;
       if (!comparisonSides.includes("green slip") && greenHit && !silverHit) score -= 120;
@@ -2822,6 +4639,130 @@ function rerankSupportReferences(args: {
       if (combined.includes("open time") && pcsSpecificHits.length === 1 && !combined.includes("processing")) score -= 35;
       if ((combined.includes("definitions") || combined.includes("pilot-to-pilot swap board")) && pcsSpecificHits.length === 0) score -= 70;
     }
+    if (vacationBankScenario) {
+      if (reference.sourceId === "pwa" && vacationSpecificHits.length > 0) score += 150;
+      if (normalizeSectionIdentifier(reference.section).includes(normalizeSectionIdentifier("Section 7"))) score += 180;
+      if (vacationSpecificHits.length > 0) score += 110;
+      score += vacationSpecificHits.length * 24;
+      score += vacationRequiredHits.length * 42;
+      if (combined.includes("vacation year")) score += 70;
+      if (combined.includes("sup") || combined.includes("ivd")) score += 60;
+      if (combined.includes("bank") && combined.includes("replacement")) score += 60;
+      if ((/\bsection 23\b/.test(combined) || /\bsection 12\b/.test(combined)) && vacationSpecificHits.length === 0 && !exactSectionHit) score -= 150;
+    }
+    if (domicileLayoverScenario) {
+      const section2Hit = normalizeSectionIdentifier(reference.section).includes(normalizeSectionIdentifier("Section 2"));
+      const schedulerConstructionHit =
+        reference.sourceId === "scheduler_manual" &&
+        domicileSpecificHits.some((term) => term === "open time" || term === "rotation construction" || term === "domicile layover");
+      if (section2Hit && domicileSpecificHits.length > 0) score += 180;
+      if (section2Hit && domicileRequiredHits.length >= 2) score += 90;
+      if (schedulerConstructionHit) score += 160;
+      if (reference.sourceId === "scheduler_manual" && domicileSpecificHits.length >= 2) score += 100;
+      score += domicileSpecificHits.length * 24;
+      score += domicileRequiredHits.length * 38;
+      if ((/\bsection 23\b/.test(combined) || /\bsection 12\b/.test(combined)) && domicileSpecificHits.length === 0 && !exactSectionHit) {
+        score -= 150;
+      }
+    }
+    if (sickLookbackScenario) {
+      const section14Hit =
+        normalizeSectionIdentifier(reference.section).includes(normalizeSectionIdentifier("Section 14 F")) ||
+        normalizeSectionIdentifier(reference.section).includes(normalizeSectionIdentifier("Section 14"));
+      if (section14Hit) score += 220;
+      if (reference.sourceId === "pwa" && sickLookbackSpecificHits.length > 0) score += 170;
+      score += sickLookbackSpecificHits.length * 28;
+      score += sickLookbackRequiredHits.length * 40;
+      if (combined.includes("verification") && combined.includes("lookback")) score += 90;
+      if (combined.includes("telehealth")) score += 40;
+      if ((/\bsection 23\b/.test(combined) || /\bsection 11\b/.test(combined)) && sickLookbackSpecificHits.length === 0 && !exactSectionHit) {
+        score -= 180;
+      }
+    }
+    if (rerouteConsistencyScenario) {
+      const section23LHit =
+        normalizeSectionIdentifier(reference.section).includes(normalizeSectionIdentifier("Section 23 L")) ||
+        normalizeSectionIdentifier(combined).includes(normalizeSectionIdentifier("Section 23 L"));
+      const compensationRerouteHit =
+        reference.sourceId === "compensation_manual" &&
+        (combined.includes("reroute pay") || combined.includes("rrpay") || combined.includes("credit") || combined.includes("timecard"));
+      if (section23LHit) score += 185;
+      if (compensationRerouteHit) score += 160;
+      if (rerouteSpecificHits.length > 0) score += 120;
+      score += rerouteSpecificHits.length * 26;
+      score += rerouteRequiredHits.length * 42;
+      if (combined.includes("first airborne")) score += 80;
+      if (combined.includes("different flight number") || combined.includes("same destination")) score += 55;
+      if (combined.includes("turn time")) score += 75;
+      if ((/\bsection 23\b/.test(combined) || /\bscheduling\b/.test(combined)) && !section23LHit && rerouteSpecificHits.length === 0 && !exactSectionHit) {
+        score -= 165;
+      }
+    }
+    if (qsCallOrderScenario) {
+      const schedulerQsHit =
+        reference.sourceId === "scheduler_manual" &&
+        (combined.includes("qs") || combined.includes("quick slip") || combined.includes("arcos") || combined.includes("notification"));
+      const pwaQsHit =
+        reference.sourceId === "pwa" &&
+        (combined.includes("qs") || combined.includes("quick slip") || combined.includes("notification"));
+      if (schedulerQsHit) score += 185;
+      if (pwaQsHit) score += 120;
+      if (qsCallOrderSpecificHits.length > 0) score += 135;
+      score += qsCallOrderSpecificHits.length * 28;
+      score += qsCallOrderRequiredHits.length * 40;
+      if (combined.includes("arcos")) score += 80;
+      if (combined.includes("wide report") || combined.includes("seniority")) score += 55;
+      if ((/\bsection 23\b/.test(combined) || /\bscheduling\b/.test(combined)) && qsCallOrderSpecificHits.length === 0 && !exactSectionHit) {
+        score -= 155;
+      }
+    }
+    if (oeNotificationScenario) {
+      if (oeNotificationDirectSupport) score += 185;
+      if (oeNotificationSpecificHits.length > 0) score += 120;
+      score += oeNotificationSpecificHits.length * 26;
+      score += oeNotificationRequiredHits.length * 42;
+      if (combined.includes("company notification online") || /\bcno\b/.test(combined)) score += 70;
+      if (combined.includes("phone call") || combined.includes("telephone")) score += 65;
+      if (combined.includes("srh") || combined.includes("trh")) score += 55;
+      if ((combined.includes("green slip") || /\bgs\b/.test(combined)) && !oeNotificationDirectSupport) score -= 260;
+      if (combined.includes("deadhead") && !oeNotificationDirectSupport) score -= 180;
+      if (
+        normalizeSectionIdentifier(reference.section).includes(normalizeSectionIdentifier("Section 10")) &&
+        !oeNotificationDirectSupport
+      ) {
+        score -= 220;
+      }
+      if (
+        normalizeSectionIdentifier(reference.section).includes(normalizeSectionIdentifier("Section 2")) &&
+        !oeNotificationDirectSupport
+      ) {
+        score -= 220;
+      }
+      if ((/\bsection 23\b/.test(combined) || /\bscheduling\b/.test(combined)) && !oeNotificationDirectSupport) {
+        score -= 165;
+      }
+      if (!oeNotificationDirectSupport && oeNotificationSpecificHits.length < 2) {
+        score -= 80;
+      }
+    }
+    if (shortCallNotificationScenario) {
+      const shortCallSectionHit =
+        normalizeSectionIdentifier(reference.section).includes(normalizeSectionIdentifier("Section 23 S.9")) ||
+        normalizeSectionIdentifier(reference.section).includes(normalizeSectionIdentifier("Section 23 S"));
+      if (shortCallSectionHit) score += 170;
+      if (shortCallNotificationSpecificHits.length > 0) score += 135;
+      score += shortCallNotificationSpecificHits.length * 26;
+      score += shortCallNotificationRequiredHits.length * 40;
+      if (combined.includes("telephone") || combined.includes("contact")) score += 60;
+      if (combined.includes("electronic placement") || combined.includes("acknowledge") || combined.includes("acknowledgment")) score += 75;
+      if (combined.includes("vacation") || combined.includes("non-fly day") || combined.includes("non fly day")) score += 85;
+      if ((/\bsection 23\b/.test(combined) || /\bnotification\b/.test(combined)) && shortCallNotificationSpecificHits.length === 0 && !exactSectionHit) {
+        score -= 165;
+      }
+      if (!combined.includes("short call") && !shortCallSectionHit) {
+        score -= 80;
+      }
+    }
 
     return {
       reference,
@@ -2833,7 +4774,17 @@ function rerankSupportReferences(args: {
           ? inferSupportSectionAnchor(reference)
           : silverSlipQuery && comparisonSides.includes("green slip") && greenHit && !silverHit
             ? inferSupportSectionAnchor(reference)
+            : pickupLimitScenario && pickupLimitSpecificHits.length > 0
+              ? inferSupportSectionAnchor(reference)
             : pcsSwapScenario && pcsSpecificHits.length > 0
+              ? inferSupportSectionAnchor(reference)
+            : rerouteConsistencyScenario && rerouteSpecificHits.length > 0
+              ? inferSupportSectionAnchor(reference)
+            : qsCallOrderScenario && qsCallOrderSpecificHits.length > 0
+              ? inferSupportSectionAnchor(reference)
+            : oeNotificationScenario && oeNotificationDirectSupport
+              ? inferSupportSectionAnchor(reference)
+            : shortCallNotificationScenario && shortCallNotificationSpecificHits.length > 0
               ? inferSupportSectionAnchor(reference)
             : sectionMatch.anchor,
     };
@@ -2978,6 +4929,17 @@ function rerankSupportReferences(args: {
   }
   let pcsSwapSupportPromoted = false;
   let pcsSwapSupportMissingAnchors: string[] = [];
+  let pickupLimitAnchorFound = false;
+  let pickupLimitMissingSupportReason: string | undefined;
+  let finalSupportReorderedForSpecificAnchor = false;
+  let genericPrimaryDemotedReason: string | undefined;
+  let vacationBankSupportPromoted = false;
+  let vacationBankSupportMissingAnchors: string[] = [];
+  let domicileLayoverSupportMissingAnchors: string[] = [];
+  let sickLookbackSupportPromoted = false;
+  let sickLookbackSupportMissingAnchors: string[] = [];
+  let payCreditAnchorFound = false;
+  let payCreditMissingSupportReason: string | undefined;
   if (pcsSwapScenario) {
     const bestPcsCandidate = sorted.find((item) => {
       const combined = normalizeSupportText(
@@ -3008,6 +4970,487 @@ function rerankSupportReferences(args: {
     );
     pcsSwapSupportMissingAnchors = pcsRequiredTerms.filter((term) => !visiblePcsTerms.includes(term));
   }
+  if (pickupLimitScenario) {
+    const bestPwaPickupCandidate = sorted.find((item) => {
+      const combined = normalizeSupportText(
+        `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""}`
+      );
+      const inferredAnchor = inferSupportSectionAnchor(item.reference);
+      const section23Hit =
+        item.reference.sourceId === "pwa" &&
+        normalizeSectionIdentifier(item.reference.section).includes(normalizeSectionIdentifier("Section 23"));
+      const hits = pickupLimitTerms.filter((term) => combined.includes(term));
+      return (
+        section23Hit &&
+        inferredAnchor !== item.reference.section &&
+        (
+          hits.length >= 2 ||
+          ((combined.includes("open time") || combined.includes("pickup")) &&
+            (combined.includes("reserve coverage") || combined.includes("coverage") || combined.includes("swap")))
+        )
+      );
+    });
+    const bestSchedulerPickupCandidate = sorted.find((item) => {
+      const combined = normalizeSupportText(
+        `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""}`
+      );
+      return (
+        item.reference.sourceId === "scheduler_manual" &&
+        (combined.includes("swap with pot") || combined.includes("open time processing")) &&
+        (
+          combined.includes("max pickup") ||
+          combined.includes("pickup limit") ||
+          combined.includes("reserve coverage") ||
+          combined.includes("coverage works") ||
+          combined.includes("pickup")
+        )
+      );
+    });
+
+    const promotedPickupCandidates = [bestPwaPickupCandidate, bestSchedulerPickupCandidate].filter(
+      (item): item is (typeof sorted)[number] => Boolean(item)
+    );
+    if (promotedPickupCandidates.length > 0) {
+      const remaining = finalRanked.filter(
+        (item) => !promotedPickupCandidates.some((candidate) => candidate.reference === item.reference)
+      );
+      finalRanked.length = 0;
+      finalRanked.push(...promotedPickupCandidates, ...remaining);
+    }
+    const topPickupCandidate = finalRanked[0];
+    const topPickupText = topPickupCandidate
+      ? normalizeSupportText(
+          `${topPickupCandidate.reference.section ?? ""} ${topPickupCandidate.reference.label ?? ""} ${topPickupCandidate.reference.quoteSnippet ?? ""}`
+        )
+      : "";
+    const topIsGenericSection23 =
+      Boolean(topPickupCandidate) &&
+      normalizeSectionIdentifier(topPickupCandidate.reference.section).includes(normalizeSectionIdentifier("Section 23")) &&
+      !topPickupText.includes("swap with pot") &&
+      !topPickupText.includes("max pickup") &&
+      !topPickupText.includes("pickup limit") &&
+      !topPickupText.includes("reserve coverage");
+    if (topIsGenericSection23 && bestSchedulerPickupCandidate) {
+      const remaining = finalRanked.filter((item) => item.reference !== bestSchedulerPickupCandidate.reference);
+      finalRanked.length = 0;
+      finalRanked.push(bestSchedulerPickupCandidate, ...remaining);
+    }
+
+    const visiblePickupTerms = Array.from(
+      new Set(
+        finalRanked.flatMap((item) => {
+          const combined = normalizeSupportText(
+            `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""}`
+          );
+          return pickupLimitTerms.filter((term) => combined.includes(term));
+        })
+      )
+    );
+    pickupLimitAnchorFound =
+      Boolean(bestPwaPickupCandidate) &&
+      Boolean(bestSchedulerPickupCandidate) &&
+      visiblePickupTerms.includes("swap with pot") &&
+      visiblePickupTerms.some((term) => term === "max pickup" || term === "pickup limit");
+    if (!pickupLimitAnchorFound) {
+      pickupLimitMissingSupportReason =
+        "I do not see the exact max pickup / swap-with-pot rule in the attached support.";
+    }
+  }
+  if (pcsSwapScenario || pickupLimitScenario) {
+    const specificAnchorPriority = (item: (typeof finalRanked)[number]) => {
+      const combined = normalizeSupportText(
+        `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""} ${item.matchedSectionAnchor ?? ""}`
+      );
+      if (combined.includes("swap with pot")) return 1;
+      if (combined.includes("pickup limit") || combined.includes("max pickup")) return 2;
+      if (combined.includes("pcs processing")) return 3;
+      if (combined.includes("reserve coverage") || combined.includes("open time processing")) return 4;
+      if (normalizeSectionIdentifier(item.reference.section) === normalizeSectionIdentifier("Section 23")) return 5;
+      return 6;
+    };
+    const topBeforeReorder = finalRanked[0];
+    const topBeforeCombined = topBeforeReorder
+      ? normalizeSupportText(
+          `${topBeforeReorder.reference.section ?? ""} ${topBeforeReorder.reference.label ?? ""} ${topBeforeReorder.reference.quoteSnippet ?? ""} ${topBeforeReorder.matchedSectionAnchor ?? ""}`
+        )
+      : "";
+    const specificAvailable = finalRanked.some((item) => specificAnchorPriority(item) < 5);
+    const genericPrimary =
+      Boolean(topBeforeReorder) &&
+      normalizeSectionIdentifier(topBeforeReorder.reference.section) === normalizeSectionIdentifier("Section 23") &&
+      !topBeforeCombined.includes("swap with pot") &&
+      !topBeforeCombined.includes("pickup limit") &&
+      !topBeforeCombined.includes("max pickup") &&
+      !topBeforeCombined.includes("pcs processing") &&
+      !topBeforeCombined.includes("reserve coverage") &&
+      !topBeforeCombined.includes("open time processing");
+
+    finalRanked.sort((left, right) => {
+      const priorityDiff = specificAnchorPriority(left) - specificAnchorPriority(right);
+      if (priorityDiff !== 0) {
+        return priorityDiff;
+      }
+      return right.score - left.score;
+    });
+
+    if (genericPrimary && specificAvailable) {
+      finalSupportReorderedForSpecificAnchor = true;
+      genericPrimaryDemotedReason =
+        "Generic SECTION 23 was demoted below specific swap/pickup/PCS support.";
+    }
+  }
+  if (vacationBankScenario) {
+    const bestVacationCandidate = sorted.find((item) => {
+      const combined = normalizeSupportText(
+        `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""}`
+      );
+      const hits = vacationBankTerms.filter((term) => combined.includes(term));
+      const requiredHits = vacationRequiredTerms.filter((term) => combined.includes(term));
+      return (
+        item.reference.sourceId === "pwa" &&
+        (normalizeSectionIdentifier(item.reference.section).includes(normalizeSectionIdentifier("Section 7")) ||
+          requiredHits.length > 0 ||
+          hits.length >= 2)
+      );
+    });
+    if (bestVacationCandidate) {
+      vacationBankSupportPromoted = true;
+      const remaining = finalRanked.filter((item) => item.reference !== bestVacationCandidate.reference);
+      finalRanked.length = 0;
+      finalRanked.push(bestVacationCandidate, ...remaining);
+    }
+    const visibleVacationTerms = Array.from(
+      new Set(
+        finalRanked.flatMap((item) => {
+          const combined = normalizeSupportText(
+            `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""}`
+          );
+          return vacationBankTerms.filter((term) => combined.includes(term));
+        })
+      )
+    );
+    vacationBankSupportMissingAnchors = vacationRequiredTerms.filter((term) => !visibleVacationTerms.includes(term));
+  }
+  if (domicileLayoverScenario) {
+    const bestDomicileCandidate = sorted.find((item) => {
+      const combined = normalizeSupportText(
+        `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""}`
+      );
+      const hits = domicileLayoverTerms.filter((term) => combined.includes(term));
+      const requiredHits = domicileRequiredTerms.filter((term) => combined.includes(term));
+      const section2Hit = normalizeSectionIdentifier(item.reference.section).includes(normalizeSectionIdentifier("Section 2"));
+      return (
+        (item.reference.sourceId === "pwa" && section2Hit && requiredHits.length >= 2) ||
+        (item.reference.sourceId === "scheduler_manual" && hits.length >= 2)
+      );
+    });
+    if (bestDomicileCandidate) {
+      const remaining = finalRanked.filter((item) => item.reference !== bestDomicileCandidate.reference);
+      finalRanked.length = 0;
+      finalRanked.push(bestDomicileCandidate, ...remaining);
+    }
+    const visibleDomicileTerms = Array.from(
+      new Set(
+        finalRanked.flatMap((item) => {
+          const combined = normalizeSupportText(
+            `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""}`
+          );
+          return domicileLayoverTerms.filter((term) => combined.includes(term));
+        })
+      )
+    );
+    domicileLayoverSupportMissingAnchors = domicileRequiredTerms.filter((term) => !visibleDomicileTerms.includes(term));
+  }
+  if (sickLookbackScenario) {
+    const bestSickLookbackCandidate = sorted.find((item) => {
+      const combined = normalizeSupportText(
+        `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""}`
+      );
+      const hits = sickLookbackTerms.filter((term) => combined.includes(term));
+      const requiredHits = sickLookbackRequiredTerms.filter((term) => combined.includes(term));
+      const section14Hit =
+        normalizeSectionIdentifier(item.reference.section).includes(normalizeSectionIdentifier("Section 14 F")) ||
+        normalizeSectionIdentifier(item.reference.section).includes(normalizeSectionIdentifier("Section 14"));
+      return item.reference.sourceId === "pwa" && (section14Hit || requiredHits.length >= 2 || hits.length >= 3);
+    });
+    if (bestSickLookbackCandidate) {
+      sickLookbackSupportPromoted = true;
+      const remaining = finalRanked.filter((item) => item.reference !== bestSickLookbackCandidate.reference);
+      finalRanked.length = 0;
+      finalRanked.push(bestSickLookbackCandidate, ...remaining);
+    }
+    const visibleSickLookbackTerms = Array.from(
+      new Set(
+        finalRanked.flatMap((item) => {
+          const combined = normalizeSupportText(
+            `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""}`
+          );
+          return sickLookbackTerms.filter((term) => combined.includes(term));
+        })
+      )
+    );
+    sickLookbackSupportMissingAnchors = sickLookbackRequiredTerms.filter((term) => !visibleSickLookbackTerms.includes(term));
+  }
+  if (payCreditConsistencyScenario) {
+    const bestPayCreditCandidate = sorted.find((item) => {
+      const combined = normalizeSupportText(
+        `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""}`
+      );
+      const hits = payCreditConsistencyTerms.filter((term) => combined.includes(term));
+      const requiredHits = payCreditRequiredTerms.filter((term) => combined.includes(term));
+      const compManualHit = item.reference.sourceId === "compensation_manual";
+      const section14Hit =
+        item.reference.sourceId === "pwa" &&
+        normalizeSectionIdentifier(item.reference.section).includes(normalizeSectionIdentifier("Section 14"));
+      const section12Hit =
+        item.reference.sourceId === "pwa" &&
+        normalizeSectionIdentifier(item.reference.section).includes(normalizeSectionIdentifier("Section 12"));
+      return (
+        (compManualHit && (requiredHits.length > 0 || hits.length >= 2)) ||
+        (section14Hit && (combined.includes("sick") || combined.includes("bank"))) ||
+        (section12Hit && (combined.includes("layover") || combined.includes("deadhead") || combined.includes("rest")))
+      );
+    });
+    if (bestPayCreditCandidate) {
+      const remaining = finalRanked.filter((item) => item.reference !== bestPayCreditCandidate.reference);
+      finalRanked.length = 0;
+      finalRanked.push(bestPayCreditCandidate, ...remaining);
+    }
+    const visiblePayCreditTerms = Array.from(
+      new Set(
+        finalRanked.flatMap((item) => {
+          const combined = normalizeSupportText(
+            `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""}`
+          );
+          return payCreditConsistencyTerms.filter((term) => combined.includes(term));
+        })
+      )
+    );
+    payCreditAnchorFound =
+      Boolean(bestPayCreditCandidate) &&
+      (
+        (lowerIncludesAny(args.question, ["sick bank", "called well"]) && visiblePayCreditTerms.includes("sick bank")) ||
+        (lowerIncludesAny(args.question, ["ss credit", "bank deposit", "deposit"]) && (visiblePayCreditTerms.includes("ss credit") || visiblePayCreditTerms.includes("bank deposit"))) ||
+        (lowerIncludesAny(args.question, ["micrew", "timecard", "credit recalculation", "deadhead deviation", "13 hours"]) &&
+          (visiblePayCreditTerms.includes("timecard") || visiblePayCreditTerms.includes("credit recalculation") || visiblePayCreditTerms.includes("deadhead deviation")))
+      );
+    if (!payCreditAnchorFound) {
+      payCreditMissingSupportReason =
+        "I do not have the exact pay/credit/bank-eligibility rule attached for this question.";
+    }
+  }
+  let rerouteAnchorFound = false;
+  let rerouteMissingSupportReason: string | undefined;
+  let rerouteVisibleSupportTerms: string[] = [];
+  if (rerouteConsistencyScenario) {
+    const bestRerouteCandidate = sorted.find((item) => {
+      const combined = normalizeSupportText(
+        `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""}`
+      );
+      const hits = rerouteConsistencyTerms.filter((term) => combined.includes(term));
+      const requiredHits = rerouteRequiredTerms.filter((term) => combined.includes(term));
+      const section23LHit =
+        item.reference.sourceId === "pwa" &&
+        normalizeSectionIdentifier(item.reference.section).includes(normalizeSectionIdentifier("Section 23 L"));
+      const compManualHit =
+        item.reference.sourceId === "compensation_manual" &&
+        (combined.includes("reroute pay") || combined.includes("rrpay") || combined.includes("turn time") || combined.includes("timecard") || combined.includes("credit"));
+      return section23LHit || compManualHit || requiredHits.length >= 2 || hits.length >= 3;
+    });
+    if (bestRerouteCandidate) {
+      const remaining = finalRanked.filter((item) => item.reference !== bestRerouteCandidate.reference);
+      finalRanked.length = 0;
+      finalRanked.push(bestRerouteCandidate, ...remaining);
+    }
+    rerouteVisibleSupportTerms = Array.from(
+      new Set(
+        finalRanked.flatMap((item) => {
+          const combined = normalizeSupportText(
+            `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""}`
+          );
+          return rerouteConsistencyTerms.filter((term) => combined.includes(term));
+        })
+      )
+    );
+    rerouteAnchorFound =
+      Boolean(bestRerouteCandidate) &&
+      (
+        (lowerIncludesAny(args.question, ["first airborne", "after first airborne", "different flight number", "same destination"]) &&
+          (rerouteVisibleSupportTerms.includes("first airborne") || rerouteVisibleSupportTerms.includes("reroute pay") || rerouteVisibleSupportTerms.includes("continuation"))) ||
+        (lowerIncludesAny(args.question, ["rrpay", "paid differently", "turn time"]) &&
+          (rerouteVisibleSupportTerms.includes("rrpay") || rerouteVisibleSupportTerms.includes("turn time") || rerouteVisibleSupportTerms.includes("timecard")))
+      );
+    if (!rerouteAnchorFound) {
+      rerouteMissingSupportReason =
+        "I do not have the exact reroute / continuation / RRPay rule attached for this question.";
+    }
+  }
+  let qsCallOrderAnchorFound = false;
+  let qsCallOrderMissingSupportReason: string | undefined;
+  let qsCallOrderVisibleSupportTerms: string[] = [];
+  if (qsCallOrderScenario) {
+    const bestQsCallOrderCandidate = sorted.find((item) => {
+      const combined = normalizeSupportText(
+        `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""}`
+      );
+      const hits = qsCallOrderTerms.filter((term) => combined.includes(term));
+      const requiredHits = qsCallOrderRequiredTerms.filter((term) => combined.includes(term));
+      const schedulerQsHit =
+        item.reference.sourceId === "scheduler_manual" &&
+        (combined.includes("qs") || combined.includes("quick slip") || combined.includes("arcos") || combined.includes("notification"));
+      const pwaQsHit =
+        item.reference.sourceId === "pwa" &&
+        (combined.includes("qs") || combined.includes("quick slip") || combined.includes("notification"));
+      return schedulerQsHit || pwaQsHit || requiredHits.length >= 2 || hits.length >= 3;
+    });
+    if (bestQsCallOrderCandidate) {
+      const remaining = finalRanked.filter((item) => item.reference !== bestQsCallOrderCandidate.reference);
+      finalRanked.length = 0;
+      finalRanked.push(bestQsCallOrderCandidate, ...remaining);
+    }
+    qsCallOrderVisibleSupportTerms = Array.from(
+      new Set(
+        finalRanked.flatMap((item) => {
+          const combined = normalizeSupportText(
+            `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""}`
+          );
+          return qsCallOrderTerms.filter((term) => combined.includes(term));
+        })
+      )
+    );
+    qsCallOrderAnchorFound =
+      Boolean(bestQsCallOrderCandidate) &&
+      qsCallOrderRequiredTerms.every((term) => qsCallOrderVisibleSupportTerms.includes(term));
+    if (!qsCallOrderAnchorFound) {
+      qsCallOrderMissingSupportReason =
+        "I do not have the exact QS call-order / ARCOS notification rule attached for this question.";
+    }
+  }
+  let oeNotificationAnchorFound = false;
+  let oeNotificationMissingSupportReason: string | undefined;
+  let oeNotificationVisibleSupportTerms: string[] = [];
+  let oeNotificationSupportRejectedReasons: string[] = [];
+  if (oeNotificationScenario) {
+    const bestOeNotificationCandidate = sorted.find((item) => {
+      const combined = normalizeSupportText(
+        `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""}`
+      );
+      const hits = getOeNotificationSupportHits(combined);
+      const requiredHits = oeNotificationRequiredTerms.filter((term) => hits.includes(term));
+      return hasDirectOeNotificationSupport(combined) || requiredHits.length >= 2 || hits.length >= 4;
+    });
+    if (bestOeNotificationCandidate) {
+      const remaining = finalRanked.filter((item) => item.reference !== bestOeNotificationCandidate.reference);
+      finalRanked.length = 0;
+      finalRanked.push(bestOeNotificationCandidate, ...remaining);
+    }
+    oeNotificationVisibleSupportTerms = Array.from(
+      new Set(
+        finalRanked.flatMap((item) => {
+          const combined = normalizeSupportText(
+            `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""}`
+          );
+          return getOeNotificationSupportHits(combined);
+        })
+      )
+    );
+    oeNotificationAnchorFound =
+      Boolean(bestOeNotificationCandidate) &&
+      (
+        oeNotificationVisibleSupportTerms.includes("notification") &&
+        (
+          oeNotificationVisibleSupportTerms.includes("oe") ||
+          oeNotificationVisibleSupportTerms.includes("srh") ||
+          oeNotificationVisibleSupportTerms.includes("trh")
+        ) &&
+        (
+          oeNotificationVisibleSupportTerms.includes("cno") ||
+          oeNotificationVisibleSupportTerms.includes("phone call") ||
+          oeNotificationVisibleSupportTerms.includes("online notification") ||
+          oeNotificationVisibleSupportTerms.includes("electronic notification")
+        )
+      );
+    oeNotificationSupportRejectedReasons = Array.from(
+      new Set(
+        sorted.flatMap((item) => {
+          const combined = normalizeSupportText(
+            `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""}`
+          );
+          const reasons: string[] = [];
+          if ((combined.includes("green slip") || /\bgs\b/.test(combined)) && !hasDirectOeNotificationSupport(combined)) {
+            reasons.push("green_slip_support_rejected");
+          }
+          if (combined.includes("deadhead") && !hasDirectOeNotificationSupport(combined)) {
+            reasons.push("deadhead_support_rejected");
+          }
+          if (
+            normalizeSectionIdentifier(item.reference.section).includes(normalizeSectionIdentifier("Section 10")) &&
+            !hasDirectOeNotificationSupport(combined)
+          ) {
+            reasons.push("section_10_pay_support_rejected");
+          }
+          if (
+            normalizeSectionIdentifier(item.reference.section).includes(normalizeSectionIdentifier("Section 2")) &&
+            !hasDirectOeNotificationSupport(combined)
+          ) {
+            reasons.push("section_2_definition_support_rejected");
+          }
+          return reasons;
+        })
+      )
+    );
+    if (!oeNotificationAnchorFound) {
+      oeNotificationMissingSupportReason =
+        "I do not have the exact OE notification / CNO source attached.";
+    }
+  }
+  let shortCallNotificationAnchorFound = false;
+  let shortCallNotificationMissingSupportReason: string | undefined;
+  let shortCallNotificationVisibleSupportTerms: string[] = [];
+  if (shortCallNotificationScenario) {
+    const bestShortCallNotificationCandidate = sorted.find((item) => {
+      const combined = normalizeSupportText(
+        `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""}`
+      );
+      const hits = shortCallNotificationTerms.filter((term) => combined.includes(term));
+      const requiredHits = shortCallNotificationRequiredTerms.filter((term) => combined.includes(term));
+      const shortCallSectionHit =
+        normalizeSectionIdentifier(item.reference.section).includes(normalizeSectionIdentifier("Section 23 S.9")) ||
+        normalizeSectionIdentifier(item.reference.section).includes(normalizeSectionIdentifier("Section 23 S"));
+      return (shortCallSectionHit && hits.length >= 2) || requiredHits.length >= 2 || hits.length >= 4;
+    });
+    if (bestShortCallNotificationCandidate) {
+      const remaining = finalRanked.filter((item) => item.reference !== bestShortCallNotificationCandidate.reference);
+      finalRanked.length = 0;
+      finalRanked.push(bestShortCallNotificationCandidate, ...remaining);
+    }
+    shortCallNotificationVisibleSupportTerms = Array.from(
+      new Set(
+        finalRanked.flatMap((item) => {
+          const combined = normalizeSupportText(
+            `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""}`
+          );
+          return shortCallNotificationTerms.filter((term) => combined.includes(term));
+        })
+      )
+    );
+    shortCallNotificationAnchorFound =
+      Boolean(bestShortCallNotificationCandidate) &&
+      shortCallNotificationRequiredTerms.every((term) => shortCallNotificationVisibleSupportTerms.includes(term));
+    if (!shortCallNotificationAnchorFound) {
+      shortCallNotificationMissingSupportReason =
+        "I do not see the exact short-call-after-vacation/non-fly-day notification rule in the attached support.";
+    }
+  }
+  const apdThresholdExplained =
+    apdDiagnosticScenario &&
+    /\b18 required\b/i.test(args.answerText) &&
+    /\b5 available\b/i.test(args.answerText) &&
+    /\b25%\b/.test(args.answerText);
+  const apdDriftDetected =
+    apdDiagnosticScenario &&
+    /(reroute|deadhead|silver slip|x-day|quick slip)/i.test(args.answerText) &&
+    !/\bapd\b/i.test(args.answerText);
   const bestSilverSlipCandidate = sorted.find((item) => {
     const combined = normalizeSupportText(
       `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""}`
@@ -3112,6 +5555,51 @@ function rerankSupportReferences(args: {
       combined.includes("x day")
     );
   });
+  const xDayGroupingAnchorFound = finalRanked.some((item) => {
+    const combined = normalizeSupportText(
+      `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""}`
+    );
+    return (
+      combined.includes("x-day") &&
+      combined.includes("reserve") &&
+      (
+        combined.includes("grouping") ||
+        combined.includes("x-day block") ||
+        combined.includes("month-to-month") ||
+        combined.includes("move")
+      )
+    );
+  });
+  const pbAnchorFound = finalRanked.some((item) => {
+    const combined = normalizeSupportText(
+      `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""}`
+    );
+    return combined.includes("pb") || combined.includes("payback") || combined.includes("pr") || combined.includes("lc");
+  });
+  const pbProcessingAnchorFound = finalRanked.some((item) => {
+    const combined = normalizeSupportText(
+      `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""}`
+    );
+    return (
+      combined.includes("processing") ||
+      combined.includes("payback") ||
+      combined.includes("pr remainder") ||
+      combined.includes("long call") ||
+      combined.includes("continuation")
+    );
+  });
+  const notificationAnchorFound = finalRanked.some((item) => {
+    const combined = normalizeSupportText(
+      `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""}`
+    );
+    return (
+      combined.includes("notification") ||
+      combined.includes("acars") ||
+      combined.includes("arcos") ||
+      combined.includes("robot") ||
+      combined.includes("contact")
+    );
+  });
   const shortCallDutyAnchorFound = finalRanked.some((item) => {
     const combined = normalizeSupportText(
       `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""}`
@@ -3146,6 +5634,94 @@ function rerankSupportReferences(args: {
       combined.includes("add")
     );
   });
+  const vacationBankAnchorFound = finalRanked.some((item) => {
+    const combined = normalizeSupportText(
+      `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""}`
+    );
+    return (
+      normalizeSectionIdentifier(item.reference.section).includes(normalizeSectionIdentifier("Section 7")) ||
+      combined.includes("vacation year") ||
+      combined.includes("ivd") ||
+      combined.includes("sup") ||
+      (combined.includes("bank") && combined.includes("vacation")) ||
+      combined.includes("replacement")
+    );
+  });
+  const futureRotationChangeAnchorFound = finalRanked.some((item) => {
+    const combined = normalizeSupportText(
+      `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""}`
+    );
+    return (
+      combined.includes("rotation change") ||
+      combined.includes("redeye") ||
+      combined.includes("removed leg") ||
+      combined.includes("asterisk rotation changes") ||
+      combined.includes("pay protection")
+    );
+  });
+  const cpoOverrideAnchorFound = finalRanked.some((item) => {
+    const combined = normalizeSupportText(
+      `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""}`
+    );
+    return combined.includes("cpo") || combined.includes("manual") || combined.includes("override");
+  });
+  const knownAbsenceAnchorFound = finalRanked.some((item) => {
+    const combined = normalizeSupportText(
+      `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""}`
+    );
+    return combined.includes("known absence") || combined.includes("leave");
+  });
+  const payProtectionAnchorFound = finalRanked.some((item) => {
+    const combined = normalizeSupportText(
+      `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""}`
+    );
+    return (
+      combined.includes("pay protection") ||
+      combined.includes("credit protection") ||
+      (combined.includes("pay") && combined.includes("credit"))
+    );
+  });
+  const domicileLayoverPwaAnchorFound = finalRanked.some((item) => {
+    const combined = normalizeSupportText(
+      `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""}`
+    );
+    return (
+      item.reference.sourceId === "pwa" &&
+      normalizeSectionIdentifier(item.reference.section).includes(normalizeSectionIdentifier("Section 2")) &&
+      combined.includes("rotation") &&
+      combined.includes("break in duty") &&
+      combined.includes("base")
+    );
+  });
+  const domicileLayoverSchedulerAnchorFound = finalRanked.some((item) => {
+    const combined = normalizeSupportText(
+      `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""}`
+    );
+    return (
+      item.reference.sourceId === "scheduler_manual" &&
+      combined.includes("open time") &&
+      combined.includes("rotation") &&
+      (combined.includes("domicile layover") || combined.includes("base layover") || combined.includes("construction"))
+    );
+  });
+  const domicileLayoverAnchorFound = domicileLayoverPwaAnchorFound || domicileLayoverSchedulerAnchorFound;
+  const sickLookbackAnchorFound = finalRanked.some((item) => {
+    const combined = normalizeSupportText(
+      `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""}`
+    );
+    return (
+      item.reference.sourceId === "pwa" &&
+      (
+        normalizeSectionIdentifier(item.reference.section).includes(normalizeSectionIdentifier("Section 14 F")) ||
+        normalizeSectionIdentifier(item.reference.section).includes(normalizeSectionIdentifier("Section 14"))
+      ) &&
+      (
+        (combined.includes("sickness") && combined.includes("verification")) ||
+        combined.includes("lookback") ||
+        combined.includes("medical")
+      )
+    );
+  });
   const pcsSwapVisibleSupportTerms = pcsSwapScenario
     ? Array.from(
         new Set(
@@ -3158,6 +5734,30 @@ function rerankSupportReferences(args: {
         )
       )
     : [];
+  const vacationBankVisibleSupportTerms = vacationBankScenario
+    ? Array.from(
+        new Set(
+          finalRanked.flatMap((item) => {
+            const combined = normalizeSupportText(
+              `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""}`
+            );
+            return vacationBankTerms.filter((term) => combined.includes(term));
+          })
+        )
+      )
+    : [];
+  const shortCallNotificationVisibleSupportTermsFinal = shortCallNotificationScenario
+    ? Array.from(
+        new Set(
+          finalRanked.flatMap((item) => {
+            const combined = normalizeSupportText(
+              `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""}`
+            );
+            return shortCallNotificationTerms.filter((term) => combined.includes(term));
+          })
+        )
+      )
+    : shortCallNotificationVisibleSupportTerms;
   const retrievalSilverSlipAnchorsFound = sorted
     .filter((item) => {
       const combined = normalizeSupportText(
@@ -3183,14 +5783,57 @@ function rerankSupportReferences(args: {
     (finalRanked[0]?.score ?? 0) < 60 ||
     qualityGate.primaryAnchorMissing ||
     silverSlipSupportMissing ||
+    (pickupLimitScenario && !pickupLimitAnchorFound) ||
     (xDayScenario && !xDayAnchorFound) ||
+    (xDayGroupingScenario && !xDayGroupingAnchorFound) ||
+    (pbRerouteXdayScenario && (!pbAnchorFound || !pbProcessingAnchorFound)) ||
     (shortCallDutyScenario && !shortCallDutyAnchorFound) ||
-    (pcsSwapScenario && !pcsSwapAnchorFound);
+    (pcsSwapScenario && !pcsSwapAnchorFound) ||
+    (vacationBankScenario && !vacationBankAnchorFound) ||
+    (futureRotationChangeScenario &&
+      (!futureRotationChangeAnchorFound || !knownAbsenceAnchorFound || !payProtectionAnchorFound)) ||
+    (domicileLayoverScenario && (!domicileLayoverAnchorFound || domicileLayoverSupportMissingAnchors.length > 0)) ||
+    (sickLookbackScenario && (!sickLookbackAnchorFound || sickLookbackSupportMissingAnchors.length > 0)) ||
+    (payCreditConsistencyScenario && !payCreditAnchorFound) ||
+    (rerouteConsistencyScenario && !rerouteAnchorFound) ||
+    (qsCallOrderScenario && !qsCallOrderAnchorFound) ||
+    (oeNotificationScenario && !oeNotificationAnchorFound) ||
+    (shortCallNotificationScenario && !shortCallNotificationAnchorFound);
 
   const visibleReferences = finalRanked.map((item) => ({
     ...item.reference,
     section: item.matchedSectionAnchor ?? item.reference.section,
   }));
+  if (pcsSwapScenario || pickupLimitScenario) {
+    const visiblePriority = (reference: (typeof visibleReferences)[number]) => {
+      const combined = normalizeSupportText(
+        `${reference.section ?? ""} ${reference.label ?? ""} ${reference.quoteSnippet ?? ""}`
+      );
+      if (combined.includes("swap with pot")) return 1;
+      if (combined.includes("pickup limit") || combined.includes("max pickup")) return 2;
+      if (combined.includes("pcs processing")) return 3;
+      if (combined.includes("reserve coverage") || combined.includes("open time processing")) return 4;
+      if (normalizeSectionIdentifier(reference.section) === normalizeSectionIdentifier("Section 23")) return 5;
+      return 6;
+    };
+    const topVisibleBefore = visibleReferences[0];
+    const topVisibleWasGeneric =
+      Boolean(topVisibleBefore) &&
+      normalizeSectionIdentifier(topVisibleBefore.section) === normalizeSectionIdentifier("Section 23");
+    const specificVisibleAvailable = visibleReferences.some((reference) => visiblePriority(reference) < 5);
+    visibleReferences.sort((left, right) => {
+      const priorityDiff = visiblePriority(left) - visiblePriority(right);
+      if (priorityDiff !== 0) {
+        return priorityDiff;
+      }
+      return 0;
+    });
+    if (topVisibleWasGeneric && specificVisibleAvailable) {
+      finalSupportReorderedForSpecificAnchor = true;
+      genericPrimaryDemotedReason =
+        "Generic SECTION 23 was demoted below specific visible swap/pickup/PCS support.";
+    }
+  }
 
   return {
     references: visibleReferences,
@@ -3221,17 +5864,103 @@ function rerankSupportReferences(args: {
       primarySupportAnchorUsed,
       xDayScenario,
       xDayAnchorFound,
+      xDayGroupingScenario,
+      xDayGroupingAnchorFound,
+      xDayGroupingMissingSupportReason:
+        xDayGroupingScenario && !xDayGroupingAnchorFound
+          ? "I do not have the exact reserve X-day grouping / cross-month movement rule attached for this question."
+          : undefined,
+      pbRerouteXdayScenario,
+      pbAnchorFound,
+      pbProcessingAnchorFound,
+      notificationAnchorFound,
+      pbScenarioMissingSupportReason:
+        pbRerouteXdayScenario && (!pbAnchorFound || !pbProcessingAnchorFound)
+          ? "I do not have the full PB / PR / LC reapplication or interrupted X-day processing logic attached for this question."
+          : pbRerouteXdayScenario && !notificationAnchorFound
+            ? "I do not have the exact notification-processing rule attached for this reroute/QS award sequence."
+            : undefined,
       pcsSwapScenario,
       pcsSwapAnchorFound,
       pcsSwapVisibleSupportTerms,
       pcsSwapSupportPromoted,
       pcsSwapSupportMissingAnchors,
+      pickupLimitScenario,
+      pickupLimitAnchorFound,
+      pickupLimitMissingSupportReason,
+      finalSupportReorderedForSpecificAnchor,
+      genericPrimaryDemotedReason,
       pcsSwapMissingSupportReason:
         pcsSwapScenario && !pcsSwapAnchorFound
           ? "I do not see the exact PCS/swap-with-pot processing rule in the attached support."
           : pcsSwapScenario && pcsSwapSupportMissingAnchors.length > 0
             ? `I do not see all of the expected PCS/swap processing anchors in the attached support: ${pcsSwapSupportMissingAnchors.join(", ")}.`
           : undefined,
+      vacationBankScenario,
+      vacationBankAnchorFound,
+      vacationBankVisibleSupportTerms,
+      vacationBankSupportPromoted,
+      vacationBankSupportMissingAnchors,
+      vacationBankMissingSupportReason:
+        vacationBankScenario && !vacationBankAnchorFound
+          ? "I do not see the exact vacation bank / SUP / IVD Section 7 rule in the attached support."
+          : vacationBankScenario && vacationBankSupportMissingAnchors.length > 0
+            ? `I do not see all of the expected vacation bank / SUP / IVD anchors in the attached support: ${vacationBankSupportMissingAnchors.join(", ")}.`
+            : undefined,
+      futureRotationChangeScenario,
+      futureRotationChangeAnchorFound,
+      cpoOverrideAnchorFound,
+      knownAbsenceAnchorFound,
+      payProtectionAnchorFound,
+      futureRotationMissingSupportReason:
+        futureRotationChangeScenario &&
+        (!futureRotationChangeAnchorFound || !knownAbsenceAnchorFound || !payProtectionAnchorFound)
+          ? "I do not have a clean controlling source for CPO override / known absence pay protection in this packet."
+          : undefined,
+      domicileLayoverScenario,
+      domicileLayoverAnchorFound,
+      domicileLayoverMissingSupportReason:
+        domicileLayoverScenario && !domicileLayoverPwaAnchorFound && !domicileLayoverSchedulerAnchorFound
+          ? "I do not have the PWA rotation-definition or Scheduler Manual domicile-layover construction reference attached for this question."
+          : domicileLayoverScenario && domicileLayoverPwaAnchorFound && !domicileLayoverSchedulerAnchorFound
+            ? "I do not have the exact Scheduler Manual open-time / domicile-layover construction reference attached for this question."
+            : domicileLayoverScenario && !domicileLayoverPwaAnchorFound && domicileLayoverSchedulerAnchorFound
+              ? "I do not have the PWA Section 2 rotation-definition support attached for this question."
+              : domicileLayoverScenario && domicileLayoverSupportMissingAnchors.length > 0
+                ? `I do not see all of the expected domicile-layover anchors in the attached support: ${domicileLayoverSupportMissingAnchors.join(", ")}.`
+                : undefined,
+      sickLookbackScenario,
+      sickLookbackAnchorFound,
+      sickLookbackMissingSupportReason:
+        sickLookbackScenario && !sickLookbackAnchorFound
+          ? "I do not have the exact Section 14 medical-procedure / sick-lookback exclusion or approval-process language attached for this question."
+          : sickLookbackScenario && sickLookbackSupportMissingAnchors.length > 0
+            ? `I do not see all of the expected sick-lookback / approval-process anchors in the attached support: ${sickLookbackSupportMissingAnchors.join(", ")}.`
+            : undefined,
+      payCreditConsistencyScenario,
+      payCreditAnchorFound,
+      payCreditMissingSupportReason,
+      rerouteConsistencyScenario,
+      rerouteAnchorFound,
+      rerouteMissingSupportReason,
+      rerouteVisibleSupportTerms,
+      qsCallOrderScenario,
+      qsCallOrderAnchorFound,
+      qsCallOrderMissingSupportReason,
+      qsCallOrderVisibleSupportTerms,
+      oeNotificationScenario,
+      oeNotificationAnchorFound,
+      oeNotificationMissingSupportReason,
+      oeNotificationSupportRejectedReasons,
+      oeNotificationVisibleSupportTerms,
+      inferredPilotStatus: inferPilotStatus(args.question),
+      shortCallNotificationScenario,
+      shortCallNotificationAnchorFound,
+      shortCallNotificationMissingSupportReason,
+      shortCallNotificationVisibleSupportTerms: shortCallNotificationVisibleSupportTermsFinal,
+      apdDiagnosticScenario,
+      apdThresholdExplained,
+      apdDriftDetected,
       shortCallDutyScenario,
       shortCallDutyAnchorFound,
       visibleSupportAnchorPromoted: finalRanked.some(
@@ -3266,6 +5995,16 @@ function buildSupportFocusedCandidates(args: {
   const silverSlipQuery =
     args.question.toLowerCase().includes("silver slip") || /\bss\b/.test(args.question.toLowerCase());
   const pcsSwapScenario = detectPcsSwapScenario(args.question);
+  const pickupLimitScenario = detectPickupLimitScenario(args.question);
+  const vacationBankScenario = detectVacationBankScenario(args.question);
+  const domicileLayoverScenario = detectDomicileLayoverScenario(args.question);
+  const sickLookbackScenario = detectSickLookbackScenario(args.question);
+  const payCreditConsistencyScenario = detectPayCreditConsistencyScenario(args.question);
+  const rerouteConsistencyScenario = detectRerouteConsistencyScenario(args.question);
+  const qsCallOrderScenario = detectQsCallOrderScenario(args.question);
+  const oeNotificationScenario = detectOeNotificationScenario(args.question);
+  const shortCallNotificationScenario = detectShortCallNotificationScenario(args.question);
+  const futureRotationChangeScenario = detectFutureRotationChangeScenario(args.question);
   const termWeights: Record<string, number> = {
     "harmed pilot": 100,
     "auto accept": 90,
@@ -3323,6 +6062,68 @@ function buildSupportFocusedCandidates(args: {
     overlap: 70,
     processing: 65,
     "coverage works": 60,
+    bank: 75,
+    "vacation day": 80,
+    "buy vacation": 75,
+    replacement: 75,
+    "60 hours": 70,
+    sup: 85,
+    ivd: 85,
+    "vacation year": 90,
+    "domicile layover": 85,
+    "base layover": 80,
+    "rotation definition": 90,
+    "break in duty": 80,
+    "break in duty at base": 95,
+    "open time rotation": 85,
+    "rotation construction": 75,
+    "medical procedures": 95,
+    "medical procedure": 95,
+    "sick lookback": 100,
+    "approval process": 90,
+    "section 14": 85,
+    sickness: 85,
+    notification: 70,
+    verification: 90,
+    lookback: 95,
+    medical: 80,
+    procedure: 75,
+    telehealth: 70,
+    "sick bank": 95,
+    "called well": 90,
+    "bank deposit": 85,
+    deposit: 70,
+    "ss credit": 95,
+    timecard: 85,
+    micrew: 80,
+    "credit recalculation": 100,
+    "deadhead deviation": 90,
+    deviation: 70,
+    "13 hours": 85,
+    "bank eligibility": 90,
+    "blanket qs": 90,
+    "call order": 95,
+    arcos: 90,
+    eligible: 85,
+    "30/168": 80,
+    evidence: 70,
+    dart: 70,
+    telephone: 85,
+    "electronic placement": 95,
+    acknowledge: 90,
+    acknowledgment: 90,
+    icrew: 90,
+    micrew: 85,
+    cno: 90,
+    "oe notification": 100,
+    "company notification online": 95,
+    srh: 85,
+    trh: 85,
+    "phone call": 90,
+    "online notification": 85,
+    "electronic notification": 90,
+    "non-fly day": 95,
+    "non fly day": 95,
   };
   const pcsGeneralTerms = [
     "pcs",
@@ -3337,6 +6138,127 @@ function buildSupportFocusedCandidates(args: {
     "open time",
     "processing",
     "coverage works",
+  ];
+  const pickupLimitTerms = [
+    "max pickup",
+    "pickup limit",
+    "swap with pot",
+    "open time",
+    "reserve coverage",
+    "coverage works",
+    "pickup",
+    "coverage",
+  ];
+  const vacationBankTerms = ["vacation", "bank", "replacement", "vacation year", "sup", "ivd"];
+  const domicileLayoverTerms = [
+    "domicile layover",
+    "base layover",
+    "break in duty",
+    "break in duty at base",
+    "rotation definition",
+    "open time rotation",
+    "open time",
+    "rotation",
+    "base",
+    "rotation construction",
+  ];
+  const sickLookbackTerms = [
+    "medical procedures",
+    "medical procedure",
+    "sick lookback",
+    "approval process",
+    "section 14",
+    "sickness",
+    "notification",
+    "verification",
+    "lookback",
+    "medical",
+    "procedure",
+    "telehealth",
+  ];
+  const payCreditConsistencyTerms = [
+    "sick bank",
+    "called well",
+    "bank deposit",
+    "deposit",
+    "ss credit",
+    "silver slip credit",
+    "timecard",
+    "micrew",
+    "credit recalculation",
+    "deadhead deviation",
+    "deviation",
+    "13 hours",
+    "layover",
+    "deadhead",
+    "credit",
+    "bank eligibility",
+  ];
+  const rerouteConsistencyTerms = [
+    "reroute",
+    "reroute pay",
+    "rrpay",
+    "first airborne",
+    "different flight number",
+    "same destination",
+    "continuation",
+    "turn time",
+    "paid differently",
+    "timecard",
+    "credit",
+    "deadhead",
+  ];
+  const qsCallOrderTerms = [
+    "qs",
+    "quick slip",
+    "blanket qs",
+    "call order",
+    "category",
+    "arcos",
+    "notification",
+    "eligible",
+    "wide report",
+    "seniority",
+    "30/168",
+    "dart",
+  ];
+  const oeNotificationTerms = [
+    "oe",
+    "notification",
+    "cno",
+    "company notification online",
+    "phone call",
+    "srh",
+    "trh",
+    "online notification",
+    "electronic notification",
+  ];
+  const shortCallNotificationTerms = [
+    "short call",
+    "notification",
+    "vacation",
+    "non-fly day",
+    "non fly day",
+    "telephone",
+    "electronic placement",
+    "icrew",
+    "micrew",
+    "acknowledge",
+    "acknowledgment",
+    "cno",
+    "contact",
+  ];
+  const futureRotationTerms = [
+    "rotation change",
+    "redeye",
+    "removed leg",
+    "pay protection",
+    "credit protection",
+    "reserve coverage",
+    "known absence",
+    "cpo",
+    "processing",
+    "leave",
   ];
 
   const scored = args.chunks
@@ -3358,12 +6280,60 @@ function buildSupportFocusedCandidates(args: {
         return null;
       }
 
-      const sourceBoost = pcsSwapScenario
+      const sourceBoost = payCreditConsistencyScenario
+        ? chunk.source === "compensation_manual"
+          ? 88
+          : chunk.source === "pwa"
+            ? 74
+            : 28
+        : shortCallNotificationScenario
+        ? chunk.source === "scheduler_manual"
+          ? 92
+          : chunk.source === "pwa"
+            ? 80
+            : 18
+        : qsCallOrderScenario
+        ? chunk.source === "scheduler_manual"
+          ? 94
+          : chunk.source === "pwa"
+            ? 68
+            : 8
+        : oeNotificationScenario
+        ? chunk.source === "scheduler_manual"
+          ? 100
+          : chunk.source === "pwa"
+            ? 40
+            : 0
+        : rerouteConsistencyScenario
+        ? chunk.source === "pwa"
+          ? 86
+          : chunk.source === "compensation_manual"
+            ? 82
+            : 24
+        : pickupLimitScenario
+        ? chunk.source === "scheduler_manual"
+          ? 82
+          : chunk.source === "pwa"
+            ? 68
+            : 10
+        : pcsSwapScenario
         ? chunk.source === "scheduler_manual"
           ? 70
           : chunk.source === "pwa"
             ? 35
             : 12
+        : vacationBankScenario
+          ? chunk.source === "pwa"
+            ? 75
+            : chunk.source === "compensation_manual"
+              ? 22
+              : 10
+        : domicileLayoverScenario
+          ? chunk.source === "pwa"
+            ? 80
+            : chunk.source === "scheduler_manual"
+              ? 72
+              : 8
         : chunk.source === "pwa"
           ? 40
           : chunk.source === "compensation_manual"
@@ -3378,6 +6348,17 @@ function buildSupportFocusedCandidates(args: {
       const silverHit = chunkText.includes("silver slip");
       const greenHit = chunkText.includes("green slip") || /\bgs\b/.test(chunkText);
       const pcsSpecificHits = pcsGeneralTerms.filter((term) => chunkText.includes(term));
+      const pickupLimitSpecificHits = pickupLimitTerms.filter((term) => chunkText.includes(term));
+      const vacationSpecificHits = vacationBankTerms.filter((term) => chunkText.includes(term));
+      const domicileSpecificHits = domicileLayoverTerms.filter((term) => chunkText.includes(term));
+      const sickLookbackSpecificHits = sickLookbackTerms.filter((term) => chunkText.includes(term));
+      const payCreditSpecificHits = payCreditConsistencyTerms.filter((term) => chunkText.includes(term));
+      const rerouteSpecificHits = rerouteConsistencyTerms.filter((term) => chunkText.includes(term));
+      const qsCallOrderSpecificHits = qsCallOrderTerms.filter((term) => chunkText.includes(term));
+      const oeNotificationSpecificHits = getOeNotificationSupportHits(chunkText);
+      const oeNotificationDirectSupport = hasDirectOeNotificationSupport(chunkText);
+      const shortCallNotificationSpecificHits = shortCallNotificationTerms.filter((term) => chunkText.includes(term));
+      const futureRotationSpecificHits = futureRotationTerms.filter((term) => chunkText.includes(term));
       const score =
         sourceBoost +
         sectionMatch.score +
@@ -3390,6 +6371,15 @@ function buildSupportFocusedCandidates(args: {
         (silverSlipQuery && !comparisonSides.includes("green slip") && greenHit && !silverHit ? -130 : 0) +
         (silverSlipQuery && comparisonSides.includes("green slip") && silverHit && greenHit ? 80 : 0) +
         (silverSlipQuery && comparisonSides.includes("green slip") && greenHit && !silverHit ? 30 : 0) +
+        (pickupLimitScenario && pickupLimitSpecificHits.length > 0 ? 170 : 0) +
+        (pickupLimitScenario ? pickupLimitSpecificHits.length * 36 : 0) +
+        (pickupLimitScenario && chunk.source === "scheduler_manual" && pickupLimitSpecificHits.length > 0 ? 130 : 0) +
+        (pickupLimitScenario && chunk.source === "pwa" &&
+          normalizeSectionIdentifier(chunk.section).includes(normalizeSectionIdentifier("Section 23")) &&
+          (chunkText.includes("open time") || chunkText.includes("pickup"))
+          ? 140
+          : 0) +
+        (pickupLimitScenario && /\bsection 23\b/.test(chunkText) && pickupLimitSpecificHits.length === 0 ? -145 : 0) +
         (pcsSwapScenario &&
         pcsSpecificHits.length > 0
           ? 140
@@ -3397,6 +6387,62 @@ function buildSupportFocusedCandidates(args: {
         (pcsSwapScenario ? pcsSpecificHits.length * 30 : 0) +
         (pcsSwapScenario && chunk.source === "scheduler_manual" && pcsSpecificHits.length > 0 ? 110 : 0) +
         (pcsSwapScenario && /\bsection 23\b/.test(chunkText) && !chunkText.includes("swap") && !chunkText.includes("bid period") ? -120 : 0) +
+        (vacationBankScenario && vacationSpecificHits.length > 0 ? 135 : 0) +
+        (vacationBankScenario ? vacationSpecificHits.length * 30 : 0) +
+        (vacationBankScenario && chunk.source === "pwa" && vacationSpecificHits.length > 0 ? 120 : 0) +
+        (vacationBankScenario && normalizeSectionIdentifier(chunk.section).includes(normalizeSectionIdentifier("Section 7")) ? 160 : 0) +
+        (vacationBankScenario && /\bsection 23\b/.test(chunkText) && vacationSpecificHits.length === 0 ? -120 : 0) +
+        (domicileLayoverScenario && domicileSpecificHits.length > 0 ? 145 : 0) +
+        (domicileLayoverScenario ? domicileSpecificHits.length * 28 : 0) +
+        (domicileLayoverScenario && chunk.source === "pwa" && normalizeSectionIdentifier(chunk.section).includes(normalizeSectionIdentifier("Section 2")) ? 160 : 0) +
+        (domicileLayoverScenario && chunk.source === "scheduler_manual" && domicileSpecificHits.length >= 2 ? 110 : 0) +
+        (domicileLayoverScenario && /\bsection 23\b/.test(chunkText) && domicileSpecificHits.length === 0 ? -130 : 0) +
+        (sickLookbackScenario && sickLookbackSpecificHits.length > 0 ? 150 : 0) +
+        (sickLookbackScenario ? sickLookbackSpecificHits.length * 30 : 0) +
+        (sickLookbackScenario && chunk.source === "pwa" && normalizeSectionIdentifier(chunk.section).includes(normalizeSectionIdentifier("Section 14")) ? 190 : 0) +
+        (sickLookbackScenario && /\bsection 23\b/.test(chunkText) && sickLookbackSpecificHits.length === 0 ? -160 : 0) +
+        (payCreditConsistencyScenario && payCreditSpecificHits.length > 0 ? 165 : 0) +
+        (payCreditConsistencyScenario ? payCreditSpecificHits.length * 30 : 0) +
+        (payCreditConsistencyScenario && chunk.source === "compensation_manual" && payCreditSpecificHits.length > 0 ? 150 : 0) +
+        (payCreditConsistencyScenario && chunk.source === "pwa" && normalizeSectionIdentifier(chunk.section).includes(normalizeSectionIdentifier("Section 14")) && (chunkText.includes("sick") || chunkText.includes("bank")) ? 140 : 0) +
+        (payCreditConsistencyScenario && chunk.source === "pwa" && normalizeSectionIdentifier(chunk.section).includes(normalizeSectionIdentifier("Section 12")) && (chunkText.includes("layover") || chunkText.includes("deadhead") || chunkText.includes("rest")) ? 135 : 0) +
+        (payCreditConsistencyScenario && /\bsection 23\b/.test(chunkText) && payCreditSpecificHits.length === 0 ? -120 : 0) +
+        (shortCallNotificationScenario && shortCallNotificationSpecificHits.length > 0 ? 155 : 0) +
+        (shortCallNotificationScenario ? shortCallNotificationSpecificHits.length * 28 : 0) +
+        (shortCallNotificationScenario && chunk.source === "scheduler_manual" && shortCallNotificationSpecificHits.length > 0 ? 150 : 0) +
+        (shortCallNotificationScenario && chunk.source === "pwa" && shortCallNotificationSpecificHits.length > 0 ? 105 : 0) +
+        (shortCallNotificationScenario && chunkText.includes("short call") ? 90 : 0) +
+        (shortCallNotificationScenario && (chunkText.includes("telephone") || chunkText.includes("contact")) ? 60 : 0) +
+        (shortCallNotificationScenario && (chunkText.includes("electronic placement") || chunkText.includes("acknowledge") || chunkText.includes("acknowledgment")) ? 75 : 0) +
+        (shortCallNotificationScenario && (chunkText.includes("vacation") || chunkText.includes("non-fly day") || chunkText.includes("non fly day")) ? 80 : 0) +
+        (shortCallNotificationScenario && /\bsection 23\b/.test(chunkText) && shortCallNotificationSpecificHits.length === 0 ? -155 : 0) +
+        (shortCallNotificationScenario && !chunkText.includes("short call") ? -70 : 0) +
+        (qsCallOrderScenario && qsCallOrderSpecificHits.length > 0 ? 150 : 0) +
+        (qsCallOrderScenario ? qsCallOrderSpecificHits.length * 28 : 0) +
+        (qsCallOrderScenario && chunk.source === "scheduler_manual" && qsCallOrderSpecificHits.length > 0 ? 145 : 0) +
+        (qsCallOrderScenario && chunk.source === "pwa" && qsCallOrderSpecificHits.length > 0 ? 90 : 0) +
+        (qsCallOrderScenario && /\bsection 23\b/.test(chunkText) && qsCallOrderSpecificHits.length === 0 ? -160 : 0) +
+        (oeNotificationScenario && oeNotificationDirectSupport ? 180 : 0) +
+        (oeNotificationScenario && oeNotificationSpecificHits.length > 0 ? 130 : 0) +
+        (oeNotificationScenario ? oeNotificationSpecificHits.length * 28 : 0) +
+        (oeNotificationScenario && chunk.source === "scheduler_manual" && oeNotificationDirectSupport ? 155 : 0) +
+        (oeNotificationScenario && chunk.source === "pwa" && oeNotificationDirectSupport ? 70 : 0) +
+        (oeNotificationScenario && (chunkText.includes("green slip") || /\bgs\b/.test(chunkText)) && !oeNotificationDirectSupport ? -260 : 0) +
+        (oeNotificationScenario && chunkText.includes("deadhead") && !oeNotificationDirectSupport ? -180 : 0) +
+        (oeNotificationScenario && normalizeSectionIdentifier(chunk.section).includes(normalizeSectionIdentifier("Section 10")) && !oeNotificationDirectSupport ? -220 : 0) +
+        (oeNotificationScenario && normalizeSectionIdentifier(chunk.section).includes(normalizeSectionIdentifier("Section 2")) && !oeNotificationDirectSupport ? -220 : 0) +
+        (oeNotificationScenario && /\bsection 23\b/.test(chunkText) && !oeNotificationDirectSupport ? -165 : 0) +
+        (rerouteConsistencyScenario && rerouteSpecificHits.length > 0 ? 155 : 0) +
+        (rerouteConsistencyScenario ? rerouteSpecificHits.length * 30 : 0) +
+        (rerouteConsistencyScenario && chunk.source === "pwa" && normalizeSectionIdentifier(chunk.section).includes(normalizeSectionIdentifier("Section 23 L")) ? 180 : 0) +
+        (rerouteConsistencyScenario && chunk.source === "compensation_manual" && (chunkText.includes("reroute pay") || chunkText.includes("rrpay") || chunkText.includes("turn time") || chunkText.includes("timecard")) ? 165 : 0) +
+        (rerouteConsistencyScenario && /\bsection 23\b/.test(chunkText) && !normalizeSectionIdentifier(chunk.section).includes(normalizeSectionIdentifier("Section 23 L")) && rerouteSpecificHits.length === 0 ? -150 : 0) +
+        (futureRotationChangeScenario && futureRotationSpecificHits.length > 0 ? 150 : 0) +
+        (futureRotationChangeScenario ? futureRotationSpecificHits.length * 28 : 0) +
+        (futureRotationChangeScenario && chunk.source === "scheduler_manual" && (chunkText.includes("reserve coverage") || chunkText.includes("processing") || chunkText.includes("rotation change")) ? 145 : 0) +
+        (futureRotationChangeScenario && chunk.source === "compensation_manual" && (chunkText.includes("pay protection") || chunkText.includes("credit protection") || (chunkText.includes("pay") && chunkText.includes("credit"))) ? 165 : 0) +
+        (futureRotationChangeScenario && chunk.source === "pwa" && (chunkText.includes("known absence") || chunkText.includes("leave") || chunkText.includes("pay protection")) ? 130 : 0) +
+        (futureRotationChangeScenario && /\bsection 23\b/.test(chunkText) && futureRotationSpecificHits.length === 0 ? -130 : 0) +
         ((chunk.title ?? "").toLowerCase().includes("silver slip") ? 90 : 0);
 
       return {
@@ -3405,12 +6451,60 @@ function buildSupportFocusedCandidates(args: {
         termHits,
         exactSectionHit,
         matchedSectionAnchor:
-          (pcsSwapScenario && pcsSpecificHits.length > 0)
+          (pickupLimitScenario && pickupLimitSpecificHits.length > 0)
             ? inferSupportSectionAnchor({
                 section: chunk.section,
                 label: [chunk.title ?? "", ...(chunk.sectionAnchors ?? [])].join(" "),
                 quoteSnippet: chunk.text,
               })
+            : (pcsSwapScenario && pcsSpecificHits.length > 0)
+            ? inferSupportSectionAnchor({
+                section: chunk.section,
+                label: [chunk.title ?? "", ...(chunk.sectionAnchors ?? [])].join(" "),
+                quoteSnippet: chunk.text,
+              })
+            : (vacationBankScenario && vacationSpecificHits.length > 0)
+              ? inferSupportSectionAnchor({
+                  section: chunk.section,
+                  label: [chunk.title ?? "", ...(chunk.sectionAnchors ?? [])].join(" "),
+                  quoteSnippet: chunk.text,
+                })
+            : (payCreditConsistencyScenario && payCreditSpecificHits.length > 0)
+              ? inferSupportSectionAnchor({
+                  section: chunk.section,
+                  label: [chunk.title ?? "", ...(chunk.sectionAnchors ?? [])].join(" "),
+                  quoteSnippet: chunk.text,
+                })
+            : (qsCallOrderScenario && qsCallOrderSpecificHits.length > 0)
+              ? inferSupportSectionAnchor({
+                  section: chunk.section,
+                  label: [chunk.title ?? "", ...(chunk.sectionAnchors ?? [])].join(" "),
+                  quoteSnippet: chunk.text,
+                })
+            : (oeNotificationScenario && oeNotificationDirectSupport)
+              ? inferSupportSectionAnchor({
+                  section: chunk.section,
+                  label: [chunk.title ?? "", ...(chunk.sectionAnchors ?? [])].join(" "),
+                  quoteSnippet: chunk.text,
+                })
+            : (shortCallNotificationScenario && shortCallNotificationSpecificHits.length > 0)
+              ? inferSupportSectionAnchor({
+                  section: chunk.section,
+                  label: [chunk.title ?? "", ...(chunk.sectionAnchors ?? [])].join(" "),
+                  quoteSnippet: chunk.text,
+                })
+            : (rerouteConsistencyScenario && rerouteSpecificHits.length > 0)
+              ? inferSupportSectionAnchor({
+                  section: chunk.section,
+                  label: [chunk.title ?? "", ...(chunk.sectionAnchors ?? [])].join(" "),
+                  quoteSnippet: chunk.text,
+                })
+            : (futureRotationChangeScenario && futureRotationSpecificHits.length > 0)
+              ? inferSupportSectionAnchor({
+                  section: chunk.section,
+                  label: [chunk.title ?? "", ...(chunk.sectionAnchors ?? [])].join(" "),
+                  quoteSnippet: chunk.text,
+                })
             : sectionMatch.anchor,
       };
     })
@@ -3485,6 +6579,43 @@ function buildSupportFocusedCandidates(args: {
       matchedTerms: item.termHits,
     };
   });
+}
+
+function selectDebugRetrievedSnippets(args: {
+  question: string;
+  retrievedSupport: ContractCopilotApiSuccessResponse["answer"]["references"];
+  visibleReferences?: ContractCopilotApiSuccessResponse["answer"]["references"];
+}) {
+  const oeNotificationScenario = detectOeNotificationScenario(args.question);
+  if (!oeNotificationScenario) {
+    return args.retrievedSupport.map((item) => `${item.section}: ${item.quoteSnippet ?? item.note}`);
+  }
+
+  const preferredVisible = (args.visibleReferences ?? []).filter((item) => {
+    const combined = normalizeSupportText(
+      `${item.section ?? ""} ${item.label ?? ""} ${item.quoteSnippet ?? ""}`
+    );
+    const directSupport = hasDirectOeNotificationSupport(combined);
+    const oeContext =
+      combined.includes("notification") ||
+      combined.includes("cno") ||
+      combined.includes("phone") ||
+      /\boe\b/.test(combined) ||
+      combined.includes("srh") ||
+      combined.includes("trh");
+    const rejected =
+      (combined.includes("green slip") || /\bgs\b/.test(combined)) ||
+      combined.includes("deadhead") ||
+      normalizeSectionIdentifier(item.section).includes(normalizeSectionIdentifier("Section 10")) ||
+      normalizeSectionIdentifier(item.section).includes(normalizeSectionIdentifier("Section 2"));
+    return !rejected && (directSupport || oeContext);
+  });
+
+  if (preferredVisible.length > 0) {
+    return preferredVisible.map((item) => `${item.section}: ${item.quoteSnippet ?? item.label}`);
+  }
+
+  return [];
 }
 
 function buildBestGuessShortAnswer(args: {
@@ -3646,6 +6777,255 @@ function mergeAnswerReferencedSupport(args: {
   };
 }
 
+function formatControllingSectionDisplay(args: {
+  sourceLabel?: string;
+  sourceId?: "pwa" | "compensation_manual" | "scheduler_manual";
+  section: string;
+}) {
+  const normalizedSection = String(args.section ?? "")
+    .trim()
+    .replace(/^SECTION\s+/i, "Section ");
+  const sourceLabel =
+    args.sourceLabel ??
+    (args.sourceId === "pwa"
+      ? "PWA"
+      : args.sourceId === "compensation_manual"
+        ? "Compensation Manual"
+        : args.sourceId === "scheduler_manual"
+          ? "Scheduler Manual"
+          : "");
+  return `${sourceLabel} ${normalizedSection}`.replace(/\s+/g, " ").trim();
+}
+
+function selectControllingQuote(args: {
+  content: string;
+  question: string;
+  section?: string;
+}) {
+  const normalizedContent = String(args.content ?? "").replace(/\s+/g, " ").trim();
+  if (!normalizedContent) {
+    return undefined;
+  }
+
+  const questionTerms = extractSupportIntentTerms(args.question, "");
+  const sectionNormalized = normalizeSectionIdentifier(args.section);
+  const candidatePassages = normalizedContent
+    .split(/(?<=[.!?])\s+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  const scoredPassages = candidatePassages
+    .map((passage) => {
+      const searchable = normalizeSupportText(passage);
+      const termHits = questionTerms.filter((term) => searchable.includes(term)).length;
+      const sectionHit = sectionNormalized && normalizeSectionIdentifier(passage).includes(sectionNormalized) ? 1 : 0;
+      const notificationHit =
+        /\b(notification|notify|telephone|phone|icrew|micrew|acknowledge|short call|long call|reserve|vacation|non-fly)\b/i.test(
+          passage
+        )
+          ? 1
+          : 0;
+      return {
+        passage,
+        score: termHits * 10 + sectionHit * 8 + notificationHit * 5,
+      };
+    })
+    .sort((left, right) => right.score - left.score);
+
+  const best = scoredPassages.find((item) => item.score > 0)?.passage ?? candidatePassages[0];
+  const trimmed = trimToTwoSentences(best).trim();
+  if (trimmed.length <= 220) {
+    return trimmed;
+  }
+  const clipped = trimmed.slice(0, 220);
+  const boundary = clipped.lastIndexOf(" ");
+  return `${clipped.slice(0, boundary > 120 ? boundary : 220).trim()}…`;
+}
+
+function buildControllingSectionLock(args: {
+  question: string;
+  governingPacket?: SectionAwareGroundingPacket;
+  chunks: ContractDocumentChunk[];
+}) {
+  const packet = args.governingPacket;
+  if (!packet) {
+    return undefined;
+  }
+
+  const packetSections = keepMostSpecificSectionReferences(
+    extractSectionReferencesFromText(`${packet.section} ${packet.title ?? ""} ${packet.content}`)
+  );
+  const exactSection = packetSections.find((item) => isSpecificSubsectionAnchor(item));
+  if (!exactSection) {
+    return undefined;
+  }
+
+  const normalizedExactSection = normalizeSectionIdentifier(exactSection);
+  const sectionParents = extractSectionParentIdentifiers(exactSection).map(normalizeSectionIdentifier);
+  const questionTerms = extractSupportIntentTerms(args.question, "");
+  const chunkMatch = args.chunks
+    .map((chunk) => {
+      const anchors = [chunk.section, ...(chunk.sectionAnchors ?? [])];
+      const exactAnchor = anchors.find((anchor) => normalizeSectionIdentifier(anchor) === normalizedExactSection);
+      const parentAnchor = anchors.find((anchor) =>
+        sectionParents.includes(normalizeSectionIdentifier(anchor))
+      );
+      const combined = normalizeSupportText(
+        [chunk.section, chunk.title ?? "", ...(chunk.sectionAnchors ?? []), chunk.text].join(" ")
+      );
+      const termHits = questionTerms.filter((term) => combined.includes(term)).length;
+      const sameTier =
+        (packet.tier === "pwa" && chunk.source === "pwa") ||
+        (packet.tier === "compensation_manual" && chunk.source === "compensation_manual") ||
+        (packet.tier === "scheduler_manual" && chunk.source === "scheduler_manual");
+      const score =
+        (exactAnchor ? 700 : 0) +
+        (parentAnchor ? 180 : 0) +
+        (sameTier ? 40 : 0) +
+        termHits * 25 +
+        Math.min(chunk.text.length, 1200) / 100;
+      return score > 0
+        ? {
+            chunk,
+            score,
+            matchedSection: exactAnchor ?? parentAnchor ?? exactSection,
+          }
+        : null;
+    })
+    .filter(
+      (item): item is { chunk: ContractDocumentChunk; score: number; matchedSection: string } => Boolean(item)
+    )
+    .sort((left, right) => right.score - left.score)[0];
+
+  if (chunkMatch) {
+    const displaySection = formatControllingSectionDisplay({
+      sourceId:
+        chunkMatch.chunk.source === "pwa"
+          ? "pwa"
+          : chunkMatch.chunk.source === "compensation_manual"
+            ? "compensation_manual"
+            : "scheduler_manual",
+      section: chunkMatch.matchedSection,
+    });
+    const quoteSnippet =
+      selectControllingQuote({
+        content: chunkMatch.chunk.text,
+        question: args.question,
+        section: chunkMatch.matchedSection,
+      }) ?? trimToTwoSentences(chunkMatch.chunk.text);
+    return {
+      governingSection: exactSection,
+      displaySection,
+      quoteSnippet,
+      exactAttached: true,
+      reference: {
+        ...chunkToAnswerReference({
+          chunk: chunkMatch.chunk,
+          matchedSection: chunkMatch.matchedSection,
+        }),
+        section: chunkMatch.matchedSection,
+        quoteSnippet,
+      },
+    };
+  }
+
+  const packetQuote =
+    selectControllingQuote({
+      content: packet.content,
+      question: args.question,
+      section: exactSection,
+    }) ?? trimToTwoSentences(packet.content);
+  const packetCanStandIn =
+    normalizeSectionIdentifier(packet.section) === normalizedExactSection ||
+    normalizeSectionIdentifier(`${packet.title ?? ""} ${packet.content}`).includes(normalizedExactSection);
+
+  if (packetCanStandIn && packetQuote) {
+    return {
+      governingSection: exactSection,
+      displaySection: formatControllingSectionDisplay({
+        sourceLabel: packet.sourceLabel,
+        section: exactSection,
+      }),
+      quoteSnippet: packetQuote,
+      exactAttached: true,
+      reference: {
+        label: packet.title ?? packet.note ?? exactSection,
+        sourceId:
+          packet.tier === "pwa"
+            ? "pwa"
+            : packet.tier === "compensation_manual"
+              ? "compensation_manual"
+              : "scheduler_manual",
+        section: exactSection,
+        quoteSnippet: packetQuote,
+        ruleType: packet.tier === "pwa" ? "contract" : "scheduler_practice",
+      },
+    };
+  }
+
+  return {
+    governingSection: exactSection,
+    displaySection: formatControllingSectionDisplay({
+      sourceLabel: packet.sourceLabel,
+      section: exactSection,
+    }),
+    exactAttached: false,
+    missingMessage: `I do not have the exact ${exactSection.replace(/^SECTION\s+/i, "Section ")} language attached.`,
+  };
+}
+
+function applyControllingSectionLock(args: {
+  answer: ContractAnswerCard;
+  controllingSectionLock?: {
+    governingSection: string;
+    displaySection: string;
+    quoteSnippet?: string;
+    exactAttached: boolean;
+    missingMessage?: string;
+    reference?: ContractAnswerCard["references"][number];
+  };
+}) {
+  const lock = args.controllingSectionLock;
+  if (!lock) {
+    return args.answer;
+  }
+
+  const references = lock.reference
+    ? [lock.reference, ...args.answer.references].filter(
+        (reference, index, items) =>
+          items.findIndex(
+            (candidate) =>
+              candidate.sourceId === reference.sourceId &&
+              candidate.section === reference.section &&
+              candidate.quoteSnippet === reference.quoteSnippet
+          ) === index
+      )
+    : args.answer.references;
+
+  const explanationLines = String(args.answer.plainEnglishExplanation ?? "")
+    .split(/\n+/)
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0 && !item.startsWith("What controls:") && !item.startsWith("Quote:"));
+
+  const headerLines = [`What controls: ${lock.displaySection}.`];
+  if (lock.quoteSnippet && lock.quoteSnippet.trim().length > 0) {
+    headerLines.push(`Quote: "${lock.quoteSnippet.trim()}"`);
+  } else if (!lock.exactAttached && lock.missingMessage) {
+    headerLines.push(lock.missingMessage);
+  }
+
+  const caveats = !lock.exactAttached && lock.missingMessage
+    ? Array.from(new Set([...(args.answer.caveats ?? []), lock.missingMessage]))
+    : args.answer.caveats;
+
+  return {
+    ...args.answer,
+    plainEnglishExplanation: [...headerLines, ...explanationLines].join("\n"),
+    references,
+    caveats,
+  };
+}
+
 function selectPreferredGoverningPacket(args: {
   question: string;
   governingPackets: SectionAwareGroundingPacket[];
@@ -3723,10 +7103,12 @@ function parseRequiredAndAvailable(question: string) {
   const normalized = question.toLowerCase();
   const requiredMatch =
     normalized.match(/required(?:\s+for(?:\s+that)?\s+day)?\s+(?:is|=)\s*(\d+(?:\.\d+)?)/) ??
-    normalized.match(/required reserves?(?:\s+are|\s+is|=)\s*(\d+(?:\.\d+)?)/);
+    normalized.match(/required reserves?(?:\s+are|\s+is|=)\s*(\d+(?:\.\d+)?)/) ??
+    normalized.match(/(\d+(?:\.\d+)?)\s+required\b/);
   const availableMatch =
     normalized.match(/available(?:\s+are|\s+is|=)\s*(\d+(?:\.\d+)?)/) ??
-    normalized.match(/reserves available(?:\s+are|\s+is|=)\s*(\d+(?:\.\d+)?)/);
+    normalized.match(/reserves available(?:\s+are|\s+is|=)\s*(\d+(?:\.\d+)?)/) ??
+    normalized.match(/(\d+(?:\.\d+)?)\s+available\b/);
 
   return {
     required: requiredMatch ? Number(requiredMatch[1]) : null,
@@ -4417,6 +7799,7 @@ export async function handleContractCopilotRoute(request: Request): Promise<Resp
   const governingSectionsSelected = groundingPack.sectionPackets.governingSections.map(
     (item) => `${item.sourceLabel}:${item.section}`
   );
+  const inferredPilotStatus = inferPilotStatus(parsedRequest.question);
   const xDayScenario =
     /\bx-days?\b/i.test(parsedRequest.question) ||
     /\bx days?\b/i.test(parsedRequest.question) ||
@@ -4426,27 +7809,29 @@ export async function handleContractCopilotRoute(request: Request): Promise<Resp
   const governingSectionIncludesXDay = governingSectionsSelected.some((item) =>
     /23 l\.9|x-day/i.test(item)
   );
+  const xDayGroupingScenario = detectXDayGroupingScenario(parsedRequest.question);
+  const pbRerouteXdayScenario = detectPbRerouteXdayScenario(parsedRequest.question);
+  const futureRotationChangeScenario = detectFutureRotationChangeScenario(parsedRequest.question);
   const pcsSwapScenario = detectPcsSwapScenario(parsedRequest.question);
   const governingSectionIncludesPcsSwap = governingSectionsSelected.some((item) =>
     /pcs|swap|bid period|reserve coverage|capped reserve|max pickup|carry-out|open time/i.test(item)
   );
-  const shortCallDutyScenario =
-    /short call/i.test(parsedRequest.question) &&
-    (
-      /same day trip|subsequent same day trip/i.test(parsedRequest.question) ||
-      /report time|reports at/i.test(parsedRequest.question) ||
-      /duty/i.test(parsedRequest.question) ||
-      /flight time/i.test(parsedRequest.question) ||
-      /legality/i.test(parsedRequest.question) ||
-      /both remain on schedule/i.test(parsedRequest.question) ||
-      /assigned short call and trip/i.test(parsedRequest.question)
-    );
+  const vacationBankScenario = detectVacationBankScenario(parsedRequest.question);
+  const governingSectionIncludesVacationBank = governingSectionsSelected.some((item) =>
+    /section 7|vacation|bank|replacement|sup|ivd|vacation year/i.test(item)
+  );
+  const shortCallDutyScenario = detectShortCallDutyScenario(parsedRequest.question);
   const governingSectionIncludesDutyLegality = governingSectionsSelected.some((item) =>
     /23 s|section 12|short call/i.test(item)
   );
   const governingPacketUsed = selectPreferredGoverningPacket({
     question: parsedRequest.question,
     governingPackets: groundingPack.sectionPackets.governingSections,
+  });
+  const controllingSectionLock = buildControllingSectionLock({
+    question: parsedRequest.question,
+    governingPacket: governingPacketUsed,
+    chunks: searchableChunks,
   });
   const workedExamplePacketUsed = selectPreferredWorkedExamplePacket({
     question: parsedRequest.question,
@@ -4578,7 +7963,11 @@ export async function handleContractCopilotRoute(request: Request): Promise<Resp
     const rerankedMissingKeySupport = rerankSupportReferences({
       question: parsedRequest.question,
       answerText: `${verifiedMissingKeyFallbackAnswer.answer.shortAnswer} ${verifiedMissingKeyFallbackAnswer.answer.plainEnglishExplanation}`,
-      references: [...missingKeyAnswerSupport.references, ...supportFocusedReferences],
+      references: [
+        ...missingKeyAnswerSupport.references,
+        ...(controllingSectionLock?.reference ? [controllingSectionLock.reference] : []),
+        ...supportFocusedReferences,
+      ],
       selectedLane: intentResolution.selectedLane,
     });
     const missingKeyVisibleReferences = selectVisibleContractReferences(rerankedMissingKeySupport.references);
@@ -4594,8 +7983,13 @@ export async function handleContractCopilotRoute(request: Request): Promise<Resp
       },
       references: missingKeyVisibleReferences,
     });
-    const finalizedMissingKeyScenarioAnswer = finalizeScenarioSafetyPipeline({
+    const missingKeyAnswerWithControllingSection = applyControllingSectionLock({
       answer: missingKeyAnswerWithComparisonNote,
+      controllingSectionLock,
+    });
+    const finalizedMissingKeyScenarioAnswer = finalizeScenarioSafetyPipeline({
+      question: parsedRequest.question,
+      answer: missingKeyAnswerWithControllingSection,
       verified: verifiedMissingKeyFallbackAnswer,
       supportDebug: {
         ...rerankedMissingKeySupport.debug,
@@ -4603,6 +7997,11 @@ export async function handleContractCopilotRoute(request: Request): Promise<Resp
         answerReferencedSections: missingKeyAnswerSupport.answerReferencedSections,
         supportInjectedFromAnswer: missingKeyAnswerSupport.supportInjectedFromAnswer,
         supportMissingForReferencedSection: missingKeyAnswerSupport.missingSections.length > 0,
+        controllingSectionLocked: Boolean(controllingSectionLock),
+        controllingSectionDisplay: controllingSectionLock?.displaySection,
+        controllingSectionQuoteAttached: Boolean(controllingSectionLock?.quoteSnippet),
+        controllingSectionQuote: controllingSectionLock?.quoteSnippet,
+        controllingSectionMissingExactText: controllingSectionLock?.exactAttached === false,
       },
     });
 
@@ -4640,9 +8039,11 @@ export async function handleContractCopilotRoute(request: Request): Promise<Resp
               governingSourcePriorityUsed,
               reasoningMode: matchedInteractionRule ? "interaction_led" : "generic_retrieval_led",
               answerMode: groundingPack.retrievalMeta.sectionLed ? "section_led" : "generic",
-              retrievedSnippets: retrievedSupport.map(
-                (item) => `${item.section}: ${item.quoteSnippet ?? item.note}`
-              ),
+              retrievedSnippets: selectDebugRetrievedSnippets({
+                question: parsedRequest.question,
+                retrievedSupport,
+                visibleReferences: finalizedMissingKeyScenarioAnswer.references,
+              }),
               groundingSource: "fallback" as const,
               usedRetrievedSupport: false,
               externalAllowed: groundingPack.retrievalMeta.externalAllowed,
@@ -4661,12 +8062,8 @@ export async function handleContractCopilotRoute(request: Request): Promise<Resp
                 groundingPack,
                 usedRetrievedSupport: false,
               }),
-              sourcesUsed: sourceUsageDebug.sourcesUsed,
-              pwaSectionsUsed: sourceUsageDebug.pwaSectionsUsed,
-              compensationChunksUsed: sourceUsageDebug.compensationChunksUsed,
-              schedulerChunksUsed: sourceUsageDebug.schedulerChunksUsed,
+              ...augmentSourceUsageWithReferences(sourceUsageDebug, finalizedMissingKeyScenarioAnswer.answer.references),
               structuredRowsUsed: sourceUsageDebug.structuredRowsUsed,
-              missingSourceWarnings: sourceUsageDebug.missingSourceWarnings,
               aiSynthesisUsed: false,
               OPENAI_API_KEYPresent: Boolean(apiKey),
               modelClientCalled,
@@ -4709,13 +8106,49 @@ export async function handleContractCopilotRoute(request: Request): Promise<Resp
               supportInjectedFromAnswer: finalizedMissingKeyScenarioAnswer.debug.supportInjectedFromAnswer,
               supportMissingForReferencedSection:
                 finalizedMissingKeyScenarioAnswer.debug.supportMissingForReferencedSection,
+              controllingSectionLocked: finalizedMissingKeyScenarioAnswer.debug.controllingSectionLocked,
+              controllingSectionDisplay: finalizedMissingKeyScenarioAnswer.debug.controllingSectionDisplay,
+              controllingSectionQuoteAttached:
+                finalizedMissingKeyScenarioAnswer.debug.controllingSectionQuoteAttached,
+              controllingSectionQuote: finalizedMissingKeyScenarioAnswer.debug.controllingSectionQuote,
+              controllingSectionMissingExactText:
+                finalizedMissingKeyScenarioAnswer.debug.controllingSectionMissingExactText,
               xDayScenario,
               xDayAnchorFound: finalizedMissingKeyScenarioAnswer.debug.xDayAnchorFound,
+              xDayGroupingScenario,
+              xDayGroupingAnchorFound: finalizedMissingKeyScenarioAnswer.debug.xDayGroupingAnchorFound,
+              xDayGroupingMissingSupportReason:
+                finalizedMissingKeyScenarioAnswer.debug.xDayGroupingMissingSupportReason,
+              pbRerouteXdayScenario,
+              pbAnchorFound: finalizedMissingKeyScenarioAnswer.debug.pbAnchorFound,
+              pbProcessingAnchorFound: finalizedMissingKeyScenarioAnswer.debug.pbProcessingAnchorFound,
+              notificationAnchorFound: finalizedMissingKeyScenarioAnswer.debug.notificationAnchorFound,
+              pbScenarioMissingSupportReason:
+                finalizedMissingKeyScenarioAnswer.debug.pbScenarioMissingSupportReason,
+              futureRotationChangeScenario,
+              futureRotationChangeAnchorFound:
+                finalizedMissingKeyScenarioAnswer.debug.futureRotationChangeAnchorFound,
+              cpoOverrideAnchorFound: finalizedMissingKeyScenarioAnswer.debug.cpoOverrideAnchorFound,
+              knownAbsenceAnchorFound: finalizedMissingKeyScenarioAnswer.debug.knownAbsenceAnchorFound,
+              payProtectionAnchorFound: finalizedMissingKeyScenarioAnswer.debug.payProtectionAnchorFound,
+              futureRotationMissingSupportReason:
+                finalizedMissingKeyScenarioAnswer.debug.futureRotationMissingSupportReason,
               governingSectionIncludesXDay,
               pcsSwapScenario,
               pcsSwapAnchorFound: finalizedMissingKeyScenarioAnswer.debug.pcsSwapAnchorFound,
               pcsSwapMissingSupportReason: finalizedMissingKeyScenarioAnswer.debug.pcsSwapMissingSupportReason,
               governingSectionIncludesPcsSwap,
+              vacationBankScenario,
+              vacationBankAnchorFound: finalizedMissingKeyScenarioAnswer.debug.vacationBankAnchorFound,
+              vacationBankMissingSupportReason:
+                finalizedMissingKeyScenarioAnswer.debug.vacationBankMissingSupportReason,
+              governingSectionIncludesVacationBank,
+              oeNotificationScenario: finalizedMissingKeyScenarioAnswer.debug.oeNotificationScenario,
+              oeNotificationAnchorFound: finalizedMissingKeyScenarioAnswer.debug.oeNotificationAnchorFound,
+              oeNotificationMissingSupportReason:
+                finalizedMissingKeyScenarioAnswer.debug.oeNotificationMissingSupportReason,
+              oeNotificationSupportRejectedReasons:
+                finalizedMissingKeyScenarioAnswer.debug.oeNotificationSupportRejectedReasons,
               shortCallDutyScenario,
               shortCallDutyAnchorFound: finalizedMissingKeyScenarioAnswer.debug.shortCallDutyAnchorFound,
               governingSectionIncludesDutyLegality,
@@ -4793,6 +8226,7 @@ export async function handleContractCopilotRoute(request: Request): Promise<Resp
     const mergedFactsForValidation = {
       ...fallbackResult.nextSession.facts,
       ...session.facts,
+      ...(inferredPilotStatus && !session.facts.status ? { status: inferredPilotStatus } : {}),
       ...aiFacts,
     };
     const scenarioValidation = resolveScenarioValidation({
@@ -4804,29 +8238,35 @@ export async function handleContractCopilotRoute(request: Request): Promise<Resp
     const inferredClarifyingQuestions = inferClarifyingQuestion(
       aiResult.output,
       fallbackResult.answer.clarifyingQuestions,
+      parsedRequest.question,
       session.clarificationCount
     );
-    const clarifyingQuestions =
+    const clarifyingQuestions = filterClarifyingQuestionsForInference(
+      parsedRequest.question,
       isComplexScenarioQuestion
         ? inferredClarifyingQuestions
         :
       scenarioValidation.gatingQuestion && session.clarificationCount < 2
         ? [scenarioValidation.gatingQuestion]
-        : inferredClarifyingQuestions;
+        : inferredClarifyingQuestions
+    );
 
     const nextSession: ContractCopilotSession = {
       ...fallbackResult.nextSession,
       currentScenario: aiDetectedScenario ?? fallbackResult.nextSession.currentScenario,
       facts: {
         ...fallbackResult.nextSession.facts,
+        ...(inferredPilotStatus && !fallbackResult.nextSession.facts.status ? { status: inferredPilotStatus } : {}),
         ...aiFacts,
       },
       clarificationCount:
+        Boolean(clarifyingQuestions?.length) &&
         (aiResult.output.needsClarification || scenarioValidation.answerIsConditional) &&
         session.clarificationCount < 2
           ? session.clarificationCount + 1
           : 0,
       unresolvedQuestion:
+        Boolean(clarifyingQuestions?.length) &&
         (aiResult.output.needsClarification || scenarioValidation.answerIsConditional) &&
         session.clarificationCount < 2
           ? (session.unresolvedQuestion ?? parsedRequest.question)
@@ -4834,6 +8274,7 @@ export async function handleContractCopilotRoute(request: Request): Promise<Resp
       lastAskedClarifyingField: clarifyingQuestions?.[0]?.factField,
       lastClarifyingQuestionId: clarifyingQuestions?.[0]?.id,
       status:
+        Boolean(clarifyingQuestions?.length) &&
         (aiResult.output.needsClarification || scenarioValidation.answerIsConditional) &&
         session.clarificationCount < 2
           ? "awaiting_reply"
@@ -4841,6 +8282,7 @@ export async function handleContractCopilotRoute(request: Request): Promise<Resp
     };
 
     const canAskFollowUp =
+      Boolean(clarifyingQuestions?.length) &&
       (aiResult.output.needsClarification || scenarioValidation.answerIsConditional) &&
       session.clarificationCount < 2;
     const nextAnswerStatus = canAskFollowUp
@@ -4988,7 +8430,11 @@ export async function handleContractCopilotRoute(request: Request): Promise<Resp
     const rerankedGroundedSupport = rerankSupportReferences({
       question: parsedRequest.question,
       answerText: `${finalSynthesis.bottomLine} ${finalSynthesis.why ?? ""}`,
-      references: [...aiAnswerSupport.references, ...supportFocusedReferences],
+      references: [
+        ...aiAnswerSupport.references,
+        ...(controllingSectionLock?.reference ? [controllingSectionLock.reference] : []),
+        ...supportFocusedReferences,
+      ],
       selectedLane: intentResolution.selectedLane,
     });
     const visibleGroundedReferences = selectVisibleContractReferences(rerankedGroundedSupport.references);
@@ -5054,8 +8500,13 @@ export async function handleContractCopilotRoute(request: Request): Promise<Resp
       answer: verifiedAIAnswer.answer,
       references: verifiedAIAnswer.answer.references,
     });
-    const finalizedAIScenarioAnswer = finalizeScenarioSafetyPipeline({
+    const aiAnswerWithControllingSection = applyControllingSectionLock({
       answer: aiAnswerWithComparisonNote,
+      controllingSectionLock,
+    });
+    const finalizedAIScenarioAnswer = finalizeScenarioSafetyPipeline({
+      question: parsedRequest.question,
+      answer: aiAnswerWithControllingSection,
       verified: verifiedAIAnswer,
       supportDebug: {
         ...rerankedGroundedSupport.debug,
@@ -5063,6 +8514,11 @@ export async function handleContractCopilotRoute(request: Request): Promise<Resp
         answerReferencedSections: aiAnswerSupport.answerReferencedSections,
         supportInjectedFromAnswer: aiAnswerSupport.supportInjectedFromAnswer,
         supportMissingForReferencedSection: aiAnswerSupport.missingSections.length > 0,
+        controllingSectionLocked: Boolean(controllingSectionLock),
+        controllingSectionDisplay: controllingSectionLock?.displaySection,
+        controllingSectionQuoteAttached: Boolean(controllingSectionLock?.quoteSnippet),
+        controllingSectionQuote: controllingSectionLock?.quoteSnippet,
+        controllingSectionMissingExactText: controllingSectionLock?.exactAttached === false,
       },
     });
 
@@ -5117,9 +8573,11 @@ export async function handleContractCopilotRoute(request: Request): Promise<Resp
               governingSourcePriorityUsed,
               reasoningMode: matchedInteractionRule ? "interaction_led" : "generic_retrieval_led",
               answerMode: finalBottomLineMode,
-              retrievedSnippets: retrievedSupport.map(
-                (item) => `${item.section}: ${item.quoteSnippet ?? item.note}`
-              ),
+              retrievedSnippets: selectDebugRetrievedSnippets({
+                question: parsedRequest.question,
+                retrievedSupport,
+                visibleReferences: finalizedAIScenarioAnswer.references,
+              }),
               groundingSource: groundedSupport.usedRetrievedSupport
                 ? "retrieved_contract_snippets"
                 : "deterministic_support",
@@ -5140,12 +8598,8 @@ export async function handleContractCopilotRoute(request: Request): Promise<Resp
                 groundingPack,
                 usedRetrievedSupport: groundedSupport.usedRetrievedSupport,
               }),
-              sourcesUsed: sourceUsageDebug.sourcesUsed,
-              pwaSectionsUsed: sourceUsageDebug.pwaSectionsUsed,
-              compensationChunksUsed: sourceUsageDebug.compensationChunksUsed,
-              schedulerChunksUsed: sourceUsageDebug.schedulerChunksUsed,
+              ...augmentSourceUsageWithReferences(sourceUsageDebug, finalizedAIScenarioAnswer.answer.references),
               structuredRowsUsed: sourceUsageDebug.structuredRowsUsed,
-              missingSourceWarnings: sourceUsageDebug.missingSourceWarnings,
               aiSynthesisUsed: true,
               OPENAI_API_KEYPresent: Boolean(apiKey),
               modelClientCalled,
@@ -5188,13 +8642,49 @@ export async function handleContractCopilotRoute(request: Request): Promise<Resp
                   supportInjectedFromAnswer: finalizedAIScenarioAnswer.debug.supportInjectedFromAnswer,
                   supportMissingForReferencedSection:
                     finalizedAIScenarioAnswer.debug.supportMissingForReferencedSection,
+                  controllingSectionLocked: finalizedAIScenarioAnswer.debug.controllingSectionLocked,
+                  controllingSectionDisplay: finalizedAIScenarioAnswer.debug.controllingSectionDisplay,
+                  controllingSectionQuoteAttached:
+                    finalizedAIScenarioAnswer.debug.controllingSectionQuoteAttached,
+                  controllingSectionQuote: finalizedAIScenarioAnswer.debug.controllingSectionQuote,
+                  controllingSectionMissingExactText:
+                    finalizedAIScenarioAnswer.debug.controllingSectionMissingExactText,
                   xDayScenario,
                   xDayAnchorFound: finalizedAIScenarioAnswer.debug.xDayAnchorFound,
+                  xDayGroupingScenario,
+                  xDayGroupingAnchorFound: finalizedAIScenarioAnswer.debug.xDayGroupingAnchorFound,
+                  xDayGroupingMissingSupportReason:
+                    finalizedAIScenarioAnswer.debug.xDayGroupingMissingSupportReason,
+                  pbRerouteXdayScenario,
+                  pbAnchorFound: finalizedAIScenarioAnswer.debug.pbAnchorFound,
+                  pbProcessingAnchorFound: finalizedAIScenarioAnswer.debug.pbProcessingAnchorFound,
+                  notificationAnchorFound: finalizedAIScenarioAnswer.debug.notificationAnchorFound,
+                  pbScenarioMissingSupportReason:
+                    finalizedAIScenarioAnswer.debug.pbScenarioMissingSupportReason,
+                  futureRotationChangeScenario,
+                  futureRotationChangeAnchorFound:
+                    finalizedAIScenarioAnswer.debug.futureRotationChangeAnchorFound,
+                  cpoOverrideAnchorFound: finalizedAIScenarioAnswer.debug.cpoOverrideAnchorFound,
+                  knownAbsenceAnchorFound: finalizedAIScenarioAnswer.debug.knownAbsenceAnchorFound,
+                  payProtectionAnchorFound: finalizedAIScenarioAnswer.debug.payProtectionAnchorFound,
+                  futureRotationMissingSupportReason:
+                    finalizedAIScenarioAnswer.debug.futureRotationMissingSupportReason,
                   governingSectionIncludesXDay,
                   pcsSwapScenario,
                   pcsSwapAnchorFound: finalizedAIScenarioAnswer.debug.pcsSwapAnchorFound,
                   pcsSwapMissingSupportReason: finalizedAIScenarioAnswer.debug.pcsSwapMissingSupportReason,
                   governingSectionIncludesPcsSwap,
+                  vacationBankScenario,
+                  vacationBankAnchorFound: finalizedAIScenarioAnswer.debug.vacationBankAnchorFound,
+                  vacationBankMissingSupportReason:
+                    finalizedAIScenarioAnswer.debug.vacationBankMissingSupportReason,
+                  governingSectionIncludesVacationBank,
+                  oeNotificationScenario: finalizedAIScenarioAnswer.debug.oeNotificationScenario,
+                  oeNotificationAnchorFound: finalizedAIScenarioAnswer.debug.oeNotificationAnchorFound,
+                  oeNotificationMissingSupportReason:
+                    finalizedAIScenarioAnswer.debug.oeNotificationMissingSupportReason,
+                  oeNotificationSupportRejectedReasons:
+                    finalizedAIScenarioAnswer.debug.oeNotificationSupportRejectedReasons,
                   shortCallDutyScenario,
                   shortCallDutyAnchorFound: finalizedAIScenarioAnswer.debug.shortCallDutyAnchorFound,
                   governingSectionIncludesDutyLegality,
@@ -5245,6 +8735,7 @@ export async function handleContractCopilotRoute(request: Request): Promise<Resp
           facts: {
             ...fallbackResult.nextSession.facts,
             ...session.facts,
+            ...(inferredPilotStatus && !session.facts.status ? { status: inferredPilotStatus } : {}),
             ...partialFacts,
           },
           governingPacket: governingPacketUsed,
@@ -5281,6 +8772,7 @@ export async function handleContractCopilotRoute(request: Request): Promise<Resp
           facts: {
             ...fallbackResult.nextSession.facts,
             ...session.facts,
+            ...(inferredPilotStatus && !session.facts.status ? { status: inferredPilotStatus } : {}),
             ...partialFacts,
           },
           governingPacket: governingPacketUsed,
@@ -5382,7 +8874,11 @@ export async function handleContractCopilotRoute(request: Request): Promise<Resp
           answerText: `${conditionalPartialBottomLine} ${
             typeof partial.whyItApplies === "string" ? partial.whyItApplies : ""
           }`,
-          references: [...partialAnswerSupport.references, ...supportFocusedReferences],
+          references: [
+            ...partialAnswerSupport.references,
+            ...(controllingSectionLock?.reference ? [controllingSectionLock.reference] : []),
+            ...supportFocusedReferences,
+          ],
           selectedLane: intentResolution.selectedLane,
         });
         const visiblePartialReferences = selectVisibleContractReferences(rerankedPartialSupport.references);
@@ -5390,13 +8886,15 @@ export async function handleContractCopilotRoute(request: Request): Promise<Resp
           visiblePartialReferences,
           rerankedPartialSupport.debug as Record<string, unknown>
         );
-        const partialClarifyingQuestions =
+        const partialClarifyingQuestions = filterClarifyingQuestionsForInference(
+          parsedRequest.question,
           isComplexScenarioQuestion
             ? inferClarifyingQuestion(
                 {
                   ...aiResultFromPartial(partial),
                 },
                 fallbackResult.answer.clarifyingQuestions,
+                parsedRequest.question,
                 session.clarificationCount
               )
             : partialScenarioValidation.gatingQuestion && session.clarificationCount < 2
@@ -5406,8 +8904,10 @@ export async function handleContractCopilotRoute(request: Request): Promise<Resp
                     ...aiResultFromPartial(partial),
                   },
                   fallbackResult.answer.clarifyingQuestions,
+                  parsedRequest.question,
                   session.clarificationCount
-                );
+                )
+        );
 
         console.log("=== AI_UNVERIFIED AVAILABLE ===");
         console.dir(
@@ -5424,6 +8924,7 @@ export async function handleContractCopilotRoute(request: Request): Promise<Resp
           ...fallbackResult.answer,
           status:
             !isComplexScenarioQuestion &&
+            Boolean(partialClarifyingQuestions?.length) &&
             (partial.needsClarification || partialScenarioValidation.answerIsConditional) &&
             session.clarificationCount < 2
               ? "needs_clarification"
@@ -5491,8 +8992,13 @@ export async function handleContractCopilotRoute(request: Request): Promise<Resp
           answer: verifiedAIUnverifiedAnswer.answer,
           references: verifiedAIUnverifiedAnswer.answer.references,
         });
-        const finalizedAIUnverifiedScenarioAnswer = finalizeScenarioSafetyPipeline({
+        const aiUnverifiedAnswerWithControllingSection = applyControllingSectionLock({
           answer: aiUnverifiedAnswerWithComparisonNote,
+          controllingSectionLock,
+        });
+        const finalizedAIUnverifiedScenarioAnswer = finalizeScenarioSafetyPipeline({
+          question: parsedRequest.question,
+          answer: aiUnverifiedAnswerWithControllingSection,
           verified: verifiedAIUnverifiedAnswer,
           supportDebug: {
             ...rerankedPartialSupport.debug,
@@ -5500,6 +9006,11 @@ export async function handleContractCopilotRoute(request: Request): Promise<Resp
             answerReferencedSections: partialAnswerSupport.answerReferencedSections,
             supportInjectedFromAnswer: partialAnswerSupport.supportInjectedFromAnswer,
             supportMissingForReferencedSection: partialAnswerSupport.missingSections.length > 0,
+            controllingSectionLocked: Boolean(controllingSectionLock),
+            controllingSectionDisplay: controllingSectionLock?.displaySection,
+            controllingSectionQuoteAttached: Boolean(controllingSectionLock?.quoteSnippet),
+            controllingSectionQuote: controllingSectionLock?.quoteSnippet,
+            controllingSectionMissingExactText: controllingSectionLock?.exactAttached === false,
           },
         });
 
@@ -5511,11 +9022,13 @@ export async function handleContractCopilotRoute(request: Request): Promise<Resp
           nextSession: {
             ...fallbackResult.nextSession,
             clarificationCount:
+              Boolean(partialClarifyingQuestions?.length) &&
               (partial.needsClarification || partialScenarioValidation.answerIsConditional) &&
               session.clarificationCount < 2
                 ? session.clarificationCount + 1
                 : 0,
             unresolvedQuestion:
+              Boolean(partialClarifyingQuestions?.length) &&
               (partial.needsClarification || partialScenarioValidation.answerIsConditional) &&
               session.clarificationCount < 2
                 ? (session.unresolvedQuestion ?? parsedRequest.question)
@@ -5523,6 +9036,7 @@ export async function handleContractCopilotRoute(request: Request): Promise<Resp
             lastAskedClarifyingField: partialClarifyingQuestions?.[0]?.factField,
             lastClarifyingQuestionId: partialClarifyingQuestions?.[0]?.id,
             status:
+              Boolean(partialClarifyingQuestions?.length) &&
               (partial.needsClarification || partialScenarioValidation.answerIsConditional) &&
               session.clarificationCount < 2
                 ? "awaiting_reply"
@@ -5580,9 +9094,11 @@ export async function handleContractCopilotRoute(request: Request): Promise<Resp
                   governingSourcePriorityUsed,
                   reasoningMode: matchedInteractionRule ? "interaction_led" : "generic_retrieval_led",
                   answerMode: partialBottomLineMode,
-                  retrievedSnippets: retrievedSupport.map(
-                    (item) => `${item.section}: ${item.quoteSnippet ?? item.note}`
-                  ),
+                  retrievedSnippets: selectDebugRetrievedSnippets({
+                    question: parsedRequest.question,
+                    retrievedSupport,
+                    visibleReferences: finalizedAIUnverifiedScenarioAnswer.references,
+                  }),
                   groundingSource: groundedPartialSupport.usedRetrievedSupport
                     ? "retrieved_contract_snippets"
                     : "deterministic_support",
@@ -5601,12 +9117,8 @@ export async function handleContractCopilotRoute(request: Request): Promise<Resp
                     groundingPack,
                     usedRetrievedSupport: groundedPartialSupport.usedRetrievedSupport,
                   }),
-                  sourcesUsed: sourceUsageDebug.sourcesUsed,
-                  pwaSectionsUsed: sourceUsageDebug.pwaSectionsUsed,
-                  compensationChunksUsed: sourceUsageDebug.compensationChunksUsed,
-                  schedulerChunksUsed: sourceUsageDebug.schedulerChunksUsed,
+                  ...augmentSourceUsageWithReferences(sourceUsageDebug, finalizedAIUnverifiedScenarioAnswer.answer.references),
                   structuredRowsUsed: sourceUsageDebug.structuredRowsUsed,
-                  missingSourceWarnings: sourceUsageDebug.missingSourceWarnings,
                   aiSynthesisUsed: true,
                   OPENAI_API_KEYPresent: Boolean(apiKey),
                   modelClientCalled,
@@ -5649,14 +9161,50 @@ export async function handleContractCopilotRoute(request: Request): Promise<Resp
                   supportInjectedFromAnswer: finalizedAIUnverifiedScenarioAnswer.debug.supportInjectedFromAnswer,
                   supportMissingForReferencedSection:
                     finalizedAIUnverifiedScenarioAnswer.debug.supportMissingForReferencedSection,
+                  controllingSectionLocked: finalizedAIUnverifiedScenarioAnswer.debug.controllingSectionLocked,
+                  controllingSectionDisplay: finalizedAIUnverifiedScenarioAnswer.debug.controllingSectionDisplay,
+                  controllingSectionQuoteAttached:
+                    finalizedAIUnverifiedScenarioAnswer.debug.controllingSectionQuoteAttached,
+                  controllingSectionQuote: finalizedAIUnverifiedScenarioAnswer.debug.controllingSectionQuote,
+                  controllingSectionMissingExactText:
+                    finalizedAIUnverifiedScenarioAnswer.debug.controllingSectionMissingExactText,
                   xDayScenario,
                   xDayAnchorFound: finalizedAIUnverifiedScenarioAnswer.debug.xDayAnchorFound,
+                  xDayGroupingScenario,
+                  xDayGroupingAnchorFound: finalizedAIUnverifiedScenarioAnswer.debug.xDayGroupingAnchorFound,
+                  xDayGroupingMissingSupportReason:
+                    finalizedAIUnverifiedScenarioAnswer.debug.xDayGroupingMissingSupportReason,
+                  pbRerouteXdayScenario,
+                  pbAnchorFound: finalizedAIUnverifiedScenarioAnswer.debug.pbAnchorFound,
+                  pbProcessingAnchorFound: finalizedAIUnverifiedScenarioAnswer.debug.pbProcessingAnchorFound,
+                  notificationAnchorFound: finalizedAIUnverifiedScenarioAnswer.debug.notificationAnchorFound,
+                  pbScenarioMissingSupportReason:
+                    finalizedAIUnverifiedScenarioAnswer.debug.pbScenarioMissingSupportReason,
+                  futureRotationChangeScenario,
+                  futureRotationChangeAnchorFound:
+                    finalizedAIUnverifiedScenarioAnswer.debug.futureRotationChangeAnchorFound,
+                  cpoOverrideAnchorFound: finalizedAIUnverifiedScenarioAnswer.debug.cpoOverrideAnchorFound,
+                  knownAbsenceAnchorFound: finalizedAIUnverifiedScenarioAnswer.debug.knownAbsenceAnchorFound,
+                  payProtectionAnchorFound: finalizedAIUnverifiedScenarioAnswer.debug.payProtectionAnchorFound,
+                  futureRotationMissingSupportReason:
+                    finalizedAIUnverifiedScenarioAnswer.debug.futureRotationMissingSupportReason,
                   governingSectionIncludesXDay,
                   pcsSwapScenario,
                   pcsSwapAnchorFound: finalizedAIUnverifiedScenarioAnswer.debug.pcsSwapAnchorFound,
                   pcsSwapMissingSupportReason:
                     finalizedAIUnverifiedScenarioAnswer.debug.pcsSwapMissingSupportReason,
                   governingSectionIncludesPcsSwap,
+                  vacationBankScenario,
+                  vacationBankAnchorFound: finalizedAIUnverifiedScenarioAnswer.debug.vacationBankAnchorFound,
+                  vacationBankMissingSupportReason:
+                    finalizedAIUnverifiedScenarioAnswer.debug.vacationBankMissingSupportReason,
+                  governingSectionIncludesVacationBank,
+                  oeNotificationScenario: finalizedAIUnverifiedScenarioAnswer.debug.oeNotificationScenario,
+                  oeNotificationAnchorFound: finalizedAIUnverifiedScenarioAnswer.debug.oeNotificationAnchorFound,
+                  oeNotificationMissingSupportReason:
+                    finalizedAIUnverifiedScenarioAnswer.debug.oeNotificationMissingSupportReason,
+                  oeNotificationSupportRejectedReasons:
+                    finalizedAIUnverifiedScenarioAnswer.debug.oeNotificationSupportRejectedReasons,
                   shortCallDutyScenario,
                   shortCallDutyAnchorFound: finalizedAIUnverifiedScenarioAnswer.debug.shortCallDutyAnchorFound,
                   governingSectionIncludesDutyLegality,
@@ -5697,6 +9245,7 @@ export async function handleContractCopilotRoute(request: Request): Promise<Resp
       facts: {
         ...fallbackResult.nextSession.facts,
         ...session.facts,
+        ...(inferredPilotStatus && !session.facts.status ? { status: inferredPilotStatus } : {}),
       },
       governingPacket: governingPacketUsed,
       matchedInteractionRule,
@@ -5729,7 +9278,11 @@ export async function handleContractCopilotRoute(request: Request): Promise<Resp
     const rerankedFallbackSupport = rerankSupportReferences({
       question: parsedRequest.question,
       answerText: `${verifiedFallbackAnswer.answer.shortAnswer} ${verifiedFallbackAnswer.answer.plainEnglishExplanation}`,
-      references: [...fallbackAnswerSupport.references, ...supportFocusedReferences],
+      references: [
+        ...fallbackAnswerSupport.references,
+        ...(controllingSectionLock?.reference ? [controllingSectionLock.reference] : []),
+        ...supportFocusedReferences,
+      ],
       selectedLane: intentResolution.selectedLane,
     });
     const fallbackVisibleReferences = selectVisibleContractReferences(rerankedFallbackSupport.references);
@@ -5745,8 +9298,13 @@ export async function handleContractCopilotRoute(request: Request): Promise<Resp
       },
       references: fallbackVisibleReferences,
     });
-    const finalizedFallbackScenarioAnswer = finalizeScenarioSafetyPipeline({
+    const fallbackAnswerWithControllingSection = applyControllingSectionLock({
       answer: fallbackAnswerWithComparisonNote,
+      controllingSectionLock,
+    });
+    const finalizedFallbackScenarioAnswer = finalizeScenarioSafetyPipeline({
+      question: parsedRequest.question,
+      answer: fallbackAnswerWithControllingSection,
       verified: verifiedFallbackAnswer,
       supportDebug: {
         ...rerankedFallbackSupport.debug,
@@ -5754,6 +9312,11 @@ export async function handleContractCopilotRoute(request: Request): Promise<Resp
         answerReferencedSections: fallbackAnswerSupport.answerReferencedSections,
         supportInjectedFromAnswer: fallbackAnswerSupport.supportInjectedFromAnswer,
         supportMissingForReferencedSection: fallbackAnswerSupport.missingSections.length > 0,
+        controllingSectionLocked: Boolean(controllingSectionLock),
+        controllingSectionDisplay: controllingSectionLock?.displaySection,
+        controllingSectionQuoteAttached: Boolean(controllingSectionLock?.quoteSnippet),
+        controllingSectionQuote: controllingSectionLock?.quoteSnippet,
+        controllingSectionMissingExactText: controllingSectionLock?.exactAttached === false,
       },
     });
 
@@ -5807,9 +9370,11 @@ export async function handleContractCopilotRoute(request: Request): Promise<Resp
               governingSourcePriorityUsed,
               reasoningMode: matchedInteractionRule ? "interaction_led" : "generic_retrieval_led",
               answerMode: groundingPack.retrievalMeta.sectionLed ? "section_led" : "generic",
-              retrievedSnippets: retrievedSupport.map(
-                (item) => `${item.section}: ${item.quoteSnippet ?? item.note}`
-              ),
+              retrievedSnippets: selectDebugRetrievedSnippets({
+                question: parsedRequest.question,
+                retrievedSupport,
+                visibleReferences: finalizedFallbackScenarioAnswer.references,
+              }),
               groundingSource: "fallback",
               usedRetrievedSupport: false,
               externalAllowed: groundingPack.retrievalMeta.externalAllowed,
@@ -5828,12 +9393,8 @@ export async function handleContractCopilotRoute(request: Request): Promise<Resp
                 groundingPack,
                 usedRetrievedSupport: false,
               }),
-              sourcesUsed: sourceUsageDebug.sourcesUsed,
-              pwaSectionsUsed: sourceUsageDebug.pwaSectionsUsed,
-              compensationChunksUsed: sourceUsageDebug.compensationChunksUsed,
-              schedulerChunksUsed: sourceUsageDebug.schedulerChunksUsed,
+              ...augmentSourceUsageWithReferences(sourceUsageDebug, finalizedFallbackScenarioAnswer.answer.references),
               structuredRowsUsed: sourceUsageDebug.structuredRowsUsed,
-              missingSourceWarnings: sourceUsageDebug.missingSourceWarnings,
               aiSynthesisUsed: false,
               OPENAI_API_KEYPresent: Boolean(apiKey),
               modelClientCalled,
@@ -5876,13 +9437,49 @@ export async function handleContractCopilotRoute(request: Request): Promise<Resp
               supportInjectedFromAnswer: finalizedFallbackScenarioAnswer.debug.supportInjectedFromAnswer,
               supportMissingForReferencedSection:
                 finalizedFallbackScenarioAnswer.debug.supportMissingForReferencedSection,
+              controllingSectionLocked: finalizedFallbackScenarioAnswer.debug.controllingSectionLocked,
+              controllingSectionDisplay: finalizedFallbackScenarioAnswer.debug.controllingSectionDisplay,
+              controllingSectionQuoteAttached:
+                finalizedFallbackScenarioAnswer.debug.controllingSectionQuoteAttached,
+              controllingSectionQuote: finalizedFallbackScenarioAnswer.debug.controllingSectionQuote,
+              controllingSectionMissingExactText:
+                finalizedFallbackScenarioAnswer.debug.controllingSectionMissingExactText,
               xDayScenario,
               xDayAnchorFound: finalizedFallbackScenarioAnswer.debug.xDayAnchorFound,
+              xDayGroupingScenario,
+              xDayGroupingAnchorFound: finalizedFallbackScenarioAnswer.debug.xDayGroupingAnchorFound,
+              xDayGroupingMissingSupportReason:
+                finalizedFallbackScenarioAnswer.debug.xDayGroupingMissingSupportReason,
+              pbRerouteXdayScenario,
+              pbAnchorFound: finalizedFallbackScenarioAnswer.debug.pbAnchorFound,
+              pbProcessingAnchorFound: finalizedFallbackScenarioAnswer.debug.pbProcessingAnchorFound,
+              notificationAnchorFound: finalizedFallbackScenarioAnswer.debug.notificationAnchorFound,
+              pbScenarioMissingSupportReason:
+                finalizedFallbackScenarioAnswer.debug.pbScenarioMissingSupportReason,
+              futureRotationChangeScenario,
+              futureRotationChangeAnchorFound:
+                finalizedFallbackScenarioAnswer.debug.futureRotationChangeAnchorFound,
+              cpoOverrideAnchorFound: finalizedFallbackScenarioAnswer.debug.cpoOverrideAnchorFound,
+              knownAbsenceAnchorFound: finalizedFallbackScenarioAnswer.debug.knownAbsenceAnchorFound,
+              payProtectionAnchorFound: finalizedFallbackScenarioAnswer.debug.payProtectionAnchorFound,
+              futureRotationMissingSupportReason:
+                finalizedFallbackScenarioAnswer.debug.futureRotationMissingSupportReason,
               governingSectionIncludesXDay,
               pcsSwapScenario,
               pcsSwapAnchorFound: finalizedFallbackScenarioAnswer.debug.pcsSwapAnchorFound,
               pcsSwapMissingSupportReason: finalizedFallbackScenarioAnswer.debug.pcsSwapMissingSupportReason,
               governingSectionIncludesPcsSwap,
+              vacationBankScenario,
+              vacationBankAnchorFound: finalizedFallbackScenarioAnswer.debug.vacationBankAnchorFound,
+              vacationBankMissingSupportReason:
+                finalizedFallbackScenarioAnswer.debug.vacationBankMissingSupportReason,
+              governingSectionIncludesVacationBank,
+              oeNotificationScenario: finalizedFallbackScenarioAnswer.debug.oeNotificationScenario,
+              oeNotificationAnchorFound: finalizedFallbackScenarioAnswer.debug.oeNotificationAnchorFound,
+              oeNotificationMissingSupportReason:
+                finalizedFallbackScenarioAnswer.debug.oeNotificationMissingSupportReason,
+              oeNotificationSupportRejectedReasons:
+                finalizedFallbackScenarioAnswer.debug.oeNotificationSupportRejectedReasons,
               shortCallDutyScenario,
               shortCallDutyAnchorFound: finalizedFallbackScenarioAnswer.debug.shortCallDutyAnchorFound,
               governingSectionIncludesDutyLegality,

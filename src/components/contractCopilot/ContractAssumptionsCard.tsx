@@ -1,5 +1,6 @@
 import React from "react";
 import { Text, View } from "react-native";
+import { getFliegerPalette } from "../../theme/flieger";
 
 type ContractAssumptionsCardProps = {
   assumptions: string[];
@@ -8,6 +9,8 @@ type ContractAssumptionsCardProps = {
 export function ContractAssumptionsCard({
   assumptions,
 }: ContractAssumptionsCardProps) {
+  const palette = getFliegerPalette();
+
   if (assumptions.length === 0) {
     return null;
   }
@@ -16,18 +19,18 @@ export function ContractAssumptionsCard({
     <View
       style={{
         gap: 8,
-        backgroundColor: "#F7FAFC",
+        backgroundColor: palette.surfaceRaised,
         borderRadius: 18,
-        borderWidth: 1,
-        borderColor: "#D4DEE9",
+        borderWidth: 1.5,
+        borderColor: palette.border,
         padding: 16,
       }}
     >
-      <Text style={{ fontSize: 16, fontWeight: "800", color: "#0C2340" }}>
+      <Text style={{ fontSize: 16, fontWeight: "800", color: palette.textPrimary }}>
         Assumptions
       </Text>
       {assumptions.map((assumption) => (
-        <Text key={assumption} style={{ fontSize: 14, lineHeight: 21, color: "#52606D" }}>
+        <Text key={assumption} style={{ fontSize: 14, lineHeight: 21, color: palette.textMuted }}>
           • {assumption}
         </Text>
       ))}

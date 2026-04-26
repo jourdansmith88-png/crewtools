@@ -1,12 +1,14 @@
 import React from "react";
 import { Text, View } from "react-native";
 import type { ContractAnswerCard } from "../../types/contractCopilot";
+import { getFliegerPalette } from "../../theme/flieger";
 
 type ContractEvidenceCardProps = {
   answer: ContractAnswerCard;
 };
 
 export function ContractEvidenceCard({ answer }: ContractEvidenceCardProps) {
+  const palette = getFliegerPalette();
   const visibleReferences = answer.references.filter(
     (reference) =>
       reference.ruleType !== "inference" &&
@@ -42,14 +44,14 @@ export function ContractEvidenceCard({ answer }: ContractEvidenceCardProps) {
     <View
       style={{
         gap: 12,
-        backgroundColor: "#F7FAFC",
+        backgroundColor: palette.surfaceRaised,
         borderRadius: 18,
-        borderWidth: 1,
-        borderColor: "#D4DEE9",
+        borderWidth: 1.5,
+        borderColor: palette.border,
         padding: 16,
       }}
     >
-      <Text style={{ fontSize: 16, fontWeight: "800", color: "#0C2340" }}>
+      <Text style={{ fontSize: 16, fontWeight: "800", color: palette.textPrimary }}>
         Contract support
       </Text>
       {visibleReferences.map((reference) => (
@@ -57,10 +59,10 @@ export function ContractEvidenceCard({ answer }: ContractEvidenceCardProps) {
             key={`${reference.label}-${reference.section}-${reference.quoteSnippet ?? "no-quote"}`}
             style={{
               gap: 6,
-              backgroundColor: "#FFFFFF",
+              backgroundColor: palette.surfaceRecessed,
               borderRadius: 14,
-              borderWidth: 1,
-              borderColor: "#E2E8F0",
+              borderWidth: 1.5,
+              borderColor: palette.border,
               padding: 12,
             }}
           >
@@ -69,11 +71,11 @@ export function ContractEvidenceCard({ answer }: ContractEvidenceCardProps) {
                 style={{
                   backgroundColor:
                     reference.ruleType === "contract"
-                      ? "#DDE8F7"
+                      ? palette.accentSoft
                       : reference.ruleType === "scheduler_practice"
-                        ? "#F4E9D2"
-                        : "#F8E1E5",
-                  color: "#0C2340",
+                        ? palette.surfaceRaised
+                        : palette.surface,
+                  color: palette.textPrimary,
                   paddingHorizontal: 10,
                   paddingVertical: 5,
                   borderRadius: 999,
@@ -84,11 +86,11 @@ export function ContractEvidenceCard({ answer }: ContractEvidenceCardProps) {
               >
                 {sourceBadgeLabel(reference.sourceId, reference.ruleType, reference.displaySourceLabel)}
               </Text>
-              <Text style={{ fontSize: 13, fontWeight: "800", color: "#0C2340", flexShrink: 1 }}>
+              <Text style={{ fontSize: 13, fontWeight: "800", color: palette.textPrimary, flexShrink: 1 }}>
                 {reference.section}
               </Text>
             </View>
-            <Text style={{ fontSize: 12, color: "#6B7C93" }}>
+            <Text style={{ fontSize: 12, color: palette.textMuted }}>
               {reference.label}
             </Text>
             {reference.quoteSnippet ? (
@@ -96,9 +98,9 @@ export function ContractEvidenceCard({ answer }: ContractEvidenceCardProps) {
                 style={{
                   fontSize: 13,
                   lineHeight: 20,
-                  color: "#0C2340",
+                  color: palette.textPrimary,
                   fontStyle: "italic",
-                  backgroundColor: "#F7FAFC",
+                  backgroundColor: palette.surface,
                   borderRadius: 12,
                   paddingHorizontal: 10,
                   paddingVertical: 8,
@@ -107,7 +109,7 @@ export function ContractEvidenceCard({ answer }: ContractEvidenceCardProps) {
                 "{reference.quoteSnippet}"
               </Text>
             ) : null}
-            <Text style={{ fontSize: 12, color: "#6B7C93" }}>
+            <Text style={{ fontSize: 12, color: palette.textMuted }}>
               {reference.ruleType === "contract"
                 ? "Contract-backed"
                 : reference.ruleType === "scheduler_practice"

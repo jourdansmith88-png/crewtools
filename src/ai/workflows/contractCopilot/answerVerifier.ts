@@ -135,6 +135,142 @@ function hasDecisionPathFallback(explanation: string | undefined) {
   );
 }
 
+function detectShortCallNotificationScenarioFromHaystack(haystack: string) {
+  const hasShortCallContext =
+    /\bshort call assignment\b/.test(haystack) ||
+    /\bshort call\b/.test(haystack) ||
+    (/\blong call\b/.test(haystack) &&
+      (/\bvacation\b/.test(haystack) || /\bnon-fly day\b/.test(haystack) || /\bnon fly day\b/.test(haystack))) ||
+    (/\blc\b/.test(haystack) &&
+      (/\bvacation\b/.test(haystack) || /\bnon-fly day\b/.test(haystack) || /\bnon fly day\b/.test(haystack)));
+  const hasNotificationTerms =
+    /\bnotification\b/.test(haystack) ||
+    /\bno notification\b/.test(haystack) ||
+    /\backnowledge\b/.test(haystack) ||
+    /\backnowledgment\b/.test(haystack) ||
+    /\bcno\b/.test(haystack) ||
+    /\bcall duty pilot\b/.test(haystack) ||
+    /\bphone never rang\b/.test(haystack) ||
+    /\barcos\b/.test(haystack) ||
+    /\brobot\b/.test(haystack) ||
+    /\btelephone\b/.test(haystack) ||
+    /\bicrew\b/.test(haystack) ||
+    /\bmicrew\b/.test(haystack);
+  const hasVacationNoticeContext =
+    /\bvacation\b/.test(haystack) ||
+    /\bnon-fly day\b/.test(haystack) ||
+    /\bnon fly day\b/.test(haystack);
+  const hasDutyLegalitySignals =
+    /\bsame-day trip\b/.test(haystack) ||
+    /\bsame day trip\b/.test(haystack) ||
+    /\breport time\b/.test(haystack) ||
+    /\breports at\b/.test(haystack) ||
+    /\bduty period\b/.test(haystack) ||
+    /\bflight time\b/.test(haystack) ||
+    /\blegality\b/.test(haystack) ||
+    /\bboth remain on schedule\b/.test(haystack) ||
+    /\bshort call window\b/.test(haystack);
+
+  if (hasDutyLegalitySignals) {
+    return false;
+  }
+
+  return hasShortCallContext && (hasNotificationTerms || (hasVacationNoticeContext && (/\b18 hours\b/.test(haystack) || /\b12 hours\b/.test(haystack))));
+}
+
+function detectOeNotificationScenarioFromHaystack(haystack: string) {
+  return (
+    /\boe notification\b/.test(haystack) ||
+    (/\boe\b/.test(haystack) && /\bnotification\b/.test(haystack)) ||
+    /\bcompany notification online\b/.test(haystack) ||
+    /\bcno\b/.test(haystack) ||
+    /\bphone call\b/.test(haystack) ||
+    /\bnotification requirement\b/.test(haystack) ||
+    /\bsrh\b/.test(haystack) ||
+    /\btrh\b/.test(haystack)
+  );
+}
+
+function detectShortCallDutyScenarioFromHaystack(haystack: string) {
+  const hasShortCallContext =
+    /\bshort call\b/.test(haystack) ||
+    /\bassigned short call and trip\b/.test(haystack);
+  const strongDutyLegalitySignals =
+    /\bsame-day trip\b/.test(haystack) ||
+    /\bsame day trip\b/.test(haystack) ||
+    /\bsubsequent same day trip\b/.test(haystack) ||
+    /\breport time\b/.test(haystack) ||
+    /\breports at\b/.test(haystack) ||
+    /\bflight time\b/.test(haystack) ||
+    /\blegality\b/.test(haystack) ||
+    /\bboth remain on schedule\b/.test(haystack) ||
+    /\bshort call window\b/.test(haystack) ||
+    /\b9\+36\b/.test(haystack) ||
+    /\b7\+36\b/.test(haystack) ||
+    /\bduty period\b/.test(haystack);
+  const notificationScenario = detectShortCallNotificationScenarioFromHaystack(haystack);
+  if (notificationScenario && !strongDutyLegalitySignals) {
+    return false;
+  }
+  return hasShortCallContext && strongDutyLegalitySignals;
+}
+
+function detectPbRerouteXdayScenarioFromHaystack(haystack: string) {
+  const hasPbProcessingContext =
+    /\bpb\b/.test(haystack) ||
+    /\bpayback\b/.test(haystack) ||
+    /\bpr\b/.test(haystack) ||
+    /\bpr remainder\b/.test(haystack) ||
+    /\binterrupted x-days?\b/.test(haystack) ||
+    /\bpb day\b/.test(haystack);
+  const hasRerouteSequenceContext =
+    /\bqs\b/.test(haystack) ||
+    /\bquick slip\b/.test(haystack) ||
+    /\breroute\b/.test(haystack) ||
+    /\bdeadhead\b/.test(haystack) ||
+    /\bx-days?\b/.test(haystack) ||
+    /\bdart\b/.test(haystack) ||
+    /\bacars\b/.test(haystack) ||
+    /\barcos\b/.test(haystack) ||
+    /\brobot\b/.test(haystack) ||
+    /\bnotification\b/.test(haystack) ||
+    /\b2-day\b/.test(haystack) ||
+    /\b3-day\b/.test(haystack);
+
+  return hasPbProcessingContext && hasRerouteSequenceContext;
+}
+
+function detectFutureRotationChangeScenarioFromHaystack(haystack: string) {
+  return (
+    (/\brotation changed\b/.test(haystack) ||
+      /\bnext month\b/.test(haystack) ||
+      /\bnot a carryover\b/.test(haystack) ||
+      /\bremoved a leg\b/.test(haystack) ||
+      /\bredeye\b/.test(haystack)) &&
+    (/\bdue anything extra\b/.test(haystack) ||
+      /\bpay protection\b/.test(haystack) ||
+      /\bcredit protection\b/.test(haystack) ||
+      /\bcpo\b/.test(haystack) ||
+      /\bknown absence\b/.test(haystack) ||
+      /\breserve coverage\b/.test(haystack))
+  );
+}
+
+function detectKnownAbsenceScenarioFromHaystack(haystack: string) {
+  return (
+    (/\bcourt\b/.test(haystack) ||
+      /\bcustody hearing\b/.test(haystack) ||
+      /\bnotice to appear\b/.test(haystack) ||
+      /\bsubpoena\b/.test(haystack) ||
+      /\blegal obligation\b/.test(haystack)) &&
+    (/\btrip\b/.test(haystack) ||
+      /\bday 1\b/.test(haystack) ||
+      /\bknown absence\b/.test(haystack) ||
+      /\bleave\b/.test(haystack) ||
+      /\bprotection\b/.test(haystack))
+  );
+}
+
 function normalizeSection(value: string | undefined) {
   return normalizeText(value).replace(/[^a-z0-9]+/g, "");
 }
@@ -298,6 +434,9 @@ function collectDecisionDependencies(question: string, answer: ContractAnswerCar
   const haystack = normalizeText(
     [question, answer.shortAnswer, answer.plainEnglishExplanation, ...(answer.scenarioBreakdown ?? [])].join(" ")
   );
+  const apdDiagnostic = /\bapd\b|\bauthorized personal drop\b/.test(haystack);
+  const payCreditBankEligibility =
+    /\bss credit\b|\bsilver slip credit\b|\bbank deposit\b|\bdeposit\b|\bmicrew\b|\btimecard\b|\bsick bank\b/.test(haystack);
   const dependencies: string[] = [];
   const push = (value: string) => {
     if (!dependencies.includes(value)) dependencies.push(value);
@@ -306,14 +445,30 @@ function collectDecisionDependencies(question: string, answer: ContractAnswerCar
   if (/\blc\b|\blong call\b/.test(haystack)) {
     push("whether this is a new Long Call period or a continuation of an earlier status");
   }
+  if (/\bpb\b|\bpayback\b|\bpr remainder\b|\binterrupted x-days\b|\bdart\b/.test(haystack)) {
+    push("whether the PB to LC conversion and PR remainder were recalculated after the reroute extension");
+    push("whether the interrupted X-days were coded as used, interrupted, restored, or held for later reapplication");
+    push("whether the system is showing a temporary processing lag that still needs DART review");
+  }
   if (/\bgolden day\b|\bhard non-fly day\b/.test(haystack)) {
     push("whether the Golden Day definition is tied to a separate operational timing rule");
   }
   if (/\bshort call\b/.test(haystack)) {
     push("whether the short-call window and the later trip report can legally coexist");
   }
+  if (detectShortCallNotificationScenarioFromHaystack(haystack)) {
+    push("whether the short-call rule requires telephone contact, electronic placement, acknowledgment, or some combination of those notice methods");
+    push("whether seeing the assignment in iCrew or MiCrew counts as notice under the actual rule or is only evidence that the placement happened");
+    push("whether the vacation or non-fly day changed when notice had to occur before the short-call assignment start time");
+    push("whether a CNO or no-notification dispute path applies if the assignment appeared without direct contact");
+  }
   if (/\bwocl\b|\b8d3\b|\b8 d\.?3\b/.test(haystack)) {
     push("whether WOCL or Section 8 D.3 timing controls this duty sequence");
+  }
+  if (/\breserve x-day\b|\bmove x-day\b|\bswap x-day\b|\bgrouping\b|\bbetween months\b/.test(haystack)) {
+    push("whether the reserve X-day move between months preserves the grouping restrictions across the month boundary");
+    push("whether the adjacent reserve days still create a valid X-day block after swapping the 28th and the 2nd");
+    push("whether iCrew evaluates the grouping rule continuously across the April/May boundary");
   }
   if (/\bsick\b/.test(haystack) && /\bgreen slip\b|\bgreenslip\b|\bgs\b/.test(haystack)) {
     push("whether the premium trip overlaps the sick day or starts after the sick period ends");
@@ -321,15 +476,68 @@ function collectDecisionDependencies(question: string, answer: ContractAnswerCar
   if (/\breroute\b|\bdeadhead\b|\bcontinuation\b/.test(haystack)) {
     push("whether the event was processed as a reroute, continuation, reassignment, or new award");
   }
-  if (/\bsilver slip\b|\bss\b/.test(haystack) && (/\bgreen slip\b|\bgreenslip\b|\bgs\b/.test(haystack) || /\bsimilar to\b|\bvs\b|\bthreshold\b/.test(haystack))) {
+  if (/\bfirst airborne\b|\bdifferent flight number\b|\bsame destination\b/.test(haystack)) {
+    push("whether the first-airborne threshold had already been crossed before the Day 2 change");
+    push("whether the same destination plus a different flight number was treated as continuation or a true reroute");
+  }
+  if (/\brrpay\b|\bturn time\b|\bpaid differently\b/.test(haystack)) {
+    push("whether turn time, duty buildup, or credit inputs changed the RRPay calculation even though the trip looked the same");
+  }
+  if (!apdDiagnostic && /\bsilver slip\b|\bss\b/.test(haystack) && (/\bgreen slip\b|\bgreenslip\b|\bgs\b/.test(haystack) || /\bsimilar to\b|\bvs\b|\bthreshold\b/.test(haystack))) {
     push("whether Silver Slip has its own premium mechanism or the packet is only giving Green Slip trigger language");
     push("how the assignment was awarded and whether any overlap or conflict changes the premium result");
+  }
+  if (apdDiagnostic) {
+    push("whether the available reserve count was at least 25% of the required reserve count at the time APD processed");
+    push("whether the 18 required / 5 available numbers are the actual processing-time counts rather than a later screen view");
+    push("whether the APD-eligible reserve pool matched the available pool you were reading");
   }
   if (/\breserve\b|\blong call\b|\bshort call\b|\bairport standby\b/.test(haystack)) {
     push("your reserve status and which assignment window the company says you were in");
   }
+  if (/\bnext month\b|\bremoved a leg\b|\bredeye\b|\bpay protection\b|\bcredit protection\b/.test(haystack)) {
+    push("whether this next month rotation changed after it was already awarded or published");
+    push("whether the removed leg and redeye change trigger pay or credit protection on this future non-carryover trip");
+    push("whether reserve coverage, CPO discretion, or known absence are separate processing questions rather than automatic pay-protection answers");
+  }
   if (/\bcpo\b|\bknown absence\b|\breserve coverage\b|\bswap with pot\b|\bcapped reserve\b/.test(haystack)) {
     push("whether the system is blocking the transaction for coverage or known-absence reasons");
+  }
+  if (/\brotation changed\b|\bnext month\b|\bremoved a leg\b|\bredeye\b|\bpay protection\b|\bcpo\b|\bknown absence\b/.test(haystack)) {
+    push("whether the changed rotation was already awarded or published when the company changed it");
+    push("whether the removed leg and redeye change actually trigger pay protection or credit protection on a future non-carryover trip");
+    push("whether a CPO exception or known-absence path is discretionary processing rather than a guaranteed contract entitlement");
+  }
+  if (!payCreditBankEligibility && /\bbank\b|\bvacation day\b|\bbuy vacation\b|\breplacement\b|\b60 hours\b/.test(haystack)) {
+    push("whether the bank is already full at 60 hours and how the system sequences the vacation purchase against the replacement entry");
+  }
+  if (!payCreditBankEligibility && /\bsup\b|\bivd\b|\bvacation year\b/.test(haystack)) {
+    push("whether the SUP day and the IVD request fall inside the same contract vacation year rather than the same calendar year");
+  }
+  if (/\bdomicile layover\b|\bbase layover\b|\bopen time rotation\b|\brotation definition\b/.test(haystack)) {
+    push("whether Section 2 is only defining how a rotation is treated, rather than creating the open-time construction rule itself");
+    push("whether there is separate Scheduler Manual or open-time construction language about domicile layovers or a break in duty at base");
+  }
+  if (/\bsick lookback\b|\bmedical procedure\b|\bapproval process\b|\bsection 14\b|\blookback\b/.test(haystack)) {
+    push("whether the relevant source is general Section 14 notification/verification language or a specific exclusion from sick lookback");
+    push("whether the procedure is being treated as ordinary sick leave, a verified occurrence, medical leave, or another protected status");
+  }
+  if (/\bqs\b|\bquick slip\b|\bblanket qs\b|\barcos\b|\bwide report\b|\b30\/168\b/.test(haystack)) {
+    push("whether you were actually QS-eligible in category at the time the call went out");
+    push("whether blanket QS was active and the ARCOS / phone / notification process actually fired");
+    push("whether the system log shows a call-order skip, a processing failure, or a different hidden eligibility screen");
+  }
+  if (/\bsick bank\b|\bcalled well\b|\bpicked up flying\b/.test(haystack)) {
+    push("whether the picked-up flying started only after the sick trip ended, or overlapped the original sick period");
+    push("whether the attached packet actually provides a sick-bank restoration or offset rule, rather than only the original sick-occurrence treatment");
+  }
+  if (/\bss credit\b|\bsilver slip credit\b|\bbank deposit\b|\bdeposit\b/.test(haystack)) {
+    push("whether the displayed value is pay, credit, or bank-eligible credit");
+    push("whether Silver Slip credit is coded differently from regular or replacement credit for bank posting");
+  }
+  if (/\bmicrew\b|\btimecard\b|\bcredit recalculation\b|\bdeadhead deviation\b|\b13 hours\b|\blayover\b/.test(haystack)) {
+    push("whether MiCrew was showing projected credit before final closeout rather than the final posted credit");
+    push("whether a deadhead deviation or short-layover assumption temporarily changed the projected value");
   }
   if (/\bcourt\b|\bcustody hearing\b|\bnotice to appear\b|\bleave\b/.test(haystack)) {
     push("whether the event fits a known-absence or leave path under the available packet");
@@ -346,6 +554,9 @@ function collectLikelyPaths(question: string, answer: ContractAnswerCard, hasOpe
   const haystack = normalizeText(
     [question, answer.shortAnswer, answer.plainEnglishExplanation, ...(answer.scenarioBreakdown ?? [])].join(" ")
   );
+  const apdDiagnostic = /\bapd\b|\bauthorized personal drop\b/.test(haystack);
+  const payCreditBankEligibility =
+    /\bss credit\b|\bsilver slip credit\b|\bbank deposit\b|\bdeposit\b|\bmicrew\b|\btimecard\b|\bsick bank\b/.test(haystack);
   const paths: string[] = [];
   const push = (value: string) => {
     if (!paths.includes(value)) paths.push(value);
@@ -359,6 +570,16 @@ function collectLikelyPaths(question: string, answer: ContractAnswerCard, hasOpe
     push("If the short-call block and the trip report create one continuous duty problem, the legality analysis may change.");
     push("If the company treats them as separate legal events, the scheduling answer may be different.");
   }
+  if (detectShortCallNotificationScenarioFromHaystack(haystack)) {
+    push("If the rule says notice can be completed by placement plus acknowledgment, the key issue is whether iCrew or MiCrew showed the assignment and whether acknowledgment happened in time.");
+    push("If the rule requires direct telephone contact or another specific notice method, simply finding the assignment later in iCrew or MiCrew may not cure a missed-notification problem.");
+    push("Calling the duty pilot can be a practical step, but it is not automatically a substitute for contractual notice unless the source text says it is.");
+  }
+  if (/\breserve x-day\b|\bmove x-day\b|\bswap x-day\b|\bgrouping\b|\bbetween months\b/.test(haystack)) {
+    push("If the grouping restrictions remain intact after moving the reserve X-day between months, the move may be allowed.");
+    push("If swapping the 28th and the 2nd breaks the required X-day grouping pattern or the surrounding reserve block, the move is not likely to be allowed.");
+    push("The month boundary by itself should not decide the answer; the grouping result is the controlling issue.");
+  }
   if (/\bsick\b/.test(haystack) && /\bgreen slip\b|\bgreenslip\b|\bgs\b/.test(haystack)) {
     push("If the Green Slip overlaps the sick day, the overlap day may follow a different pay/credit path than the later days.");
     push("If the premium trip starts only after the sick period ends, the later days are more likely to follow normal premium-trip treatment.");
@@ -367,10 +588,69 @@ function collectLikelyPaths(question: string, answer: ContractAnswerCard, hasOpe
     push("If this was processed as a reroute or continuation, the original trip protections may matter more than a brand-new award analysis.");
     push("If the system treated it as a new assignment or award, a different pay or reserve path may control.");
   }
-  if (/\bsilver slip\b|\bss\b/.test(haystack) && (/\bgreen slip\b|\bgreenslip\b|\bgs\b/.test(haystack) || /\bthreshold\b|\bvs\b|\bsimilar to\b/.test(haystack))) {
+  if (/\bfirst airborne\b|\bdifferent flight number\b|\bsame destination\b/.test(haystack)) {
+    push("If the change stayed a continuation to the same destination, the different flight number alone does not prove reroute pay.");
+    push("If the first-airborne / Section 23 L rule treated it as a true reroute, reroute pay becomes more plausible, but you still need the controlling reroute language.");
+  }
+  if (/\brrpay\b|\bturn time\b|\bpaid differently\b/.test(haystack)) {
+    push("If the turn-time difference changed duty or credit inputs, the two RR events can legitimately pay differently.");
+    push("If the timing and coding were actually identical, the mismatch points more toward a processing or timecard explanation.");
+  }
+  if (/\bpb\b|\bpayback\b|\bpr remainder\b|\binterrupted x-days\b|\bdart\b/.test(haystack)) {
+    push("If the reroute created a true X-day interruption, the interrupted X-days may need to be restored and the PB / PR / LC values may need to be recalculated.");
+    push("If the system treated the extension as continuation or a reflow without a matching PB reapplication rule, the display can look short even before DART resolves it.");
+    push("If the values are just lagging behind the reroute processing, the PB / PR / LC picture may look wrong temporarily.");
+  }
+  if (!apdDiagnostic && /\bsilver slip\b|\bss\b/.test(haystack) && (/\bgreen slip\b|\bgreenslip\b|\bgs\b/.test(haystack) || /\bthreshold\b|\bvs\b|\bsimilar to\b/.test(haystack))) {
     push("If Silver Slip has its own premium language, you do not have to satisfy the Green Slip trigger just to get Silver Slip premium.");
     push("If the packet is clearer on Green Slip than on Silver Slip, use Green Slip only as comparison support rather than proof that both slips behave the same way.");
     push("If the Silver Slip overlaps or conflicts with another premium event, the final pay treatment may still change.");
+  }
+  if (apdDiagnostic) {
+    push("If 18 required and 5 available were the real processing counts, the 25% threshold was likely met, so timing or another APD condition becomes the next place to look.");
+    push("If the counts you saw were later or from a different availability pool, the denial can still make sense under Section 23 I.10.");
+  }
+  if (!payCreditBankEligibility && /\bbank\b|\bvacation day\b|\bbuy vacation\b|\breplacement\b|\b0:00 awarded\b/.test(haystack)) {
+    push("If the bank is already full at 60 or the same-month purchase/replacement sequence does not net the way you expect, the system can show 4:35 requested and 0:00 awarded.");
+    push("If Section 7 allows the transaction but iCrew or DBMS is sequencing the purchase and replacement differently, the denial may be processing-driven rather than a clean contract bar.");
+  }
+  if (!payCreditBankEligibility && /\bsup\b|\bivd\b|\bvacation year\b/.test(haystack)) {
+    push("If March 2027 and May 2026 do not fall in the same contract vacation year, the system will reject the request even though they do not look far apart on the calendar.");
+    push("If the vacation-year mapping actually lines up, the next issue is whether the specific SUP / IVD process is blocking the request instead.");
+  }
+  if (/\bdomicile layover\b|\bbase layover\b|\bopen time rotation\b|\brotation definition\b/.test(haystack)) {
+    push("If the only source attached is the Section 2 rotation definition, that alone does not prove the rotation is illegal.");
+    push("If there is separate Scheduler Manual or open-time construction language that bars a domicile layover build, that would be the stronger source for saying the construction is not allowed.");
+  }
+  if (/\bsick lookback\b|\bmedical procedure\b|\bapproval process\b|\bsection 14\b|\blookback\b/.test(haystack)) {
+    push("If Section 14 F or a related note explicitly says the hours will not be considered for lookback, that is the stronger support for saying the occurrence is excluded.");
+    push("If the packet only shows general notification or verification language, the safer answer is that Section 14 explains the process, but not necessarily that the procedure is excluded from lookback.");
+  }
+  if (/\bqs\b|\bquick slip\b|\bblanket qs\b|\barcos\b|\bwide report\b|\b30\/168\b/.test(haystack)) {
+    push("If blanket QS was active, category eligibility was met, and no 30/168 or other legality block applied, the real issue may be missed call-order or notification processing.");
+    push("If the system applied another eligibility screen that is not obvious from the wide report, the missed call may be a process or rule-screen issue rather than proof that every eligible pilot should have been called.");
+  }
+  if (/\bsick bank\b|\bcalled well\b|\bpicked up flying\b/.test(haystack)) {
+    push("If the later flying started only after the sick trip ended, that does not automatically erase the original sick-bank hit.");
+    push("If the packet does not attach a restoration or offset rule, keep the sick-bank answer conditional rather than promising a correction.");
+  }
+  if (/\bnext month\b|\bremoved a leg\b|\bredeye\b|\bpay protection\b|\bcredit protection\b/.test(haystack)) {
+    push("If the contract has a pay or credit protection rule for this next month change, that rule controls.");
+    push("If the removed leg and redeye only reflect a future schedule construction change, extra pay may not be automatic.");
+    push("If reserve coverage blocks the similar trip swap, CPO or known-absence processing may still be discretionary rather than guaranteed.");
+  }
+  if (/\brotation changed\b|\bnext month\b|\bremoved a leg\b|\bredeye\b|\bpay protection\b|\bcpo\b|\bknown absence\b/.test(haystack)) {
+    push("If the contract has a future schedule-change pay-protection rule for this non-carryover trip, that rule controls.");
+    push("If this is only a company-driven schedule construction change before operation, extra pay may not be automatic.");
+    push("If reserve coverage blocks the swap, a CPO override may be discretionary processing, not guaranteed pay protection.");
+  }
+  if (/\bss credit\b|\bsilver slip credit\b|\bbank deposit\b|\bdeposit\b/.test(haystack)) {
+    push("If Silver Slip credit is coded differently from regular credit, iCrew can reject the bank deposit even though the trip produced pay or displayed credit.");
+    push("If the packet never says Silver Slip credit is bank-eligible, treat the question as a credit-type eligibility issue rather than assuming the system is wrong.");
+  }
+  if (/\bmicrew\b|\btimecard\b|\bcredit recalculation\b|\bdeadhead deviation\b|\b13 hours\b|\blayover\b/.test(haystack)) {
+    push("If MiCrew briefly assumed a deviation or short-layover trigger, projected credit can appear higher and then drop back at final closeout.");
+    push("If the deviation never happened or the final layover did not trip the threshold, the timecard can legitimately recalculate back down.");
   }
   if (paths.length === 0) {
     push("If the operational section directly addresses this timing or pay fact pattern, that operational rule controls.");
@@ -388,6 +668,9 @@ function collectWhatToCheck(question: string, answer: ContractAnswerCard) {
   const haystack = normalizeText(
     [question, answer.shortAnswer, answer.plainEnglishExplanation, ...(answer.scenarioBreakdown ?? [])].join(" ")
   );
+  const apdDiagnostic = /\bapd\b|\bauthorized personal drop\b/.test(haystack);
+  const payCreditBankEligibility =
+    /\bss credit\b|\bsilver slip credit\b|\bbank deposit\b|\bdeposit\b|\bmicrew\b|\btimecard\b|\bsick bank\b/.test(haystack);
   const checks: string[] = [];
   const push = (value: string) => {
     if (!checks.includes(value)) checks.push(value);
@@ -402,15 +685,83 @@ function collectWhatToCheck(question: string, answer: ContractAnswerCard) {
   if (/\bpb\b|\bpr\b|\blc\b|\bx-?day\b/.test(haystack)) {
     push("the reserve or payback status shown on the affected calendar days");
   }
+  if (/\bpb\b|\bpayback\b|\bpr remainder\b|\bdart\b|\bacars\b|\barcos\b|\brobot\b/.test(haystack)) {
+    push("the original versus modified rotation history, including the reroute extension and deadhead replacement");
+    push("the PB to LC conversion timing, the PR remainder calculation, and any DART or scheduler note explaining the current display");
+    push("the ACARS, ARCOS, robot, or manual notification logs tied to the award and reroute");
+  }
+  if (/\breserve x-day\b|\bmove x-day\b|\bswap x-day\b|\bgrouping\b|\bbetween months\b/.test(haystack)) {
+    push("the X-day pattern before and after the proposed swap between months, including the 28th and the 2nd plus the surrounding 29th, 30th, and 01st");
+    push("whether the adjacent reserve block still satisfies the grouping rule after moving the X-day");
+    push("whether iCrew labels the rejection as a grouping violation, reserve-line violation, or month-boundary processing issue");
+  }
   if (/\bdart\b|\bnotification\b|\barcos\b/.test(haystack)) {
     push("any DART, ARCOS, or scheduler note that shows how the event was processed");
   }
-  if (/\bsilver slip\b|\bss\b/.test(haystack) && (/\bgreen slip\b|\bgreenslip\b|\bgs\b/.test(haystack) || /\bthreshold\b|\bvs\b|\bsimilar to\b/.test(haystack))) {
+  if (detectShortCallNotificationScenarioFromHaystack(haystack)) {
+    push("when the short-call assignment was placed in iCrew or MiCrew and whether the system shows an acknowledgment timestamp");
+    push("call logs, voicemail, screenshots, and any CNO or notification history tied to the assignment after the vacation or non-fly day");
+    push("whether the duty pilot or scheduling log shows telephone contact, electronic placement, or both");
+  }
+  if (/\bfirst airborne\b|\bdifferent flight number\b|\bsame destination\b/.test(haystack)) {
+    push("whether the changed leg was coded as continuation, reroute, reassignment, or a new segment");
+    push("whether the destination stayed the same while only the scheduled flight number changed");
+  }
+  if (/\brrpay\b|\bturn time\b|\bpaid differently\b/.test(haystack)) {
+    push("the two timecards side by side, including turn time, duty time, reroute code, and final credit inputs");
+    push("whether Compensation Manual support shows the RRPay or reroute-pay formula that matches this reserve fact pattern");
+  }
+  if (!apdDiagnostic && /\bsilver slip\b|\bss\b/.test(haystack) && (/\bgreen slip\b|\bgreenslip\b|\bgs\b/.test(haystack) || /\bthreshold\b|\bvs\b|\bsimilar to\b/.test(haystack))) {
     push("whether the award shows Silver Slip versus Green Slip, and what premium code attached to it");
     push("whether any overlap or conflict with another premium event changed the pay result");
   }
+  if (apdDiagnostic) {
+    push("the exact required and available reserve counts at the time APD processed");
+    push("whether the available reserve pool you saw matches the APD-eligible reserve pool the system used");
+    push("whether the request was coded for the correct day and APD/drop type");
+  }
   if (/\bcourt\b|\bnotice to appear\b|\bknown absence\b|\bleave\b/.test(haystack)) {
     push("what documentation Scheduling or CPO asked for, and whether they coded it as known absence or leave");
+  }
+  if (/\bnext month\b|\bremoved a leg\b|\bredeye\b|\bpay protection\b|\bcredit protection\b/.test(haystack)) {
+    push("the original next month award versus the changed redeye version, and the pay or credit value before and after the removed leg");
+    push("the reserve coverage denial reason, any known-absence category used, and any CPO / DART / contract-admin guidance tied to the change");
+  }
+  if (/\brotation changed\b|\bnext month\b|\bremoved a leg\b|\bredeye\b|\bpay protection\b|\bcpo\b|\bknown absence\b/.test(haystack)) {
+    push("the original award versus the changed rotation history, the pay/credit values before and after the change, and any reserve-coverage denial reason");
+    push("whether the known-absence request category, CPO guidance, or DART notes actually tie to pay protection on this future changed trip");
+  }
+  if (!payCreditBankEligibility && /\bbank\b|\bvacation day\b|\bbuy vacation\b|\breplacement\b|\b0:00 awarded\b/.test(haystack)) {
+    push("whether the 4:35 requested / 0:00 awarded detail is tied to the vacation purchase itself or the replacement posting behind it");
+    push("which vacation year and month bucket iCrew / DBMS attached to the purchase and replacement entries");
+  }
+  if (!payCreditBankEligibility && /\bsup\b|\bivd\b|\bvacation year\b/.test(haystack)) {
+    push("which vacation period the SUP day belongs to, which vacation period the IVD is being drawn from, and how iCrew labels the vacation year for each");
+    push("whether March 2027 and May 2026 are being compared under the contract vacation-year mapping instead of the calendar year");
+  }
+  if (/\bdomicile layover\b|\bbase layover\b|\bopen time rotation\b|\brotation definition\b/.test(haystack)) {
+    push("whether the system cites a scheduler/open-time construction rule or only the Section 2 rotation definition");
+    push("whether the build is being described as a domicile/base layover versus a normal break in duty at base");
+  }
+  if (/\bsick lookback\b|\bmedical procedure\b|\bapproval process\b|\bsection 14\b|\blookback\b/.test(haystack)) {
+    push("whether the occurrence is coded as ordinary sick leave, verified sick leave, known sick leave, medical leave, or another status");
+    push("whether the process is pointing you to Chief Pilot, Pilot Leaves, DALPA, or a contract-admin workflow for verification");
+  }
+  if (/\bqs\b|\bquick slip\b|\bblanket qs\b|\barcos\b|\bwide report\b|\b30\/168\b/.test(haystack)) {
+    push("the ARCOS record, phone logs, email or notification history, and the exact timestamp when the QS went out");
+    push("the wide report or category evidence showing where you and any similarly situated pilot stood in seniority and eligibility");
+  }
+  if (/\bsick bank\b|\bcalled well\b|\bpicked up flying\b/.test(haystack)) {
+    push("the sick-trip end time, the called-well timestamp, and the later pickup award time");
+    push("whether the timecard still shows the original sick-bank deduction separately from the later flying");
+  }
+  if (/\bss credit\b|\bsilver slip credit\b|\bbank deposit\b|\bdeposit\b/.test(haystack)) {
+    push("whether iCrew labels the value as bank-eligible credit, premium pay only, straight credit, or a Silver Slip-specific code");
+    push("whether the rejection message ties to credit-type eligibility rather than balance or timing");
+  }
+  if (/\bmicrew\b|\btimecard\b|\bcredit recalculation\b|\bdeadhead deviation\b|\b13 hours\b|\blayover\b/.test(haystack)) {
+    push("the MiCrew projected-credit display versus the final timecard closeout");
+    push("whether a deadhead deviation field or short-layover assumption stayed active before final closeout");
   }
 
   return checks.slice(0, 4);
@@ -426,14 +777,247 @@ function buildDecisionPathExplanation(args: {
   schedulerChunksUsed: string[];
   hasOperationalSupport: boolean;
 }) {
-  const dependencies = collectDecisionDependencies(args.question, args.answer);
-  const likelyPaths = collectLikelyPaths(args.question, args.answer, args.hasOperationalSupport);
-  const whatToCheck = collectWhatToCheck(args.question, args.answer);
+  const questionText = normalizeText(args.question);
+  const haystack = normalizeText(
+    [args.question, args.answer.shortAnswer, args.answer.plainEnglishExplanation, ...(args.answer.scenarioBreakdown ?? [])].join(" ")
+  );
+  const apdDiagnostic = /\bapd\b|\bauthorized personal drop\b/.test(questionText);
+  const oeNotificationScenario = detectOeNotificationScenarioFromHaystack(questionText);
+  const shortCallDutyScenario = detectShortCallDutyScenarioFromHaystack(questionText);
+  const shortCallNotificationScenario = detectShortCallNotificationScenarioFromHaystack(questionText);
+  const pbRerouteXdayScenario = detectPbRerouteXdayScenarioFromHaystack(haystack);
+  const futureRotationChangeScenario = detectFutureRotationChangeScenarioFromHaystack(haystack);
+  const knownAbsenceScenario = detectKnownAbsenceScenarioFromHaystack(haystack);
+  const goldenDayLcScenario =
+    /\bgolden day\b/.test(questionText) &&
+    (/\bhard non-fly day\b/.test(questionText) || /\bsection 2 a\.129\b/.test(questionText) || /\bpwa section 2 a\.129\b/.test(questionText)) &&
+    (/\blc\b/.test(questionText) || /\blong call\b/.test(questionText) || /\bday one\b/.test(questionText) || /\b6pm\b/.test(questionText) || /\b18 hours\b/.test(questionText));
   const sourceSummary = compactSourceSummary({
     pwaSectionsUsed: args.pwaSectionsUsed,
     compensationChunksUsed: args.compensationChunksUsed,
     schedulerChunksUsed: args.schedulerChunksUsed,
   });
+  if (apdDiagnostic) {
+    const limitation =
+      args.failureReasons[0] ??
+      args.warnings[0] ??
+      "I do not have the full governing packet attached for the final operational step in this scenario.";
+    const countsMatch = normalizeText(args.answer.shortAnswer).match(/\bwith\s+(\d+(?:\.\d+)?)\s+required\s+and\s+(\d+(?:\.\d+)?)\s+available\b/);
+    const required = countsMatch ? Number(countsMatch[1]) : null;
+    const available = countsMatch ? Number(countsMatch[2]) : null;
+    const threshold = required !== null ? required * 0.25 : null;
+    return [
+      "What this depends on:",
+      required !== null && available !== null && threshold !== null
+        ? `- Whether ${required} required and ${available} available were the actual processing-time counts, not a later screen snapshot.`
+        : "- The required and available reserve counts at the time APD actually processed.",
+      "- Whether the APD-eligible reserve pool matched the available reserve pool you were reading.",
+      "- Whether another APD condition or coding issue blocked the request even if the raw threshold looked met.",
+      "Likely paths:",
+      required !== null && available !== null && threshold !== null
+        ? `- Section 23 I.10 uses a 25% threshold, so ${threshold.toFixed(1)} is the key comparison point for ${required} required and ${available} available.`
+        : "- Section 23 I.10 uses the 25% threshold at the time APD was processed.",
+      "- If the processing-time counts were above threshold, timing, pool definition, or another APD condition becomes the more likely explanation for the denial.",
+      "- If the processing-time counts or eligible reserve pool were different from what you saw later, the denial can still fit Section 23 I.10.",
+      "What to check:",
+      "- The exact required and available reserve counts at the time APD processed.",
+      "- Whether the available pool you saw matches the APD-eligible reserve pool the system used.",
+      "- Whether the request was coded for the correct day and APD/drop type.",
+      `Source limitation: ${limitation}`,
+      `Sources used: ${sourceSummary}.`,
+    ].join("\n");
+  }
+  if (shortCallDutyScenario) {
+    const limitation =
+      args.failureReasons[0] ??
+      args.warnings[0] ??
+      "I do not see the exact short-call plus same-day trip legality rule in the attached support.";
+    return [
+      "What this depends on:",
+      "- The short-call window and when that reserve obligation actually ends.",
+      "- The same-day trip report time and whether it begins right as short call ends.",
+      "- The total duty and flight-time interaction if the short call and the trip both remain on schedule.",
+      "- Whether the company is treating the sequence as one legality problem or as separate events that still must remain legal together.",
+      "Likely paths:",
+      "- If the short-call block and the trip report create one continuous duty problem, both events may not be able to remain on schedule together.",
+      "- If the company treats them as separate legal events, the result can still turn on whether the report, duty, and flight-time totals remain legal once the trip actually starts.",
+      "- The answer should not turn on a generic short-call definition alone; it has to be tied to report timing, duty limits, and whether both events can remain scheduled.",
+      "What to check:",
+      "- The short-call start and end window, and whether the trip report creates a continuous-duty issue.",
+      "- The duty-period and flight-time totals if the same-day trip operates as scheduled.",
+      "- Whether Section 12 duty/rest support and Section 23 short-call support both line up for this exact sequence.",
+      "- The iCrew or DBMS legality result that shows whether both the short call and the trip remain on schedule together.",
+      `Source limitation: ${limitation}`,
+      `Sources used: ${sourceSummary}.`,
+    ].join("\n");
+  }
+  if (oeNotificationScenario) {
+    const limitation =
+      args.failureReasons[0] ??
+      args.warnings[0] ??
+      "I do not have the exact OE notification / CNO source attached.";
+    return [
+      "What this depends on:",
+      "- Whether the current controlling language is actually OE-specific and lives in the SRH, TRH, or another training/process source.",
+      "- Whether the source requires personal phone contact or permits CNO / Company Notification Online or another electronic notice method.",
+      "- Whether the source is talking about OE specifically, rather than a generic contact rule from another scheduling context.",
+      "Likely paths:",
+      "- If the attached source is truly OE-specific and says CNO or another electronic method is enough, then that method can control.",
+      "- If the attached source says OE still requires personal phone contact, then an electronic notice by itself would not be enough.",
+      "- If the packet only shows generic contact language but not OE-specific notice language, the safer answer is that the exact OE notification rule is still missing.",
+      "What to check:",
+      "- The SRH and TRH pages that actually mention OE notification, phone contact, CNO, or electronic notice.",
+      "- Whether the current source is OE-specific or only a general contact/notification rule.",
+      "- Any current company or training-process note that explicitly replaced the older phone-call requirement.",
+      `Source limitation: ${limitation}`,
+      `Sources used: ${sourceSummary}.`,
+    ].join("\n");
+  }
+  if (shortCallNotificationScenario) {
+    const limitation =
+      args.failureReasons[0] ??
+      args.warnings[0] ??
+      "I do not see the exact short-call-after-vacation/non-fly-day notification rule in the attached support.";
+    return [
+      "What this depends on:",
+      "- Whether the short-call rule required telephone contact, electronic placement, acknowledgment, or some combination of those notice methods.",
+      "- Whether seeing the assignment in iCrew or MiCrew counted as contractual notice or only as evidence that the placement happened.",
+      "- Whether the vacation or non-fly day changed when notice had to occur before the short-call assignment start time.",
+      "- Whether a CNO or no-notification dispute path applies if the assignment appeared without direct contact.",
+      "Likely paths:",
+      "- If the rule says notice can be completed by placement plus acknowledgment, the key issue is whether iCrew or MiCrew showed the assignment and whether acknowledgment happened in time.",
+      "- If the rule requires direct telephone contact or another specific notice method, simply finding the assignment later in iCrew or MiCrew may not cure a missed-notification problem.",
+      "- Calling the duty pilot can be a practical step, but it is not automatically a substitute for contractual notice unless the source text says it is.",
+      "What to check:",
+      "- The iCrew or MiCrew placement timestamp, any acknowledgment timestamp, and whether the assignment appeared after the vacation or non-fly day.",
+      "- Telephone call logs, voicemail, screenshots, and any CNO, ARCOS, or scheduler notification history tied to the short-call assignment.",
+      "- Whether the duty pilot or scheduling log shows telephone contact, electronic placement, or both.",
+      "- Preserve the screenshots, timestamps, and call logs in case you need a CNO or no-notification dispute path.",
+      `Source limitation: ${limitation}`,
+      `Sources used: ${sourceSummary}.`,
+    ].join("\n");
+  }
+  if (goldenDayLcScenario) {
+    const limitation =
+      args.failureReasons[0] ??
+      args.warnings[0] ??
+      "I do not have the exact Long Call operational timing rule attached for the first LC day.";
+    return [
+      "What this depends on:",
+      "- Whether Section 2 A.129 is only defining Golden Day as a hard non-fly day or whether the attached packet also ties it to a specific Long Call assignment-timing rule.",
+      "- Whether the question is really about assignment timing before the first day of LC, report timing on the first LC day, or actual duty on the Golden Day itself.",
+      "- Whether any operational Long Call source actually sets the 6pm / 18-hour timing boundary you are asking about.",
+      "Likely paths:",
+      "- Golden Day tells you what the day is; it does not by itself answer when the company can assign Long Call or another trip on the first LC day.",
+      "- If the attached operational Long Call rule ties the hard non-fly day to a day-one timing limit, that Long Call rule is what controls the assignment-timing answer.",
+      "- If the packet only gives the Section 2 A.129 definition, keep the answer cautious rather than saying you definitely cannot be assigned before 6pm.",
+      "What to check:",
+      "- The exact Section 2 A.129 definition text for Golden Day and any visible Long Call / reserve assignment language tied to day-one timing.",
+      "- Whether the controlling rule is about assignment, report, or duty start on the first day of LC.",
+      "- Any source text that explicitly mentions a 6pm / 1800 or 18-hour boundary for Long Call after a Golden Day.",
+      `Source limitation: ${limitation}`,
+      `Sources used: ${sourceSummary}.`,
+    ].join("\n");
+  }
+  if (knownAbsenceScenario) {
+    const limitation =
+      args.failureReasons[0] ??
+      args.warnings[0] ??
+      "I do not have a clean court-specific known-absence or pay-protection rule attached in this packet.";
+    return [
+      "Issue breakdown:",
+      "- A court or custody-hearing legal obligation that conflicts with day 1 of a trip.",
+      "- A possible known-absence or leave path rather than a simple scheduling preference issue.",
+      "- Documentation, notification, and who to contact may matter as much as the underlying contract rule.",
+      "- Pay protection should stay cautious unless the attached source actually grants it for this kind of protected absence.",
+      "",
+      "What this depends on:",
+      "- Whether the notice to appear, subpoena, or custody-hearing paperwork creates a qualifying legal obligation under the available known-absence or leave rules.",
+      "- Whether the company treats this as a known absence, leave request, or another protected trip-conflict category.",
+      "- Whether any attached source gives pay protection, trip protection, or only an administrative release path.",
+      "- How early you notify Scheduling, the CPO, or the contract-admin path and what documentation they require.",
+      "",
+      "Likely paths:",
+      "- If the packet treats a court appearance or legal obligation as a known-absence or protected leave event, that process may control the trip conflict.",
+      "- If the packet only supports an administrative leave or absence request, you may still need documentation and approval without any automatic pay protection.",
+      "- If the source does not clearly attach pay protection to this type of legal obligation, keep the answer cautious and do not assume the whole trip is protected with pay.",
+      "",
+      "What to check:",
+      "- The notice to appear, subpoena, or custody-hearing paperwork and the exact date/time conflict with day 1 of the trip.",
+      "- Whether Scheduling, the CPO, or contract administration wants the event coded as known absence, leave, or another protected category.",
+      "- The documentation, reporting deadline, and contact path the company requires for a court-obligation conflict.",
+      "- Any DART, ALPA, or contract-admin guidance that explains whether this is release-only, leave-based, or actually pay-protected.",
+      `Source limitation: ${limitation}`,
+      `Sources used: ${sourceSummary}.`,
+      "Practical note: This is contract/process guidance, not a legal opinion.",
+    ].join("\n");
+  }
+  if (futureRotationChangeScenario) {
+    const limitation =
+      args.failureReasons[0] ??
+      args.warnings[0] ??
+      "I do not have a clean controlling source for future-rotation pay protection, CPO override, or known-absence treatment in this packet.";
+    return [
+      "Issue breakdown:",
+      "- A future rotation changed before operation: a leg was removed and the trip now looks like a redeye.",
+      "- A pay or credit protection question, not just a generic reroute question.",
+      "- A reserve-coverage-blocked swap question that may be separate from the actual pay-protection issue.",
+      "- A CPO / known-absence process question that should stay discretionary unless the source says otherwise.",
+      "",
+      "What this depends on:",
+      "- Whether the rotation change happened after the next-month trip was already awarded or published, rather than before it became final.",
+      "- Whether the removed leg and redeye change trigger any pay protection or credit protection for a future non-carryover rotation.",
+      "- Whether reserve coverage is only blocking the swap/process option, as opposed to answering the actual pay-protection question.",
+      "- Whether any CPO or known-absence path is discretionary processing rather than a fixed contract entitlement.",
+      "Likely paths:",
+      "- If the contract has a future schedule-change pay or credit protection rule for this kind of company-driven redeye change, that rule controls the answer.",
+      "- If this is only a future schedule construction change before operation, extra pay may not be automatic just because a leg was removed and the trip became a redeye.",
+      "- If reserve coverage blocks the similar trip swap, a CPO override or known-absence path may still exist as an administrative option, but that is not the same as contract-backed pay protection.",
+      "What to check:",
+      "- The original next-month award versus the changed redeye version, including the removed leg and the pay or credit value before and after the change.",
+      "- Whether the system shows any schedule-change code, pay-protection code, or credit adjustment tied to the modified rotation.",
+      "- The reserve-coverage denial reason for the similar 4-day swap, if that swap question is part of the same dispute.",
+      "- Any CPO, contract-admin, or DART guidance that explains whether this is just a processing block or an actual pay-protection issue.",
+      `Source limitation: ${limitation}`,
+      `Sources used: ${sourceSummary}.`,
+      "Safety note: Do not rely on a sick-leave workaround or any informal absence workaround as a substitute for an actual known-absence or protected-absence rule.",
+    ].join("\n");
+  }
+  if (pbRerouteXdayScenario) {
+    const limitation =
+      args.failureReasons[0] ??
+      args.warnings[0] ??
+      "I do not have the full governing packet for the PB / PR / LC reapplication step in this reroute sequence.";
+    return [
+      "Issue breakdown:",
+      "- PB day disappeared after a QS pickup was rerouted and the rotation extended from a 2-day trip to a 3-day trip.",
+      "- The reroute and deadhead change may have changed how the interrupted X-day sequence was coded.",
+      "- PB converting to LC and the PR remainder display may be a separate PB / PR / LC processing issue rather than a clean entitlement answer by itself.",
+      "- The missing robot / human / ACARS / ARCOS notification trail is its own dispute path and can matter if the award sequence was not communicated correctly.",
+      "",
+      "What this depends on:",
+      "- Whether the reroute qualifies under Section 23 L and whether Section 23 L.9 controls the interrupted X-day treatment.",
+      "- Whether the interrupted X-days were coded as used, interrupted, restored, or held for later PB reapplication after the QS pickup changed shape.",
+      "- When the PB converted to LC, how the PR remainder was recalculated, and whether the system treated the extension as continuation, reroute, or re-award processing.",
+      "- Whether the missing notification record reflects a separate award/notice problem or just a lag in the system history.",
+      "",
+      "Likely paths:",
+      "- If this was a true X-day interruption, the interrupted X-days may need to be restored, and the PB / PR / LC values may need to be recalculated after the reroute extension.",
+      "- If the system treated the sequence as continuation or a reflow, the PB day can disappear from the display without automatically proving PB must be restored later.",
+      "- If the values are lagging behind the reroute processing, DART or manual review may be needed before the PB day, LC status, and PR remainder settle correctly.",
+      "",
+      "What to check:",
+      "- The original QS pickup award, the reroute history, and the deadhead replacement that turned the 2-day into a 3-day sequence.",
+      "- The X-day coding on the affected days and whether the system shows them as interrupted, used, restored, or converted.",
+      "- The PB to LC conversion timing, the PR remainder calculation, and any DART or scheduler note explaining why the PB day disappeared.",
+      "- The ACARS, ARCOS, robot, or manual notification logs tied to the award and reroute sequence.",
+      `Source limitation: ${limitation}`,
+      `Sources used: ${sourceSummary}.`,
+    ].join("\n");
+  }
+  const dependencies = collectDecisionDependencies(args.question, args.answer);
+  const likelyPaths = collectLikelyPaths(args.question, args.answer, args.hasOperationalSupport);
+  const whatToCheck = collectWhatToCheck(args.question, args.answer);
   const limitation =
     args.failureReasons[0] ??
     args.warnings[0] ??
@@ -455,12 +1039,24 @@ function buildSaferFallbackAnswer(args: ContractCopilotAnswerVerifierInput & {
   warnings: string[];
   failureReasons: string[];
 }) {
+  const scenarioHaystack = normalizeText(
+    [args.question, args.answer.shortAnswer, args.answer.plainEnglishExplanation, ...(args.answer.scenarioBreakdown ?? [])].join(" ")
+  );
+  const pbRerouteXdayScenario = detectPbRerouteXdayScenarioFromHaystack(scenarioHaystack);
+  const futureRotationChangeScenario = detectFutureRotationChangeScenarioFromHaystack(scenarioHaystack);
+  const knownAbsenceScenario = detectKnownAbsenceScenarioFromHaystack(scenarioHaystack);
   return {
     ...args.answer,
     status: "insufficient_support" as const,
     answerCompleteness: "provisional" as const,
     confidence: "low" as const,
-    shortAnswer: "I found related source support, but not enough grounded scenario support to answer this cleanly yet.",
+    shortAnswer: pbRerouteXdayScenario
+      ? "Based on the source support I found, this is a PB / QS / reroute / interrupted X-day processing question, not a single-rule answer."
+      : knownAbsenceScenario
+        ? "Based on the source support I found, this looks like a legal-obligation and possible known-absence question, not something I would answer with a simple yes/no protection claim."
+      : futureRotationChangeScenario
+        ? "Based on the source support I found, this is a future rotation-change and possible pay-protection question, not a simple reroute answer."
+        : "I found related source support, but not enough grounded scenario support to answer this cleanly yet.",
     plainEnglishExplanation: buildDecisionPathExplanation({
       question: args.question,
       answer: args.answer,
@@ -485,6 +1081,7 @@ export function verifyContractScenarioAnswer(
   const warnings = [...input.missingSourceWarnings];
   const failureReasons: string[] = [];
   const strongClaims = findStrongClaims(input.answer);
+  const strongClaimsDetected = strongClaims.map((claim) => claim.text);
   const strongClaimsSupported: string[] = [];
   const strongClaimsDowngraded: string[] = [];
   const questionSignals = buildQuestionFamilySignals(input.question);
@@ -603,11 +1200,63 @@ export function verifyContractScenarioAnswer(
       failureReasons,
     });
     verifierAdjustedAnswer = true;
-  } else if (warnings.length > 0 || input.answer.confidence === "low") {
+  } else {
+    const questionText = normalizeText(input.question);
+    const explanationText = normalizeText(input.answer.plainEnglishExplanation);
+    const oeNotificationQuestion = detectOeNotificationScenarioFromHaystack(questionText);
+    const shortCallNotificationQuestion = detectShortCallNotificationScenarioFromHaystack(questionText);
+    const shortCallDutyQuestion = detectShortCallDutyScenarioFromHaystack(questionText);
+    const oeCoverageWeak =
+      oeNotificationQuestion &&
+      !(
+        /\boe\b/.test(explanationText) &&
+        /\bnotification\b/.test(explanationText) &&
+        (/\bcno\b/.test(explanationText) || /\bphone call\b|\btelephone\b/.test(explanationText)) &&
+        /\bsource limitation\b|\bexact oe notification\b|\bcurrent source\b/.test(explanationText)
+      );
+    const notificationCoverageWeak =
+      shortCallNotificationQuestion &&
+      !(
+        /\bnotification\b/.test(explanationText) &&
+        /\bvacation\b|\bnon-fly day\b|\bnon fly day\b/.test(explanationText) &&
+        /\bicrew\b|\bmicrew\b/.test(explanationText) &&
+        /\bcall logs\b|\bduty pilot\b|\bcno\b/.test(explanationText)
+      );
+    const dutyCoverageWeak =
+      shortCallDutyQuestion &&
+      !(
+        /\bsame-day trip\b|\bsame day trip\b/.test(explanationText) &&
+        /\breport\b/.test(explanationText) &&
+        /\bduty\b|\bflight-time\b|\bflight time\b|\blegality\b/.test(explanationText)
+      );
+    if (!(warnings.length > 0 || input.answer.confidence === "low" || oeCoverageWeak || notificationCoverageWeak || dutyCoverageWeak)) {
+      return {
+        verifierRan: true,
+        verifierPassed: warnings.length === 0 && failureReasons.length === 0,
+        verifierWarnings: warnings,
+        verifierFailureReasons: failureReasons,
+        verifierAdjustedAnswer,
+        answer: adjustedAnswer,
+        truthGuardRan: true,
+        strongClaimsDetected,
+        strongClaimsSupported,
+        strongClaimsDowngraded,
+        definitionSectionUsed,
+        operationalSectionUsed,
+        definitionOverrodeOperation,
+        definitionBasedAnswer,
+        applicationClaimDetected,
+        applicationClaimSupported,
+        applicationClaimDowngraded,
+      };
+    }
     const shouldRewriteToDecisionPath =
       input.answer.answerCompleteness === "provisional" ||
       input.answer.status === "insufficient_support" ||
-      !hasDecisionPathFallback(input.answer.plainEnglishExplanation);
+      !hasDecisionPathFallback(input.answer.plainEnglishExplanation) ||
+      oeCoverageWeak ||
+      notificationCoverageWeak ||
+      dutyCoverageWeak;
     adjustedAnswer = {
       ...input.answer,
       shortAnswer: makeCautiousShortAnswer(input.answer.shortAnswer),
@@ -666,7 +1315,7 @@ export function verifyContractScenarioAnswer(
     verifierFailureReasons: Array.from(new Set(failureReasons)),
     verifierAdjustedAnswer,
     truthGuardRan: true,
-    strongClaimsDetected: strongClaims.map((claim) => claim.text),
+    strongClaimsDetected,
     strongClaimsSupported: Array.from(new Set(strongClaimsSupported)),
     strongClaimsDowngraded: Array.from(new Set(strongClaimsDowngraded)),
     definitionSectionUsed,
