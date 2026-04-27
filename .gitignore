@@ -2,6 +2,10 @@ node_modules/
 dist/
 .npm/
 .next/
+.env.local
+.env.*.local
+.expo/
+*.traineddata
 
 .DS_Store
 **/.DS_Store
@@ -9,3 +13,7 @@ dist/
 Delta data/parsed/
 
 *.log
+.env.local
+.env.*.local
+.expo/
+*.traineddata
