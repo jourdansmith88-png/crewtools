@@ -274,6 +274,21 @@ function isDocumentExplanationQuestion(question: string) {
 
 function isPureTermLookup(question: string) {
   const lower = question.toLowerCase();
+  const shortCallNotificationOverride =
+    (lower.includes("short call assignment") || lower.includes("short call") || lower.includes("long call") || /\blc\b/.test(lower)) &&
+    (
+      lower.includes("notification") ||
+      lower.includes("no notification") ||
+      lower.includes("vacation") ||
+      lower.includes("non-fly day") ||
+      lower.includes("non fly day") ||
+      lower.includes("micrew placement") ||
+      lower.includes("icrew placement") ||
+      lower.includes("acknowledge") ||
+      lower.includes("acknowledgment") ||
+      lower.includes("cno") ||
+      lower.includes("call duty pilot")
+    );
   const silverSlipStatusLookup =
     lower.includes("silver slip") &&
     (lower.includes("what does") || lower.includes("status")) &&
@@ -344,7 +359,7 @@ function isPureTermLookup(question: string) {
     /\b\d+\s*-\s*day\b/.test(lower) ||
     /\breserve\b/.test(lower) ||
     /\btrip\b/.test(lower);
-  return silverSlipStatusLookup || (!comparisonApplicationCue && !contactabilityScenarioCue && (
+  return !shortCallNotificationOverride && (silverSlipStatusLookup || (!comparisonApplicationCue && !contactabilityScenarioCue && (
     lower.includes("what is alv") ||
     lower.includes("average line value") ||
     lower.includes("how do i determine alv") ||
@@ -367,7 +382,7 @@ function isPureTermLookup(question: string) {
         lower.includes("airport standby") ||
         lower.includes("reserve guarantee") ||
         lower.includes("reserve")))
-  ));
+  )));
 }
 
 function extractApdCounts(question: string) {
@@ -420,6 +435,12 @@ function isApdCalculation(question: string) {
 
 function isContractScenarioQuestion(question: string, facts: ParsedScenarioFacts) {
   const lower = question.toLowerCase();
+  const forcedRestLegalityScenario =
+    lower.includes("30-hour rest") ||
+    lower.includes("30 hour rest") ||
+    lower.includes("far legal") ||
+    lower.includes("pwa requirement") ||
+    lower.includes("release with pay");
   const comparisonApplicationCue = hasComparisonApplicationCue(question) && hasRecognizableContractTerm(question);
   const generalHypotheticalTermCue =
     lower.includes("if i never fly") ||
@@ -538,6 +559,7 @@ function isContractScenarioQuestion(question: string, facts: ParsedScenarioFacts
     lower.includes("personal drop") ||
     lower.includes("blind slip");
   return (
+    forcedRestLegalityScenario ||
     comparisonApplicationCue ||
     (processToolTopic && scenarioWording) ||
     (recognizableTopic && scenarioWording) ||

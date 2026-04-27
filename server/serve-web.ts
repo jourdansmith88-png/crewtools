@@ -5,6 +5,7 @@ import path from "node:path";
 const projectRoot = "/Users/StarJ/Desktop/Senority+";
 const distDir = path.join(projectRoot, "dist");
 const port = Number(process.env.CREWTOOLS_WEB_PORT ?? 3000);
+const host = process.env.HOST || "0.0.0.0";
 const envLocalPath = path.join(projectRoot, ".env.local");
 
 function loadEnvLocal() {
@@ -66,7 +67,7 @@ function resolveStaticPath(urlPath: string) {
   return path.join(distDir, "index.html");
 }
 
-createServer((req, res) => {
+const server = createServer((req, res) => {
   const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
 
   if (
@@ -99,6 +100,8 @@ createServer((req, res) => {
   res.statusCode = 200;
   res.setHeader("Content-Type", contentTypeFor(filePath));
   createReadStream(filePath).pipe(res);
-}).listen(port, () => {
-  console.log(`CrewTools web server listening on http://localhost:${port}`);
+});
+
+server.listen(port, host, () => {
+  console.log(`CrewTools web server listening on http://${host}:${port}`);
 });

@@ -27,11 +27,13 @@ import {
   executeContractCopilotLane,
   type ContractCopilotIntentResolution,
   type ParsedPayRateQuestion,
+  runContractCopilot,
   resolveContractCopilotIntent,
   retrieveContractCopilotSnippets,
   synthesizeContractCopilotTopAnswer,
   verifyContractScenarioAnswer,
 } from "../../../src/ai/workflows/contractCopilot/index.ts";
+import { executeScenarioPipelineLegacyCompat } from "../../../src/ai/workflows/contractCopilot/scenarioPipelineLegacyCompat.ts";
 import { AIValidationError } from "../../../src/ai/core/errors.ts";
 import type {
   ClarifyingQuestion,
@@ -43,7 +45,7 @@ import type {
   RuleType,
   SupportLevel,
 } from "../../../src/types/contractCopilot.ts";
-import { runContractCopilot } from "../../../src/utils/contractCopilot/contractCopilotEngine.ts";
+import { runContractCopilot as runLegacyContractCopilot } from "../../../src/utils/contractCopilot/contractCopilotEngine.ts";
 import { validateWithSchema } from "../../../src/ai/core/validation.ts";
 import { loadContractDocumentIndex } from "../../lib/contractSearch/loadContractIndex.ts";
 import type { PayEquipmentLabel, PaySeat } from "../../../src/data/payScales.ts";
@@ -56,6 +58,26 @@ const emptySession: ContractCopilotSession = {
   turns: [],
   status: "idle",
 };
+
+function hashShadowValue(value: string) {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `h${(hash >>> 0).toString(16)}`;
+}
+
+function summarizeShadowAnswer(answer: { shortAnswer?: string }) {
+  return typeof answer?.shortAnswer === "string" ? answer.shortAnswer : "";
+}
+
+function extractSupportSections(answer: { references?: Array<{ section?: string }> }) {
+  return (answer.references ?? [])
+    .map((reference) => reference.section)
+    .filter((section): section is string => typeof section === "string" && section.trim().length > 0);
+}
+
 
 type StructuredPayRow = {
   equipmentLabel: string;
@@ -800,10 +822,79 @@ function detectPayCreditConsistencyScenario(question: string) {
     lower.includes("credit doesn't count") ||
     lower.includes("timecard") ||
     lower.includes("micrew credit") ||
+    (lower.includes("micrew") && lower.includes("credit")) ||
+    lower.includes("projected credit") ||
+    lower.includes("final credit") ||
+    lower.includes("final closeout") ||
+    lower.includes("credit jumped") ||
+    lower.includes("reverted to") ||
+    (lower.includes("went back") && lower.includes("credit")) ||
     lower.includes("credit recalculation") ||
     lower.includes("deadhead deviation") ||
-    lower.includes("layover less than 13 hours")
+    lower.includes("layover less than 13 hours") ||
+    (lower.includes("deadhead") && lower.includes("short layover"))
   );
+}
+
+function detectPayCreditSubScenario(question: string):
+  | "sickBankAfterCalledWell"
+  | "bankDepositSilverSlipCredit"
+  | "projectedVsFinalCreditCloseout"
+  | "rerouteCreditProtection"
+  | "timecardCreditDiscrepancy"
+  | "unknownPayCredit" {
+  const lower = question.toLowerCase();
+  if (
+    (lower.includes("reroute") || lower.includes("rerouted")) &&
+    (
+      lower.includes("worth less credit") ||
+      lower.includes("less credit") ||
+      lower.includes("original pairing") ||
+      lower.includes("pay protected") ||
+      lower.includes("trip worth less") ||
+      lower.includes("after report") ||
+      lower.includes("rotation guarantee")
+    )
+  ) {
+    return "rerouteCreditProtection";
+  }
+  if (
+    (lower.includes("bank") && (lower.includes("deposit") || lower.includes("2 hours"))) ||
+    lower.includes("ss credit") ||
+    lower.includes("silver slip credit") ||
+    lower.includes("bank eligible") ||
+    lower.includes("bank eligibility")
+  ) {
+    return "bankDepositSilverSlipCredit";
+  }
+  if (
+    lower.includes("projected credit") ||
+    lower.includes("final credit") ||
+    lower.includes("closeout") ||
+    lower.includes("micrew showed") ||
+    lower.includes("dropped back") ||
+    lower.includes("credit recalculation") ||
+    lower.includes("did not deviate deadhead") ||
+    lower.includes("reverted to") ||
+    (lower.includes("went back") && lower.includes("credit"))
+  ) {
+    return "projectedVsFinalCreditCloseout";
+  }
+  if (
+    lower.includes("sick bank") ||
+    lower.includes("called well") ||
+    (lower.includes("picked up flying") && lower.includes("sick"))
+  ) {
+    return "sickBankAfterCalledWell";
+  }
+  if (
+    lower.includes("timecard") ||
+    lower.includes("credit discrepancy") ||
+    (lower.includes("credit") && lower.includes("paid differently"))
+  ) {
+    return "timecardCreditDiscrepancy";
+  }
+  return "unknownPayCredit";
 }
 
 function detectRerouteConsistencyScenario(question: string) {
@@ -904,7 +995,8 @@ function detectShortCallNotificationScenario(question: string) {
   const lower = question.toLowerCase();
   const hasShortCallContext =
     lower.includes("short call assignment") ||
-    lower.includes("short call") ||
+    lower.includes("short call");
+  const hasReserveOnCallContext =
     lower.includes("long call") ||
     /\blc\b/.test(lower);
   const hasNotificationTerms =
@@ -924,6 +1016,21 @@ function detectShortCallNotificationScenario(question: string) {
     lower.includes("vacation") ||
     lower.includes("non-fly day") ||
     lower.includes("non fly day");
+  const hardNotificationOverride =
+    (hasShortCallContext || hasReserveOnCallContext) &&
+    (
+      lower.includes("notification") ||
+      lower.includes("no notification") ||
+      lower.includes("vacation") ||
+      lower.includes("non-fly day") ||
+      lower.includes("non fly day") ||
+      lower.includes("micrew placement") ||
+      lower.includes("icrew placement") ||
+      lower.includes("acknowledge") ||
+      lower.includes("acknowledgment") ||
+      lower.includes("cno") ||
+      lower.includes("call duty pilot")
+    );
   const hasDutyLegalitySignals =
     lower.includes("same-day trip") ||
     lower.includes("same day trip") ||
@@ -942,6 +1049,10 @@ function detectShortCallNotificationScenario(question: string) {
     lower.includes("off duty") ||
     lower.includes("check your schedule") ||
     lower.includes("end of short call");
+
+  if (hardNotificationOverride) {
+    return true;
+  }
 
   if (hasDutyLegalitySignals || hasContactabilitySignals) {
     return false;
@@ -1038,7 +1149,14 @@ function coerceClarificationIntent(args: {
   const evidenceParsingAttempted = Object.keys(emptySession.facts).length >= 0;
   const issueFamilies = detectScenarioIssueFamilies(args.question);
   const looksComplex = issueFamilies.length >= 3;
+  const forcedRestLegalityScenario =
+    args.question.toLowerCase().includes("30-hour rest") ||
+    args.question.toLowerCase().includes("30 hour rest") ||
+    args.question.toLowerCase().includes("far legal") ||
+    args.question.toLowerCase().includes("pwa requirement") ||
+    args.question.toLowerCase().includes("release with pay");
   const recognizableScenarioSignals =
+    forcedRestLegalityScenario ||
     issueFamilies.length > 0 ||
     /\b(wocl|8d3|report|assigned|assignment|reroute|reserve|gs|gswc|lc|long call|short call|deadhead|bank|vacation|replacement|sup|ivd|rotation|layover|open time|base|medical|procedure|lookback|section 14|sick bank|called well|timecard|credit|micrew|oe|cno|srh|trh)\b/i.test(
       args.question
@@ -1106,6 +1224,28 @@ function coerceClarificationIntent(args: {
         evidenceParsingSucceeded: false,
         evidenceParsingForcedFallback: false,
         evidenceParsingIgnoredReason: "Ignored question_scope fallback because the original question already contained enough scenario information to continue safely.",
+        scenarioProceedWithPartialContext: true,
+      },
+      issueFamilies,
+      looksComplex,
+    };
+  }
+
+  if (forcedRestLegalityScenario) {
+    return {
+      intent: {
+        ...args.intent,
+        intentType: "contract_scenario",
+        selectedLane: "contract_scenario_retrieval",
+        requiredFieldsFound: ["question"],
+        missingFields: [],
+        toolsUsed: Array.from(new Set([...(args.intent.toolsUsed ?? []), "question_scope_guard"])),
+      } satisfies ContractCopilotIntentResolution,
+      evidenceDebug: {
+        evidenceParsingAttempted,
+        evidenceParsingSucceeded: false,
+        evidenceParsingForcedFallback: false,
+        evidenceParsingIgnoredReason: "Ignored question_scope fallback because the question clearly asks a rest-legality FAR-vs-PWA scenario.",
         scenarioProceedWithPartialContext: true,
       },
       issueFamilies,
@@ -1474,7 +1614,7 @@ function buildSafeScenarioFallbackAnswer(args: {
       "Sources used:",
       "- Start with PWA Section 23 L and Section 23 L.9 where reroute or interrupted X-day logic is involved, then use Scheduler Manual deadhead deviation / SLV / QS processing support, and use Compensation Manual only if the attached source directly addresses the pay or credit consequence.",
     ];
-  } else if (qsCallOrderScenario) {
+  } else if (qsCallOrderScenario && !shortCallNotificationScenario) {
     shortAnswer =
       "This looks like a Quick Slip eligibility and missed-notification question, and I would separate being QS-eligible from proving the company should definitely have called you under the exact call-order rule.";
     likelyApplication =
@@ -1539,7 +1679,7 @@ function buildSafeScenarioFallbackAnswer(args: {
       "Sources used:",
       "- Start with OE-specific SRH/TRH or scheduler/process support. Do not rely on unrelated Green Slip, pay, deadhead, or generic Section 2 definition language for this question.",
     ];
-  } else if (contactabilityScenario) {
+  } else if (contactabilityScenario && !shortCallNotificationScenario) {
     shortAnswer =
       "This looks like a contactability and notification-obligation question, and being on duty does not automatically answer whether you were contractually required to answer a personal phone or keep rechecking the schedule.";
     likelyApplication =
@@ -1603,7 +1743,7 @@ function buildSafeScenarioFallbackAnswer(args: {
       "Sources used:",
       "- Start with PWA Section 12 duty/rest support, then use SRH/Scheduler Manual rest-legality examples, and use Compensation Manual only if the attached support directly addresses release-with-pay treatment.",
     ];
-  } else if (shortCallDutyScenario) {
+  } else if (shortCallDutyScenario && !shortCallNotificationScenario) {
     shortAnswer =
       "This looks like a short-call plus same-day-trip legality question, and I would not assume both pieces can stay on schedule unless the duty and assignment rules clearly allow it.";
     likelyApplication =
@@ -1673,7 +1813,7 @@ function buildSafeScenarioFallbackAnswer(args: {
     shortAnswer =
       "This is a multi-part scheduling, X-day, and system-processing question, not a single-rule yes or no.";
     likelyApplication =
-      "The key is to break the problem into separate issue threads: the reroute and deadhead extension, the interrupted X-days, the PB to LC and PR remainder processing, and the missing notification trail. You should not assume PB should have been reapplied unless the X-day interruption and PB/PR/LC processing rules line up in the attached sources.";
+      "The key is to break the problem into separate issue threads: the reroute and deadhead extension, the interrupted X-days, the PB to LC and PR remainder processing, and the missing notification trail. You should not assume PB was supposed to be reapplied unless the X-day interruption and PB/PR/LC processing rules line up in the attached sources.";
     issueThreadLines = [
       "Issue breakdown:",
       "- Reroute / extension of rotation: the original 2-day QS turned into a 3-day sequence after the reroute and deadhead change.",
@@ -1700,6 +1840,7 @@ function buildSafeScenarioFallbackAnswer(args: {
       "- Check the notification logs, including ACARS, ARCOS, robot, or manual contact evidence tied to the reroute and award.",
       "",
       "Source limitation:",
+      "- The X-day interruption rule in Section 23 L.9 and the PB / PR / LC reapplication logic are not fully attached here, so I would keep this in CAUTION rather than saying PB definitely should have been reapplied.",
       "- The X-day interruption rule in Section 23 L.9 and the PB / PR / LC reapplication logic are not fully attached here, so I would keep this in CAUTION rather than saying PB definitely should have been reapplied.",
       "",
       "Sources used:",
@@ -1864,35 +2005,37 @@ function buildSafeScenarioFallbackAnswer(args: {
       "- Use Scheduler Manual processing language first for PCS/swap timing, then use direct PWA support only where the contract packet actually speaks to the underlying reserve/open-time constraint.",
     ].filter((line): line is string => Boolean(line));
   } else if (payCreditConsistencyScenario) {
-    const sickBankCase = lower.includes("sick bank") || lower.includes("called well") || (lower.includes("picked up flying") && lower.includes("sick"));
-    const bankDepositCase =
-      (lower.includes("bank") && (lower.includes("deposit") || lower.includes("2 hours"))) ||
-      lower.includes("ss credit") ||
-      lower.includes("credit doesn't count");
+    const payCreditSubScenario = detectPayCreditSubScenario(args.question);
+    const sickBankCase = payCreditSubScenario === "sickBankAfterCalledWell";
+    const bankDepositCase = payCreditSubScenario === "bankDepositSilverSlipCredit";
+    const rerouteCreditProtectionCase = payCreditSubScenario === "rerouteCreditProtection";
     const recalculationCase =
-      lower.includes("timecard") ||
-      lower.includes("micrew credit") ||
-      lower.includes("credit recalculation") ||
-      lower.includes("deadhead deviation") ||
-      lower.includes("layover less than 13 hours");
+      payCreditSubScenario === "projectedVsFinalCreditCloseout" ||
+      payCreditSubScenario === "timecardCreditDiscrepancy";
     shortAnswer =
       sickBankCase
         ? "This looks like a sick-bank and post-sick pickup question, and the key issue is whether calling well and flying after the sick trip ended changes the original sick-bank hit."
         : bankDepositCase
           ? "This looks like a bank-eligibility question, and the key issue is whether the SS credit on that 2 hours deposit request is being treated as credit that doesn't count for bank posting."
-          : "This looks like a projected-versus-final credit question, and the key issue is whether MiCrew briefly showed a higher projected value that disappeared when the trip closed and the final credit recalculated.";
+          : rerouteCreditProtectionCase
+            ? "This looks like a reroute credit-protection question, and the key issue is whether you stay pay protected to the original pairing or original rotation value when the rerouted or as-flown trip closes lower."
+            : "This looks like a projected-versus-final credit question, and the key issue is whether MiCrew briefly showed a higher projected value that disappeared when the trip closed and the final credit recalculated.";
     likelyApplication =
       sickBankCase
         ? "The safe read is to separate the sick-trip period from any later picked-up flying. Calling well and flying later may change future availability, but it does not automatically prove the original sick-bank charge should disappear unless the attached rule says the sick-bank hit is restored or offset."
         : bankDepositCase
           ? "The safe read is to separate pay, credit, and bank-eligible credit. A Silver Slip may generate credit for some purposes without that credit being bank-eligible in the same way as regular line or replacement credit."
-          : "The safe read is to separate projected credit from final closeout credit. MiCrew can temporarily show a richer projected value if a deviation, short-layover, or rest-sensitive assumption is still in play, then remove it when the trip closes under the final flown sequence.";
+          : rerouteCreditProtectionCase
+            ? "The safe read is to separate the original pairing or original rotation value from the rerouted or as-flown value. If the trip was rerouted after report, the attached packet may support some pay or credit protection, reroute pay, or rotation-guarantee treatment, but I would not promise that without the controlling source."
+            : "The safe read is to separate projected credit from final closeout credit. MiCrew can temporarily show a richer projected value if a deviation, short-layover, or rest-sensitive assumption is still in play, then remove it when the trip closes under the final flown sequence.";
     issueThreadLines = [
       "What this appears to be:",
       sickBankCase
         ? "- A question about whether picked-up flying after the sick trip ended changes the original sick-bank impact."
         : bankDepositCase
           ? "- A question about whether SS credit on a 2 hours deposit request counts as bank-eligible credit or is being treated as credit that doesn't count."
+          : rerouteCreditProtectionCase
+            ? "- A question about whether a reroute made the trip worth less credit and whether pay or credit protection preserves the original pairing value."
           : "- A question about why projected credit briefly increased and then dropped back when the rotation closed out.",
       "",
       "What this depends on:",
@@ -1907,6 +2050,15 @@ function buildSafeScenarioFallbackAnswer(args: {
         : null,
       bankDepositCase
         ? "- Whether the Silver Slip generated premium pay, straight credit, or a non-bank-eligible credit type for this transaction."
+        : null,
+      rerouteCreditProtectionCase
+        ? "- Whether the reroute happened after report or only changed the trip before report."
+        : null,
+      rerouteCreditProtectionCase
+        ? "- Whether the original pairing or original rotation value is protected when the rerouted or as-flown trip closes with less credit."
+        : null,
+      rerouteCreditProtectionCase
+        ? "- Whether the attached packet actually uses reroute pay, rotation guarantee, or another pay-protection rule for this sequence."
         : null,
       recalculationCase
         ? "- Whether MiCrew was showing projected credit based on a possible deadhead deviation or a short-layover/rest-sensitive assumption before final closeout."
@@ -1923,10 +2075,16 @@ function buildSafeScenarioFallbackAnswer(args: {
         ? "- If the packet only shows the original sick-occurrence treatment and not a restoration rule, keep the answer cautious rather than promising the sick bank will be adjusted."
         : null,
       bankDepositCase
-        ? "- If Silver Slip credit is coded differently from regular credit or replacement credit, iCrew can reject the bank deposit even though the trip produced pay or apparent credit."
+        ? "- If Silver Slip credit is coded differently from regular credit or replacement credit, iCrew can reject the bank deposit as a bank eligibility issue even though the trip produced pay or apparent credit."
         : null,
       bankDepositCase
         ? "- If the packet never says Silver Slip credit is bank-eligible, treat the rejection as a credit-type eligibility question rather than assuming the system is wrong."
+        : null,
+      rerouteCreditProtectionCase
+        ? "- If the reroute happened after report and the source packet supports reroute pay, rotation guarantee, or original-pairing protection, the final as-flown value may not be the only number that matters."
+        : null,
+      rerouteCreditProtectionCase
+        ? "- If the packet does not attach the controlling reroute pay or rotation-guarantee rule for this fact pattern, keep the answer cautious instead of promising full pay protection."
         : null,
       recalculationCase
         ? "- If MiCrew temporarily assumed a deadhead deviation or a short-layover trigger, it can show a projected 24:35 that later disappears when the trip closes at the actual 21:00 value."
@@ -1948,6 +2106,15 @@ function buildSafeScenarioFallbackAnswer(args: {
       bankDepositCase
         ? "- Check whether DBMS or the bank request detail explains the rejection as credit-type ineligibility rather than a balance issue."
         : null,
+      rerouteCreditProtectionCase
+        ? "- Check the original pairing or rotation value against the rerouted or final as-flown credit."
+        : null,
+      rerouteCreditProtectionCase
+        ? "- Check whether the reroute happened after report, whether the trip remained one rotation, and whether the timecard or DBMS notes mention reroute pay, rotation guarantee, or pay protection."
+        : null,
+      rerouteCreditProtectionCase
+        ? "- Check the Compensation Manual and any PWA Section 23 K / 23 L support attached to the reroute sequence before assuming the lower as-flown value controls."
+        : null,
       recalculationCase
         ? "- Check the MiCrew projected credit screen versus the final timecard closeout, and whether the deadhead deviation field ever remained active."
         : null,
@@ -1960,6 +2127,8 @@ function buildSafeScenarioFallbackAnswer(args: {
         ? "- I do not have the exact sick-bank restoration or offset rule attached for this fact pattern, so I would not promise the later pickup removes the original sick-bank hit."
         : bankDepositCase
           ? "- I do not have the exact bank-eligibility rule attached that says whether Silver Slip credit can be deposited, so I would keep the answer cautious."
+          : rerouteCreditProtectionCase
+            ? "- I do not have a clean attached reroute pay / rotation guarantee source that proves the original pairing value is protected in this exact fact pattern, so I would keep the pay-protection answer cautious."
           : "- I do not have a clean attached rule that ties this exact projected-credit spike to the final recalculation, so I would keep the closeout explanation cautious rather than definitive.",
       "",
       "Sources used:",
@@ -1967,6 +2136,8 @@ function buildSafeScenarioFallbackAnswer(args: {
         ? "- Start with PWA Section 14 and any Compensation Manual sick-bank or pay/credit treatment that actually addresses restoration or offset."
         : bankDepositCase
           ? "- Start with Compensation Manual pay/credit treatment and any PWA bank-eligibility language before assuming Silver Slip credit counts the same as regular credit."
+          : rerouteCreditProtectionCase
+            ? "- Start with PWA Section 23 K / 23 L as applicable, then use Compensation Manual reroute pay or rotation-guarantee support if it is attached to this sequence."
           : "- Start with Compensation Manual pay/credit and timecard treatment, then use PWA Section 12 only where rest/layover or deadhead legality changes the credit outcome.",
     ].filter((line): line is string => Boolean(line));
   } else if (detectVacationBankScenario(lower)) {
@@ -2445,6 +2616,85 @@ function buildSafeScenarioFallbackAnswer(args: {
     ),
     references: fallbackReferences,
   };
+}
+
+function buildScenarioClarificationResponse(args: {
+  question: string;
+  session: ContractCopilotSession;
+  fallbackResult: ReturnType<typeof runContractCopilot>;
+  scenarioValidation: ScenarioValidationResult;
+  contractIndex: ReturnType<typeof loadContractDocumentIndex>;
+  intentResolution: ContractCopilotIntentResolution;
+  intentDebugBase: Record<string, unknown>;
+}) {
+  const gatingQuestion = args.scenarioValidation.gatingQuestion;
+  if (!gatingQuestion) {
+    throw new Error("Scenario clarification response requires a gating question.");
+  }
+
+  return jsonResponse(200, {
+    ok: true,
+    mode: "fallback",
+    answer: {
+      status: "needs_clarification",
+      scenarioLabel: args.fallbackResult.answer.scenarioLabel,
+      answerCompleteness: "provisional",
+      shortAnswer: gatingQuestion.prompt,
+      plainEnglishExplanation:
+        args.scenarioValidation.conditionalWhy ??
+        "I need this one fact before I can keep the answer grounded instead of guessing from a broad fallback.",
+      confidence: "medium",
+      supportLevel: "mixed",
+      assumptions: [],
+      evidenceSummary: [],
+      references: [],
+      clarifyingQuestions: [gatingQuestion],
+      missingFacts: [gatingQuestion.factField],
+    },
+    detectedScenario: args.fallbackResult.detectedScenario,
+    nextSession: {
+      ...args.fallbackResult.nextSession,
+      clarificationCount: args.session.clarificationCount < 2 ? args.session.clarificationCount + 1 : args.session.clarificationCount,
+      unresolvedQuestion: args.session.unresolvedQuestion ?? args.question,
+      lastAskedClarifyingField: gatingQuestion.factField,
+      lastClarifyingQuestionId: gatingQuestion.id,
+      status: "awaiting_reply",
+    },
+    meta: {
+      fallbackReason: "scenario_missing_required_facts",
+    },
+    debug:
+      process.env.NODE_ENV !== "production"
+        ? {
+            mode: "fallback",
+            fallbackReason: "scenario_missing_required_facts",
+            aiPathUsed: false,
+            fallbackUsed: false,
+            reasonForFallback: undefined,
+            scenarioFamilySelected: args.scenarioValidation.scenarioFamilySelected,
+            missingGatingFacts: args.scenarioValidation.missingGatingFacts,
+            missingRequiredFacts: args.scenarioValidation.missingGatingFacts,
+            clarificationInsteadOfFallback: true,
+            fallbackEntryReason: "scenario_missing_required_facts",
+            aiPathSkippedReason: "missing_required_facts_before_ai",
+            modelValidationFailureReason: undefined,
+            answerIsConditional: args.scenarioValidation.answerIsConditional,
+            gatingQuestionUsed: gatingQuestion.prompt,
+            fallbackUsed: true,
+            aiSynthesisUsed: false,
+            hasPwaIndex: args.contractIndex.hasPwaIndex,
+            hasCompensationIndex: args.contractIndex.hasCompensationIndex,
+            hasSchedulerIndex: args.contractIndex.hasSchedulerIndex,
+            ...args.intentDebugBase,
+            toolsUsed: buildContractScenarioToolsUsed({
+              intent: args.intentResolution,
+              matchedInteractionRule: undefined,
+              missingGatingFacts: args.scenarioValidation.missingGatingFacts,
+              aiSynthesisUsed: false,
+            }),
+          }
+        : undefined,
+  });
 }
 
 function applyScenarioAnswerVerifier(args: {
@@ -4225,11 +4475,21 @@ function detectComparisonSupportSides(question: string) {
   return comparisonCue ? Array.from(new Set(sides)) : [];
 }
 
+function questionAllowsGreenSlipSupport(question: string) {
+  const lower = question.toLowerCase();
+  return (
+    lower.includes("green slip") ||
+    lower.includes("greenslip") ||
+    /\bgs\b/.test(lower) ||
+    lower.includes("premium pay")
+  );
+}
+
 function inferSupportSectionAnchor(reference: {
   section?: string;
   label?: string;
   quoteSnippet?: string;
-}) {
+}, options?: { allowGreenSlipInferred?: boolean }) {
   const combined = normalizeSupportText(
     `${reference.section ?? ""} ${reference.label ?? ""} ${reference.quoteSnippet ?? ""}`
   );
@@ -4272,7 +4532,7 @@ function inferSupportSectionAnchor(reference: {
   if (combined.includes("silver slip")) {
     return "Silver Slip (inferred)";
   }
-  if (combined.includes("green slip") || /\bgs\b/.test(combined)) {
+  if (options?.allowGreenSlipInferred !== false && (combined.includes("green slip") || /\bgs\b/.test(combined))) {
     return "Green Slip (inferred)";
   }
   return reference.section;
@@ -4332,6 +4592,7 @@ function rerankSupportReferences(args: {
   const questionTerms = extractSupportIntentTerms(args.question, "");
   const answerTerms = extractSupportIntentTerms("", args.answerText);
   const comparisonSides = detectComparisonSupportSides(args.question);
+  const allowGreenSlipSupport = questionAllowsGreenSlipSupport(args.question);
   const silverSlipQuery =
     args.question.toLowerCase().includes("silver slip") || /\bss\b/.test(args.question.toLowerCase());
   const xDayScenario =
@@ -4669,13 +4930,17 @@ function rerankSupportReferences(args: {
     ? Array.from(
         new Set(
           [
-            ...(lowerIncludesAny(args.question, ["sick bank", "called well", "picked up flying"])
+            ...(detectPayCreditSubScenario(args.question) === "sickBankAfterCalledWell"
               ? ["sick bank", "called well", "credit"]
               : []),
-            ...(lowerIncludesAny(args.question, ["ss credit", "bank deposit", "deposit", "doesn't count"])
+            ...(detectPayCreditSubScenario(args.question) === "bankDepositSilverSlipCredit"
               ? ["bank deposit", "ss credit", "credit", "bank eligibility"]
               : []),
-            ...(lowerIncludesAny(args.question, ["micrew", "timecard", "credit recalculation", "deadhead deviation", "13 hours"])
+            ...(detectPayCreditSubScenario(args.question) === "rerouteCreditProtection"
+              ? ["reroute", "original pairing", "less credit", "pay protected", "rotation guarantee", "reroute pay"]
+              : []),
+            ...(detectPayCreditSubScenario(args.question) === "projectedVsFinalCreditCloseout" ||
+              detectPayCreditSubScenario(args.question) === "timecardCreditDiscrepancy"
               ? ["timecard", "micrew", "credit recalculation", "deadhead deviation", "13 hours"]
               : []),
           ].filter(Boolean)
@@ -5212,21 +5477,21 @@ function rerankSupportReferences(args: {
       exactSectionHit,
       matchedSectionAnchor:
         silverSlipQuery && silverHit
-          ? inferSupportSectionAnchor(reference)
+          ? inferSupportSectionAnchor(reference, { allowGreenSlipInferred: allowGreenSlipSupport })
           : silverSlipQuery && comparisonSides.includes("green slip") && greenHit && !silverHit
-            ? inferSupportSectionAnchor(reference)
+            ? inferSupportSectionAnchor(reference, { allowGreenSlipInferred: allowGreenSlipSupport })
             : pickupLimitScenario && pickupLimitSpecificHits.length > 0
-              ? inferSupportSectionAnchor(reference)
+              ? inferSupportSectionAnchor(reference, { allowGreenSlipInferred: allowGreenSlipSupport })
             : pcsSwapScenario && pcsSpecificHits.length > 0
-              ? inferSupportSectionAnchor(reference)
+              ? inferSupportSectionAnchor(reference, { allowGreenSlipInferred: allowGreenSlipSupport })
             : rerouteConsistencyScenario && rerouteSpecificHits.length > 0
-              ? inferSupportSectionAnchor(reference)
+              ? inferSupportSectionAnchor(reference, { allowGreenSlipInferred: allowGreenSlipSupport })
             : qsCallOrderScenario && qsCallOrderSpecificHits.length > 0
-              ? inferSupportSectionAnchor(reference)
+              ? inferSupportSectionAnchor(reference, { allowGreenSlipInferred: allowGreenSlipSupport })
             : oeNotificationScenario && oeNotificationDirectSupport
-              ? inferSupportSectionAnchor(reference)
+              ? inferSupportSectionAnchor(reference, { allowGreenSlipInferred: allowGreenSlipSupport })
             : shortCallNotificationScenario && shortCallNotificationSpecificHits.length > 0
-              ? inferSupportSectionAnchor(reference)
+              ? inferSupportSectionAnchor(reference, { allowGreenSlipInferred: allowGreenSlipSupport })
             : sectionMatch.anchor,
     };
   });
@@ -5289,7 +5554,7 @@ function rerankSupportReferences(args: {
   if (primarySections.length > 0 && qualityGate.primaryAnchorMissing) {
     qualityFiltered = [];
   }
-  const finalRanked = qualityFiltered.slice(0, 4);
+  let finalRanked = qualityFiltered.slice(0, 4);
   if (comparisonSides.length >= 2) {
     for (const side of comparisonSides) {
       const alreadyCovered = finalRanked.some((item) => item.matchedTerms.includes(side));
@@ -5416,7 +5681,7 @@ function rerankSupportReferences(args: {
       const combined = normalizeSupportText(
         `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""}`
       );
-      const inferredAnchor = inferSupportSectionAnchor(item.reference);
+      const inferredAnchor = inferSupportSectionAnchor(item.reference, { allowGreenSlipInferred: allowGreenSlipSupport });
       const section23Hit =
         item.reference.sourceId === "pwa" &&
         normalizeSectionIdentifier(item.reference.section).includes(normalizeSectionIdentifier("Section 23"));
@@ -5540,6 +5805,20 @@ function rerankSupportReferences(args: {
         "Generic SECTION 23 was demoted below specific swap/pickup/PCS support.";
     }
   }
+  if (!allowGreenSlipSupport) {
+    const isGreenSlipInferred = (item: (typeof finalRanked)[number]) =>
+      (item.matchedSectionAnchor ?? inferSupportSectionAnchor(item.reference, { allowGreenSlipInferred: true })) ===
+      "Green Slip (inferred)";
+    const filteredRanked = finalRanked.filter((item) => !isGreenSlipInferred(item));
+    if (filteredRanked.length !== finalRanked.length) {
+      const backfill = sorted.filter(
+        (item) =>
+          !filteredRanked.some((chosen) => chosen.reference === item.reference) &&
+          !isGreenSlipInferred(item)
+      );
+      finalRanked = [...filteredRanked, ...backfill].slice(0, 4);
+    }
+  }
   if (vacationBankScenario) {
     const bestVacationCandidate = sorted.find((item) => {
       const combined = normalizeSupportText(
@@ -5633,6 +5912,7 @@ function rerankSupportReferences(args: {
     sickLookbackSupportMissingAnchors = sickLookbackRequiredTerms.filter((term) => !visibleSickLookbackTerms.includes(term));
   }
   if (payCreditConsistencyScenario) {
+    const payCreditSubScenario = detectPayCreditSubScenario(args.question);
     const bestPayCreditCandidate = sorted.find((item) => {
       const combined = normalizeSupportText(
         `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""}`
@@ -5646,7 +5926,22 @@ function rerankSupportReferences(args: {
       const section12Hit =
         item.reference.sourceId === "pwa" &&
         normalizeSectionIdentifier(item.reference.section).includes(normalizeSectionIdentifier("Section 12"));
+      const section23Hit =
+        item.reference.sourceId === "pwa" &&
+        (
+          normalizeSectionIdentifier(item.reference.section).includes(normalizeSectionIdentifier("Section 23 K")) ||
+          normalizeSectionIdentifier(item.reference.section).includes(normalizeSectionIdentifier("Section 23 L"))
+        );
+      const rotationGuaranteeHit =
+        item.reference.sourceId === "pwa" &&
+        normalizeSupportText(item.reference.section).includes("rotation guarantee");
       return (
+        (payCreditSubScenario === "rerouteCreditProtection" &&
+          (
+            section23Hit ||
+            rotationGuaranteeHit ||
+            (compManualHit && (combined.includes("reroute pay") || combined.includes("rotation guarantee") || combined.includes("pay protected") || combined.includes("less credit")))
+          )) ||
         (compManualHit && (requiredHits.length > 0 || hits.length >= 2)) ||
         (section14Hit && (combined.includes("sick") || combined.includes("bank"))) ||
         (section12Hit && (combined.includes("layover") || combined.includes("deadhead") || combined.includes("rest")))
@@ -5670,9 +5965,11 @@ function rerankSupportReferences(args: {
     payCreditAnchorFound =
       Boolean(bestPayCreditCandidate) &&
       (
-        (lowerIncludesAny(args.question, ["sick bank", "called well"]) && visiblePayCreditTerms.includes("sick bank")) ||
-        (lowerIncludesAny(args.question, ["ss credit", "bank deposit", "deposit"]) && (visiblePayCreditTerms.includes("ss credit") || visiblePayCreditTerms.includes("bank deposit"))) ||
-        (lowerIncludesAny(args.question, ["micrew", "timecard", "credit recalculation", "deadhead deviation", "13 hours"]) &&
+        (payCreditSubScenario === "sickBankAfterCalledWell" && visiblePayCreditTerms.includes("sick bank")) ||
+        (payCreditSubScenario === "bankDepositSilverSlipCredit" && (visiblePayCreditTerms.includes("ss credit") || visiblePayCreditTerms.includes("bank deposit"))) ||
+        (payCreditSubScenario === "rerouteCreditProtection" &&
+          (visiblePayCreditTerms.includes("reroute pay") || visiblePayCreditTerms.includes("rotation guarantee") || visiblePayCreditTerms.includes("credit"))) ||
+        ((payCreditSubScenario === "projectedVsFinalCreditCloseout" || payCreditSubScenario === "timecardCreditDiscrepancy") &&
           (visiblePayCreditTerms.includes("timecard") || visiblePayCreditTerms.includes("credit recalculation") || visiblePayCreditTerms.includes("deadhead deviation")))
       );
     if (!payCreditAnchorFound) {
@@ -6264,17 +6561,18 @@ function rerankSupportReferences(args: {
       );
       return combined.includes("silver slip");
     })
-    .map((item) => inferSupportSectionAnchor(item.reference))
+    .map((item) => inferSupportSectionAnchor(item.reference, { allowGreenSlipInferred: allowGreenSlipSupport }))
     .filter((value): value is string => Boolean(value))
     .slice(0, 6);
   const retrievalGreenSlipAnchorsFound = sorted
+    .filter(() => allowGreenSlipSupport)
     .filter((item) => {
       const combined = normalizeSupportText(
         `${item.reference.section ?? ""} ${item.reference.label ?? ""} ${item.reference.quoteSnippet ?? ""}`
       );
       return combined.includes("green slip") || /\bgs\b/.test(combined);
     })
-    .map((item) => inferSupportSectionAnchor(item.reference))
+    .map((item) => inferSupportSectionAnchor(item.reference, { allowGreenSlipInferred: allowGreenSlipSupport }))
     .filter((value): value is string => Boolean(value))
     .slice(0, 6);
   const supportWeakMatchWarning =
@@ -6527,6 +6825,7 @@ function buildSupportFocusedCandidates(args: {
   ]);
   const matchedTerms = extractSupportIntentTerms(args.question, args.answerText);
   const comparisonSides = detectComparisonSupportSides(args.question);
+  const allowGreenSlipSupport = questionAllowsGreenSlipSupport(args.question);
   const silverSlipQuery =
     args.question.toLowerCase().includes("silver slip") || /\bss\b/.test(args.question.toLowerCase());
   const pcsSwapScenario = detectPcsSwapScenario(args.question);
@@ -7021,61 +7320,61 @@ function buildSupportFocusedCandidates(args: {
                 section: chunk.section,
                 label: [chunk.title ?? "", ...(chunk.sectionAnchors ?? [])].join(" "),
                 quoteSnippet: chunk.text,
-              })
+              }, { allowGreenSlipInferred: allowGreenSlipSupport })
             : (pcsSwapScenario && pcsSpecificHits.length > 0)
             ? inferSupportSectionAnchor({
                 section: chunk.section,
                 label: [chunk.title ?? "", ...(chunk.sectionAnchors ?? [])].join(" "),
                 quoteSnippet: chunk.text,
-              })
+              }, { allowGreenSlipInferred: allowGreenSlipSupport })
             : (vacationBankScenario && vacationSpecificHits.length > 0)
               ? inferSupportSectionAnchor({
                   section: chunk.section,
                   label: [chunk.title ?? "", ...(chunk.sectionAnchors ?? [])].join(" "),
                   quoteSnippet: chunk.text,
-                })
+                }, { allowGreenSlipInferred: allowGreenSlipSupport })
             : (payCreditConsistencyScenario && payCreditSpecificHits.length > 0)
               ? inferSupportSectionAnchor({
                   section: chunk.section,
                   label: [chunk.title ?? "", ...(chunk.sectionAnchors ?? [])].join(" "),
                   quoteSnippet: chunk.text,
-                })
+                }, { allowGreenSlipInferred: allowGreenSlipSupport })
             : (qsCallOrderScenario && qsCallOrderSpecificHits.length > 0)
               ? inferSupportSectionAnchor({
                   section: chunk.section,
                   label: [chunk.title ?? "", ...(chunk.sectionAnchors ?? [])].join(" "),
                   quoteSnippet: chunk.text,
-                })
+                }, { allowGreenSlipInferred: allowGreenSlipSupport })
             : (oeNotificationScenario && oeNotificationDirectSupport)
               ? inferSupportSectionAnchor({
                   section: chunk.section,
                   label: [chunk.title ?? "", ...(chunk.sectionAnchors ?? [])].join(" "),
                   quoteSnippet: chunk.text,
-                })
+                }, { allowGreenSlipInferred: allowGreenSlipSupport })
             : (contactabilityScenario && contactabilitySpecificHits.length > 0)
               ? inferSupportSectionAnchor({
                   section: chunk.section,
                   label: [chunk.title ?? "", ...(chunk.sectionAnchors ?? [])].join(" "),
                   quoteSnippet: chunk.text,
-                })
+                }, { allowGreenSlipInferred: allowGreenSlipSupport })
             : (shortCallNotificationScenario && shortCallNotificationSpecificHits.length > 0)
               ? inferSupportSectionAnchor({
                   section: chunk.section,
                   label: [chunk.title ?? "", ...(chunk.sectionAnchors ?? [])].join(" "),
                   quoteSnippet: chunk.text,
-                })
+                }, { allowGreenSlipInferred: allowGreenSlipSupport })
             : (rerouteConsistencyScenario && rerouteSpecificHits.length > 0)
               ? inferSupportSectionAnchor({
                   section: chunk.section,
                   label: [chunk.title ?? "", ...(chunk.sectionAnchors ?? [])].join(" "),
                   quoteSnippet: chunk.text,
-                })
+                }, { allowGreenSlipInferred: allowGreenSlipSupport })
             : (futureRotationChangeScenario && futureRotationSpecificHits.length > 0)
               ? inferSupportSectionAnchor({
                   section: chunk.section,
                   label: [chunk.title ?? "", ...(chunk.sectionAnchors ?? [])].join(" "),
                   quoteSnippet: chunk.text,
-                })
+                }, { allowGreenSlipInferred: allowGreenSlipSupport })
             : sectionMatch.anchor,
       };
     })
@@ -7143,7 +7442,10 @@ function buildSupportFocusedCandidates(args: {
       title: `${item.chunk.title ?? item.chunk.section}${displayTerms.length > 0 ? ` — ${displayTerms.join(" / ")}` : ""}`,
       section: item.matchedSectionAnchor
         ? item.matchedSectionAnchor
-        : inferSupportSectionAnchor({ section: item.chunk.section, label: item.chunk.title, quoteSnippet: item.chunk.text }),
+        : inferSupportSectionAnchor(
+            { section: item.chunk.section, label: item.chunk.title, quoteSnippet: item.chunk.text },
+            { allowGreenSlipInferred: allowGreenSlipSupport }
+          ),
       quoteSnippet: item.chunk.text.slice(0, 420),
       note: item.chunk.title,
       score: item.score,
@@ -7872,6 +8174,7 @@ export function buildRuleLedBottomLine(args: {
 }
 
 type ScenarioValidationResult = {
+  scenarioFamilySelected: string;
   missingGatingFacts: string[];
   answerIsConditional: boolean;
   gatingQuestion?: ClarifyingQuestion;
@@ -7879,6 +8182,67 @@ type ScenarioValidationResult = {
   conditionalWhy?: string;
   turningCondition?: string;
 };
+
+function detectScenarioValidationFamily(question: string) {
+  if (detectShortCallNotificationScenario(question)) return "shortCallNotificationScenario";
+  if (detectRestLegalityScenario(question)) return "restLegalityScenario";
+  if (detectPbRerouteXdayScenario(question)) return "pbRerouteXdayScenario";
+  if (detectPayCreditConsistencyScenario(question)) return "payCreditConsistencyScenario";
+  return "genericScenario";
+}
+
+function hasClockOrDurationSignal(questionLower: string) {
+  return (
+    /\b\d{1,2}:\d{2}\b/.test(questionLower) ||
+    /\b\d{3,4}\b/.test(questionLower) ||
+    /\b\d+\s*hours?\b/.test(questionLower) ||
+    /\b\d+\s*days?\b/.test(questionLower) ||
+    /\b30-hour\b/.test(questionLower) ||
+    /\b30 hour\b/.test(questionLower) ||
+    /\b9:45\b/.test(questionLower) ||
+    /\b9:15\b/.test(questionLower) ||
+    /\b10 hours?\b/.test(questionLower) ||
+    /\b18 hours?\b/.test(questionLower) ||
+    /\b12 hours?\b/.test(questionLower)
+  );
+}
+
+function hasCreditValueSignals(questionLower: string) {
+  return (
+    /\b\d{1,2}:\d{2}\b/.test(questionLower) ||
+    /\bprojected credit\b/.test(questionLower) ||
+    /\bfinal credit\b/.test(questionLower) ||
+    /\bcredit time\b/.test(questionLower) ||
+    /\btimecard\b/.test(questionLower)
+  );
+}
+
+function buildMissingFactClarifier(args: {
+  id: string;
+  prompt: string;
+  factField: keyof ParsedScenarioFacts;
+  conditionalBottomLine: string;
+  conditionalWhy: string;
+  turningCondition: string;
+  missingGatingFacts: string[];
+  scenarioFamilySelected: string;
+}): ScenarioValidationResult {
+  return {
+    scenarioFamilySelected: args.scenarioFamilySelected,
+    missingGatingFacts: args.missingGatingFacts,
+    answerIsConditional: true,
+    turningCondition: args.turningCondition,
+    conditionalBottomLine: args.conditionalBottomLine,
+    conditionalWhy: args.conditionalWhy,
+    gatingQuestion: {
+      id: args.id,
+      prompt: args.prompt,
+      factField: args.factField,
+      required: true,
+      quickReplies: buildQuickRepliesForField(args.factField),
+    },
+  };
+}
 
 function questionMentionsBeforeAfterReport(questionLower: string) {
   return (
@@ -7896,12 +8260,143 @@ export function resolveScenarioValidation(args: {
   const questionLower = args.question.toLowerCase();
   const packetSection = args.governingPacket?.section ?? "";
   const packetContent = (args.governingPacket?.content ?? "").toLowerCase();
+  const scenarioFamilySelected = detectScenarioValidationFamily(args.question);
+
+  if (scenarioFamilySelected === "shortCallNotificationScenario") {
+    const hasPlacementTime =
+      /\bplaced at\b/.test(questionLower) ||
+      /\bplacement time\b/.test(questionLower) ||
+      /\bawarded at\b/.test(questionLower) ||
+      /\bshowed up at\b/.test(questionLower) ||
+      /\bappeared at\b/.test(questionLower);
+    const hasShortCallStartTime =
+      /\bassignment start\b/.test(questionLower) ||
+      /\bshort-call start\b/.test(questionLower) ||
+      /\bshort call start\b/.test(questionLower) ||
+      /\b18 hours\b/.test(questionLower) ||
+      /\b12 hours\b/.test(questionLower) ||
+      /\b\d{1,2}:\d{2}\b/.test(questionLower);
+    const hasReleaseContext =
+      !(/\bvacation\b|\bnon-fly day\b|\bnon fly day\b/.test(questionLower)) ||
+      /\brelease\b|\breleased\b|\blast day of vacation\b|\bafter vacation\b|\bafter the vacation\b/.test(questionLower);
+    const hasNoticeMethod =
+      /\bphone\b|\barcos\b|\bcno\b|\bcompany notification online\b|\bmicrew\b|\bicrew\b|\backnowledge\b|\backnowledgment\b/.test(questionLower);
+    const missingGatingFacts = [
+      !hasPlacementTime ? "the assignment placement time" : null,
+      !hasShortCallStartTime ? "the short-call assignment start time" : null,
+      !hasReleaseContext ? "the release time from the prior vacation or non-fly day" : null,
+      !hasNoticeMethod ? "whether notice came by phone, ARCOS, CNO, or only iCrew/MiCrew placement" : null,
+    ].filter((value): value is string => Boolean(value));
+    if (missingGatingFacts.length >= 2 || (!hasPlacementTime && !hasNoticeMethod)) {
+      return buildMissingFactClarifier({
+        id: "gating-short-call-notification-facts",
+        prompt:
+          "What were the assignment placement time and short-call start time, and did notice come by phone, ARCOS, CNO, or only iCrew/MiCrew placement?",
+        factField: "eventTiming",
+        missingGatingFacts,
+        scenarioFamilySelected,
+        turningCondition:
+          "the timing of placement versus short-call start and the actual notice method used",
+        conditionalBottomLine:
+          "This turns on exactly when the assignment was placed, when short call started, and whether the company used a notice method the rule actually recognizes.",
+        conditionalWhy:
+          "Without the placement time, short-call start, and notice method, I can only guess whether this was a valid short-call notification or a notice failure.",
+      });
+    }
+  }
+
+  if (scenarioFamilySelected === "restLegalityScenario" && !questionLower.includes("timing shown")) {
+    const hasRestMetric =
+      /\b30-hour\b|\b30 hour\b|\b9:45\b|\b9:15\b|\b10 hours?\b|\bdh-only\b|\bfdp\b/.test(questionLower);
+    const hasTimingContext =
+      hasClockOrDurationSignal(questionLower) ||
+      /\breport\b|\brelease\b|\boperate day 1\b|\bday 1\b/.test(questionLower);
+    const hasFarVsPwaContext =
+      /\bfar legal\b|\bpwa requirement\b|\brelease with pay\b/.test(questionLower);
+    const missingGatingFacts = [
+      !hasRestMetric ? "the scheduled and actual rest values" : null,
+      !hasTimingContext ? "the report and release timing around the rest break" : null,
+      !hasFarVsPwaContext ? "whether the question is about FAR legality, PWA legality, or release/pay treatment" : null,
+    ].filter((value): value is string => Boolean(value));
+    if (missingGatingFacts.length >= 2 || (!hasRestMetric && !hasTimingContext)) {
+      return buildMissingFactClarifier({
+        id: "gating-rest-legality-facts",
+        prompt:
+          "What were the scheduled rest, actual rest achieved, and the report/release times around the break?",
+        factField: "eventTiming",
+        missingGatingFacts,
+        scenarioFamilySelected,
+        turningCondition: "the actual rest achieved versus the scheduled rest and the surrounding report/release times",
+        conditionalBottomLine:
+          "This turns on the actual rest achieved and the report/release timing, because FAR legality and PWA legality do not always resolve the same way.",
+        conditionalWhy:
+          "Without the actual rest and the timing around the break, I cannot cleanly tell you whether this is only FAR-legal, also PWA-legal, or a release/pay issue.",
+      });
+    }
+  }
+
+  if (scenarioFamilySelected === "pbRerouteXdayScenario") {
+    const hasOriginalLength = /\b2-day\b|\b2 day\b|\boriginal\b|\bqs pickup\b/.test(questionLower);
+    const hasModifiedLength = /\b3-day\b|\b3 day\b|\bextended\b|\bextension\b|\breroute\b/.test(questionLower);
+    const hasCodingContext =
+      /\bx-day\b|\bx day\b|\binterrupted\b|\bpb\b|\bpr\b|\blc\b|\bdart\b/.test(questionLower);
+    const hasQuestionTarget =
+      /\bpay\b|\brestore\b|\breappl(?:y|ied)\b|\blegality\b|\bnotification\b/.test(questionLower);
+    const missingGatingFacts = [
+      !(hasOriginalLength && hasModifiedLength) ? "the original and modified rotation length" : null,
+      !hasCodingContext ? "how the X-day, PB, PR, and LC coding changed after the reroute" : null,
+      !hasQuestionTarget ? "whether you are asking about pay, PB restoration, legality, or notice" : null,
+    ].filter((value): value is string => Boolean(value));
+    if (missingGatingFacts.length >= 2) {
+      return buildMissingFactClarifier({
+        id: "gating-pb-reroute-xday-facts",
+        prompt:
+          "What was the original rotation length, what did it change to, and how are the X-day/PB/LC days coded now?",
+        factField: "questionIntent",
+        missingGatingFacts,
+        scenarioFamilySelected,
+        turningCondition: "the original versus modified trip shape and how the X-day/PB/LC coding changed",
+        conditionalBottomLine:
+          "This turns on how the reroute changed the trip and how the system coded the X-day, PB, PR, and LC pieces afterward.",
+        conditionalWhy:
+          "Without the before/after trip shape and the current coding, a PB/X-day answer turns into guesswork instead of a real processing analysis.",
+      });
+    }
+  }
+
+  if (scenarioFamilySelected === "payCreditConsistencyScenario") {
+    const hasOriginalCredit = /\boriginal credit\b|\brotation showed\b|\bstarted at\b|\b21 hours\b/.test(questionLower);
+    const hasProjectedOrFinalCredit =
+      /\bprojected credit\b|\bcredit jumped\b|\bfinal credit\b|\breverted\b|\bwent back\b|\b24:35\b/.test(questionLower);
+    const hasChangeDriver =
+      /\bdeadhead\b|\bdeviat(?:e|ion)\b|\blayover\b|\brest\b|\bcloseout\b|\btimecard\b|\bsegment\b/.test(questionLower);
+    const missingGatingFacts = [
+      !(hasOriginalCredit && hasProjectedOrFinalCredit) ? "the original, projected, and final credit values" : null,
+      !hasChangeDriver ? "what changed between the projected and final versions" : null,
+    ].filter((value): value is string => Boolean(value));
+    if (missingGatingFacts.length >= 2) {
+      return buildMissingFactClarifier({
+        id: "gating-credit-recalculation-facts",
+        prompt:
+          "What were the original credit, projected credit, and final credit, and what changed between those versions?",
+        factField: "questionIntent",
+        missingGatingFacts,
+        scenarioFamilySelected,
+        turningCondition: "the original, projected, and final credit values plus the change that drove the recalculation",
+        conditionalBottomLine:
+          "This turns on the original versus projected versus final credit values and the exact event that changed the duty or closeout calculation.",
+        conditionalWhy:
+          "Without those credit values and the change driver, I cannot tell whether this was a temporary display issue, a deadhead/deviation effect, or a final closeout recalculation.",
+      });
+    }
+  }
 
   const isApd = /\bapd\b/.test(questionLower) || questionLower.includes("authorized personal drop");
   if (isApd && (packetSection.includes("23 I.10") || packetContent.includes("25% of the number of reserves required"))) {
     const { required, available } = parseRequiredAndAvailable(args.question);
     if (required === null || available === null) {
       return {
+        scenarioFamilySelected,
         missingGatingFacts: ["required and available reserve counts at the time of processing"],
         answerIsConditional: true,
         turningCondition: "whether available reserves were at least 25% of required at the time APD was processed",
@@ -7919,6 +8414,7 @@ export function resolveScenarioValidation(args: {
       };
     }
     return {
+      scenarioFamilySelected,
       missingGatingFacts: [],
       answerIsConditional: false,
     };
@@ -7940,6 +8436,7 @@ export function resolveScenarioValidation(args: {
       questionLower.includes("outside 18 hours");
     if (!contactWindowKnown) {
       return {
+        scenarioFamilySelected,
         missingGatingFacts: ["whether the GS report was within 18 hours of first attempted contact"],
         answerIsConditional: true,
         turningCondition: "whether the GS report fell within the 18-hour long-call contact window",
@@ -7970,6 +8467,7 @@ export function resolveScenarioValidation(args: {
       questionMentionsBeforeAfterReport(questionLower);
     if (!timingKnown) {
       return {
+        scenarioFamilySelected,
         missingGatingFacts: ["whether the trip change happened before or after report"],
         answerIsConditional: true,
         turningCondition: "whether the change happened before report or after report",
@@ -8004,6 +8502,7 @@ export function resolveScenarioValidation(args: {
       questionLower.includes("after i cleared");
     if (!relationshipKnown) {
       return {
+        scenarioFamilySelected,
         missingGatingFacts: ["whether the pickup overlapped the sick day or happened after the sick period ended"],
         answerIsConditional: true,
         turningCondition: "whether the pickup overlapped the sick day or happened after sick cleared",
@@ -8027,6 +8526,7 @@ export function resolveScenarioValidation(args: {
   }
 
   return {
+    scenarioFamilySelected,
     missingGatingFacts: [],
     answerIsConditional: false,
   };
@@ -8190,1886 +8690,171 @@ export async function handleContractCopilotRoute(request: Request): Promise<Resp
     ...evidenceDebug,
   };
 
-  const fallbackResult = runContractCopilot(parsedRequest.question, session);
-  const searchableChunks = [...contractIndex.pwaChunks, ...contractIndex.compensationChunks, ...contractIndex.schedulerChunks];
-  const knownInteractionRules = getActiveKnownInteractionRules({
-    question: parsedRequest.question,
-    facts: session.facts,
-  });
-  const matchedInteractionRule = knownInteractionRules[0];
-  const governingSectionRoute = resolveGoverningSections({
-    question: parsedRequest.question,
-    facts: session.facts,
-    scenario: fallbackResult.detectedScenario,
-    matchedInteractionRules: knownInteractionRules,
-  });
-  const routedGoverningSections = governingSectionRoute.highConfidence.map(
-    (item) => `${item.source}:${item.section}`
-  );
-  const constrainedSearchChunks = filterChunksForGoverningRoute({
-    chunks: searchableChunks,
-    route: governingSectionRoute,
-  });
-  let searchMode: "constrained" | "global" | "constrained_then_global" =
-    constrainedSearchChunks.length > 0 ? "constrained" : "global";
-  let routingFallbackOccurred = false;
-  let primaryMatches = searchContractDocuments({
-    question: parsedRequest.question,
-    chunks: constrainedSearchChunks.length > 0 ? constrainedSearchChunks : searchableChunks,
-    rememberedFacts: session.facts,
-    deterministicScenario: fallbackResult.answer.scenarioLabel,
-    maxMatches: 8,
-  });
-  const chunkMap = new Map(searchableChunks.map((chunk) => [chunk.id, chunk]));
-  let expandedMatches = expandContractMatches({
-    matches: primaryMatches,
-    chunkMap,
-    maxExpanded: 10,
-  });
-  let linkedMatches = linkRelatedContractSections({
-    matches: [...primaryMatches, ...expandedMatches],
-    allChunks: searchableChunks,
-    maxLinked: 8,
-  });
-  let governingSectionCandidates = [
-    ...governingSectionRoute.highConfidence,
-    ...governingSectionRoute.fallbackCandidates,
-  ];
-  let sectionPackets = buildSectionAwarePackets({
-    candidates: governingSectionCandidates,
-    allChunks: searchableChunks,
-    primaryMatches,
-    expandedMatches,
-    linkedMatches,
-  });
-  if (
-    constrainedSearchChunks.length > 0 &&
-    (!hasUsableRuleMatches(primaryMatches) || !hasUsableGoverningPackets(sectionPackets))
-  ) {
-    routingFallbackOccurred = true;
-    searchMode = "constrained_then_global";
-    primaryMatches = searchContractDocuments({
-      question: parsedRequest.question,
-      chunks: searchableChunks,
-      rememberedFacts: session.facts,
-      deterministicScenario: fallbackResult.answer.scenarioLabel,
-      maxMatches: 8,
-    });
-    expandedMatches = expandContractMatches({
-      matches: primaryMatches,
-      chunkMap,
-      maxExpanded: 10,
-    });
-    linkedMatches = linkRelatedContractSections({
-      matches: [...primaryMatches, ...expandedMatches],
-      allChunks: searchableChunks,
-      maxLinked: 8,
-    });
-    sectionPackets = buildSectionAwarePackets({
-      candidates: governingSectionCandidates,
-      allChunks: searchableChunks,
-      primaryMatches,
-      expandedMatches,
-      linkedMatches,
-    });
-  }
-  const seededRetrievedSupport = retrieveContractCopilotSnippets({
-    question: parsedRequest.question,
-    rememberedFacts: session.facts,
-    deterministicScenario: fallbackResult.answer.scenarioLabel,
-    maxSnippets: 4,
-  }).map((item) => ({
-    sourceLabel:
-      item.ruleType === "inference"
-        ? "Inference"
-        : item.sourceId === "pwa"
-          ? "PWA"
-          : "Scheduler Manual",
-    sourceId: item.sourceId,
-    ruleType: item.ruleType,
-    ruleId: item.ruleId,
-    scenario: item.scenario,
-    title: item.title,
-    section: item.section,
-    quoteSnippet: item.quoteSnippet,
-    note: item.note,
-    score: item.score,
-    matchedTerms: item.matchedTerms,
-  }));
-  const deterministicGroundingSnippets = fallbackResult.answer.references.map(toGroundingSnippetFromDeterministic);
-  const groundingPack = assembleContractGroundingContext({
-    question: parsedRequest.question,
-    primaryMatches,
-    expandedMatches,
-    linkedMatches,
-    sectionPackets,
-    supplementalSnippets: seededRetrievedSupport.map(toGroundingSnippetFromSeededRetrieved),
-    deterministicSnippets: deterministicGroundingSnippets,
-    policy: contractCopilotAIWorkflow.groundingPolicy,
-  });
-  const sourceUsageDebug = buildSourceUsageDebug({
-    question: parsedRequest.question,
-    intent: intentResolution,
+  const legacyCompatArgs = {
+    parsedRequest,
+    session,
     contractIndex,
-    groundingPack,
-  });
-  const retrievedSupportBase = [
-    ...groundingPack.internal.pwa,
-    ...groundingPack.internal.compensationManual,
-    ...groundingPack.internal.schedulerManual,
-  ]
-    .filter((item) => !item.metadata?.packetType)
-    .slice(0, 6)
-    .map((item) => ({
-      sourceLabel: item.sourceLabel,
-      sourceId:
-        item.tier === "pwa"
-          ? ("pwa" as const)
-          : item.tier === "compensation_manual"
-            ? ("compensation_manual" as const)
-            : ("scheduler_manual" as const),
-      ruleType:
-        item.tier === "pwa"
-          ? ("contract" as const)
-          : item.tier === "compensation_manual"
-            ? ("scheduler_practice" as const)
-            : item.tier === "scheduler_manual"
-            ? ("scheduler_practice" as const)
-            : ("inference" as const),
-      ruleId: String(item.metadata?.ruleId ?? item.id),
-      scenario: String(item.metadata?.scenario ?? fallbackResult.answer.scenarioLabel),
-      title: String(item.metadata?.title ?? item.note ?? item.section),
-      section: item.section,
-      quoteSnippet: item.snippet,
-      note: item.note,
-      score: item.relevanceScore,
-      matchedTerms: item.matchedTerms ?? [],
-    }));
-  const supportFocusedCandidates = buildSupportFocusedCandidates({
-    question: parsedRequest.question,
-    answerText: `${fallbackResult.answer.shortAnswer} ${fallbackResult.answer.plainEnglishExplanation ?? ""}`,
-    chunks: searchableChunks,
-    scenarioLabel: fallbackResult.answer.scenarioLabel,
-  });
-  const supportFocusedReferences = supportFocusedCandidates.map(retrievedSnippetToAnswerReference);
-  const retrievedSupport = [...retrievedSupportBase, ...supportFocusedCandidates]
-    .sort((left, right) => (right.score ?? 0) - (left.score ?? 0))
-    .filter(
-      (item, index, items) =>
-        items.findIndex(
-          (candidate) =>
-            candidate.sourceId === item.sourceId &&
-            candidate.section === item.section &&
-            candidate.quoteSnippet === item.quoteSnippet
-        ) === index
-    )
-    .slice(0, 10);
-  const governingSourcePriorityUsed = determineSourcePriorityForQuestion(parsedRequest.question).map(
-    (item) => item.sourceLabel
-  );
-  const governingSectionsSelected = groundingPack.sectionPackets.governingSections.map(
-    (item) => `${item.sourceLabel}:${item.section}`
-  );
-  const inferredPilotStatus = inferPilotStatus(parsedRequest.question);
-  const xDayScenario =
-    /\bx-days?\b/i.test(parsedRequest.question) ||
-    /\bx days?\b/i.test(parsedRequest.question) ||
-    /interrupted x-days?/i.test(parsedRequest.question) ||
-    /lost x-day/i.test(parsedRequest.question) ||
-    /x-day credit/i.test(parsedRequest.question);
-  const governingSectionIncludesXDay = governingSectionsSelected.some((item) =>
-    /23 l\.9|x-day/i.test(item)
-  );
-  const xDayGroupingScenario = detectXDayGroupingScenario(parsedRequest.question);
-  const pbRerouteXdayScenario = detectPbRerouteXdayScenario(parsedRequest.question);
-  const futureRotationChangeScenario = detectFutureRotationChangeScenario(parsedRequest.question);
-  const pcsSwapScenario = detectPcsSwapScenario(parsedRequest.question);
-  const governingSectionIncludesPcsSwap = governingSectionsSelected.some((item) =>
-    /pcs|swap|bid period|reserve coverage|capped reserve|max pickup|carry-out|open time/i.test(item)
-  );
-  const vacationBankScenario = detectVacationBankScenario(parsedRequest.question);
-  const governingSectionIncludesVacationBank = governingSectionsSelected.some((item) =>
-    /section 7|vacation|bank|replacement|sup|ivd|vacation year/i.test(item)
-  );
-  const shortCallDutyScenario = detectShortCallDutyScenario(parsedRequest.question);
-  const governingSectionIncludesDutyLegality = governingSectionsSelected.some((item) =>
-    /23 s|section 12|short call/i.test(item)
-  );
-  const governingPacketUsed = selectPreferredGoverningPacket({
-    question: parsedRequest.question,
-    governingPackets: groundingPack.sectionPackets.governingSections,
-  });
-  const controllingSectionLock = buildControllingSectionLock({
-    question: parsedRequest.question,
-    governingPacket: governingPacketUsed,
-    chunks: searchableChunks,
-  });
-  const workedExamplePacketUsed = selectPreferredWorkedExamplePacket({
-    question: parsedRequest.question,
-    workedExamples: groundingPack.sectionPackets.workedExamples,
-  });
-  const finalGoverningSectionUsed =
-    governingPacketUsed ? `${governingPacketUsed.sourceLabel}:${governingPacketUsed.section}` : governingSectionsSelected[0];
-  const contextPacketSummary = {
-    governingSections: groundingPack.sectionPackets.governingSections.map(
-      (item) => `${item.sourceLabel}:${item.section}`
-    ),
-    exceptionsNotes: groundingPack.sectionPackets.exceptionsNotes.map(
-      (item) => `${item.sourceLabel}:${item.section}`
-    ),
-    workedExamples: groundingPack.sectionPackets.workedExamples.map(
-      (item) => `${item.sourceLabel}:${item.section}`
-    ),
-    interactionRuleLinkedSections: groundingPack.sectionPackets.interactionLinkedSections.map(
-      (item) => `${item.sourceLabel}:${item.section}`
-    ),
-    compensationSupport: groundingPack.sectionPackets.compensationSupport.map(
-      (item) => `${item.sourceLabel}:${item.section}`
-    ),
-    schedulerSupport: groundingPack.sectionPackets.schedulerSupport.map(
-      (item) => `${item.sourceLabel}:${item.section}`
-    ),
+    intentResolution,
+    intentDebugBase,
+    laneExecution,
+    isComplexScenarioQuestion,
+    deps: {
+      jsonResponse,
+      createOpenAIModelClient,
+      consoleAIWorkflowLogger,
+      sourceLabelFromReference,
+      assembleContractGroundingContext,
+      buildSectionAwarePackets,
+      determineSourcePriorityForQuestion,
+      expandContractMatches,
+      filterChunksForGoverningRoute,
+      getActiveKnownInteractionRules,
+      hasUsableGoverningPackets,
+      hasUsableRuleMatches,
+      linkRelatedContractSections,
+      resolveGoverningSections,
+      searchContractDocuments,
+      runAIWorkflow,
+      contractCopilotAIWorkflow,
+      contractCopilotFinalSynthesisWorkflow,
+      retrieveContractCopilotSnippets,
+      synthesizeContractCopilotTopAnswer,
+      verifyContractScenarioAnswer,
+      AIValidationError,
+      runLegacyContractCopilot,
+      buildRetrievalSourcesUsed,
+      buildContractScenarioToolsUsed,
+      buildSourceUsageDebug,
+      augmentSourceUsageWithReferences,
+      buildSafeScenarioFallbackAnswer,
+      buildScenarioClarificationResponse,
+      applyScenarioAnswerVerifier,
+      finalizeScenarioSafetyPipeline,
+      retrievedSnippetToAnswerReference,
+      toGroundingSnippetFromDeterministic,
+      toGroundingSnippetFromSeededRetrieved,
+      selectVisibleContractReferences,
+      buildFinalVisibleSupportDebug,
+      applyComparisonSupportNote,
+      rerankSupportReferences,
+      buildSupportFocusedCandidates,
+      selectDebugRetrievedSnippets,
+      mergeAnswerReferencedSupport,
+      buildControllingSectionLock,
+      applyControllingSectionLock,
+      selectPreferredGoverningPacket,
+      selectPreferredWorkedExamplePacket,
+      resolveScenarioValidation,
+      inferPilotStatus,
+      detectXDayGroupingScenario,
+      detectPbRerouteXdayScenario,
+      detectFutureRotationChangeScenario,
+      detectPcsSwapScenario,
+      detectVacationBankScenario,
+      detectShortCallDutyScenario,
+      filterClarifyingQuestionsForInference,
+      mapScenarioLabelToFamily,
+      inferClarifyingQuestion,
+      aiResultFromPartial,
+      normalizeExtractedFacts,
+      isWeakContractCopilotAIResponse,
+      buildGroundedReferences,
+      tryParsePartialAIOutput,
+      trimToTwoSentences,
+      selectVisibleSupportLevel,
+      buildBestGuessShortAnswer,
+      buildRuleLedBottomLine,
+      normalizeForComparison,
+      bottomLineLooksGeneric,
+      bottomLineIsClassificationOnly,
+      bottomLineReflectsGoverningRule,
+    },
   };
 
-  console.log("=== RETRIEVED CONTRACT SNIPPETS ===");
-  console.dir(
-    {
-      count: retrievedSupport.length,
-      sections: retrievedSupport.map((item) => item.section),
-      snippets: retrievedSupport.map((item) => ({
-        section: item.section,
-        sourceLabel: item.sourceLabel,
-        quoteSnippet: item.quoteSnippet,
-        score: item.score,
-        matchedTerms: item.matchedTerms,
-      })),
-    },
-    { depth: null }
-  );
-  console.log("=== GROUNDING PACK ===");
-  console.dir(
-    {
-      hasPwaIndex: contractIndex.hasPwaIndex,
-      hasCompensationIndex: contractIndex.hasCompensationIndex,
-      hasSchedulerIndex: contractIndex.hasSchedulerIndex,
-      compensationIndexPath: contractIndex.compensationIndexPath,
-      schedulerIndexPath: contractIndex.schedulerIndexPath,
-      pwaIndexPath: contractIndex.pwaIndexPath,
-      retrievalPassCounts: {
-        primary: primaryMatches.length,
-        expanded: expandedMatches.length,
-        linked: linkedMatches.length,
-      },
-      governingSectionCandidates: governingSectionCandidates.map((item) => ({
-        source: item.source,
-        section: item.section,
-        reason: item.reason,
-        priority: item.priority,
-      })),
-      sectionPackets: sectionPackets.map((item) => ({
-        sourceLabel: item.sourceLabel,
-        section: item.section,
-        packetType: item.packetType,
-        pages: item.pages,
-        usedSectionExpansion: item.usedSectionExpansion,
-        crossRefsFollowed: item.crossRefsFollowed,
-      })),
-      internalCounts: {
-        pwa: groundingPack.internal.pwa.length,
-        compensationManual: groundingPack.internal.compensationManual.length,
-        schedulerManual: groundingPack.internal.schedulerManual.length,
-        crewtoolsLogic: groundingPack.internal.crewtoolsLogic.length,
-      },
-      externalCounts: {
-        webDiscussion: groundingPack.external.webDiscussion.length,
-        forumUnofficial: groundingPack.external.forumUnofficial.length,
-      },
-      retrievalMeta: groundingPack.retrievalMeta,
-    },
-    { depth: null }
-  );
-  console.log("=== KNOWN INTERACTION RULES ===");
-  console.dir(knownInteractionRules, { depth: null });
-
-  const apiKey = process.env.OPENAI_API_KEY;
-  let modelClientCalled = false;
-  let modelClientSucceeded = false;
-  let modelClientError: string | undefined;
-  let aiSynthesisAttempted = false;
-  let aiSynthesisUsedDebug = false;
-  let aiSynthesisRejected = false;
-  let aiRejectionReason: string | undefined;
-  const documentShortcutUsed = intentResolution.selectedLane === "document_section_explanation";
-  const clarificationReason =
-    intentResolution.selectedLane === "clarification_needed"
-      ? intentResolution.missingFields.join(", ")
-      : undefined;
-
-  if (!apiKey) {
-    const safeMissingKeyAnswer = buildSafeScenarioFallbackAnswer({
-      question: parsedRequest.question,
-      answer: {
-        ...fallbackResult.answer,
-        assumptions: [
-          ...fallbackResult.answer.assumptions,
-          "AI fallback mode is active because OPENAI_API_KEY is not configured.",
-        ],
-      },
-      retrievedSupport,
-      sourceUsageDebug,
-      missingGatingFacts: [],
-    });
-    const verifiedMissingKeyFallbackAnswer = applyScenarioAnswerVerifier({
-      question: parsedRequest.question,
-      selectedLane: intentResolution.selectedLane,
-      answer: safeMissingKeyAnswer,
-      contractIndex,
-      sourceUsageDebug,
-    });
-    const missingKeyAnswerSupport = mergeAnswerReferencedSupport({
-      answerText: `${verifiedMissingKeyFallbackAnswer.answer.shortAnswer} ${verifiedMissingKeyFallbackAnswer.answer.plainEnglishExplanation}`,
-      references: verifiedMissingKeyFallbackAnswer.answer.references,
-      chunks: searchableChunks,
-    });
-    const rerankedMissingKeySupport = rerankSupportReferences({
-      question: parsedRequest.question,
-      answerText: `${verifiedMissingKeyFallbackAnswer.answer.shortAnswer} ${verifiedMissingKeyFallbackAnswer.answer.plainEnglishExplanation}`,
-      references: [
-        ...missingKeyAnswerSupport.references,
-        ...(controllingSectionLock?.reference ? [controllingSectionLock.reference] : []),
-        ...supportFocusedReferences,
-      ],
-      selectedLane: intentResolution.selectedLane,
-    });
-    const missingKeyVisibleReferences = selectVisibleContractReferences(rerankedMissingKeySupport.references);
-    const missingKeyFinalVisibleSupportDebug = buildFinalVisibleSupportDebug(
-      missingKeyVisibleReferences,
-      rerankedMissingKeySupport.debug as Record<string, unknown>
-    );
-    const missingKeyAnswerWithComparisonNote = applyComparisonSupportNote({
-      question: parsedRequest.question,
-      answer: {
-        ...verifiedMissingKeyFallbackAnswer.answer,
-        references: missingKeyVisibleReferences,
-      },
-      references: missingKeyVisibleReferences,
-    });
-    const missingKeyAnswerWithControllingSection = applyControllingSectionLock({
-      answer: missingKeyAnswerWithComparisonNote,
-      controllingSectionLock,
-    });
-    const finalizedMissingKeyScenarioAnswer = finalizeScenarioSafetyPipeline({
-      question: parsedRequest.question,
-      answer: missingKeyAnswerWithControllingSection,
-      verified: verifiedMissingKeyFallbackAnswer,
-      supportDebug: {
-        ...rerankedMissingKeySupport.debug,
-        ...missingKeyFinalVisibleSupportDebug,
-        answerReferencedSections: missingKeyAnswerSupport.answerReferencedSections,
-        supportInjectedFromAnswer: missingKeyAnswerSupport.supportInjectedFromAnswer,
-        supportMissingForReferencedSection: missingKeyAnswerSupport.missingSections.length > 0,
-        controllingSectionLocked: Boolean(controllingSectionLock),
-        controllingSectionDisplay: controllingSectionLock?.displaySection,
-        controllingSectionQuoteAttached: Boolean(controllingSectionLock?.quoteSnippet),
-        controllingSectionQuote: controllingSectionLock?.quoteSnippet,
-        controllingSectionMissingExactText: controllingSectionLock?.exactAttached === false,
-      },
-    });
-
-    return jsonResponse(200, {
-      ok: true,
-      mode: "fallback",
-      answer: finalizedMissingKeyScenarioAnswer.answer,
-      detectedScenario: fallbackResult.detectedScenario,
-      nextSession: fallbackResult.nextSession,
-      meta: {
-        fallbackReason: "missing_api_key",
-      },
-      debug:
-        process.env.NODE_ENV !== "production"
-          ? {
-              mode: "fallback",
-              fallbackReason: "missing_api_key",
-              retrievedSnippetCount: retrievedSupport.length,
-              retrievedSections: retrievedSupport.map((item) => item.section),
-              knownInteractionRuleIds: knownInteractionRules.map((item) => item.id),
-              matchedInteractionRuleId: matchedInteractionRule?.id,
-              matchedInteractionRuleTitle: matchedInteractionRule?.title,
-              matchedInteractionRuleGoverningSources: matchedInteractionRule?.governingSources.map(
-                (source) => `${source.source}:${source.section}`
-              ),
-              matchedInteractionRuleReasoningSteps: matchedInteractionRule?.reasoningSteps,
-              routedGoverningSections,
-              searchMode,
-              routingFallbackOccurred,
-              governingSectionsSelected,
-              governingSectionUsed: finalGoverningSectionUsed,
-              sectionExpansionUsed: groundingPack.retrievalMeta.sectionExpansionUsed,
-              crossReferencesFollowed: groundingPack.retrievalMeta.crossReferencesFollowed,
-              contextPacketSummary,
-              governingSourcePriorityUsed,
-              reasoningMode: matchedInteractionRule ? "interaction_led" : "generic_retrieval_led",
-              answerMode: groundingPack.retrievalMeta.sectionLed ? "section_led" : "generic",
-              retrievedSnippets: selectDebugRetrievedSnippets({
-                question: parsedRequest.question,
-                retrievedSupport,
-                visibleReferences: finalizedMissingKeyScenarioAnswer.references,
-              }),
-              groundingSource: "fallback" as const,
-              usedRetrievedSupport: false,
-              externalAllowed: groundingPack.retrievalMeta.externalAllowed,
-              externalUsed: groundingPack.retrievalMeta.externalUsed,
-              externalReason: groundingPack.retrievalMeta.externalReason,
-              externalSnippetCount:
-                groundingPack.external.webDiscussion.length + groundingPack.external.forumUnofficial.length,
-              externalLabels: [
-                ...groundingPack.external.webDiscussion.map((item) => item.section),
-                ...groundingPack.external.forumUnofficial.map((item) => item.section),
-              ],
-              hasPwaIndex: contractIndex.hasPwaIndex,
-              hasCompensationIndex: contractIndex.hasCompensationIndex,
-              hasSchedulerIndex: contractIndex.hasSchedulerIndex,
-              retrievalSourcesUsed: buildRetrievalSourcesUsed({
-                groundingPack,
-                usedRetrievedSupport: false,
-              }),
-              ...augmentSourceUsageWithReferences(sourceUsageDebug, finalizedMissingKeyScenarioAnswer.answer.references),
-              structuredRowsUsed: sourceUsageDebug.structuredRowsUsed,
-              aiSynthesisUsed: false,
-              OPENAI_API_KEYPresent: Boolean(apiKey),
-              modelClientCalled,
-              modelClientSucceeded,
-              modelClientError,
-              aiSynthesisAttempted,
-              aiSynthesisRejected,
-              aiRejectionReason,
-              laneEnforced: laneExecution.laneDebug.laneEnforced,
-              expectedTool: laneExecution.laneDebug.expectedTool,
-              retrievalAttempted: laneExecution.laneDebug.retrievalAttempted,
-              laneExecutionResult: laneExecution.laneDebug.laneExecutionResult,
-              documentShortcutUsed,
-              clarificationReason,
-              fallbackUsed: laneExecution.laneDebug.fallbackUsed,
-              fallthroughPrevented: laneExecution.laneDebug.fallthroughPrevented,
-              retryAttempts: laneExecution.laneDebug.retryAttempts,
-              sourceAvailability: laneExecution.laneDebug.sourceAvailability,
-              verifierRan: verifiedMissingKeyFallbackAnswer.verifierRan,
-              verifierPassed: verifiedMissingKeyFallbackAnswer.verifierPassed,
-              verifierWarnings: verifiedMissingKeyFallbackAnswer.verifierWarnings,
-              verifierFailureReasons: verifiedMissingKeyFallbackAnswer.verifierFailureReasons,
-              verifierAdjustedAnswer: verifiedMissingKeyFallbackAnswer.verifierAdjustedAnswer,
-              finalSafetyPipelineRan: finalizedMissingKeyScenarioAnswer.debug.finalSafetyPipelineRan,
-              truthGuardRan: verifiedMissingKeyFallbackAnswer.truthGuardRan,
-              definitionApplicationGuardRan: finalizedMissingKeyScenarioAnswer.debug.definitionApplicationGuardRan,
-              strongClaimsDetected: verifiedMissingKeyFallbackAnswer.strongClaimsDetected,
-              strongClaimsSupported: verifiedMissingKeyFallbackAnswer.strongClaimsSupported,
-              strongClaimsDowngraded: verifiedMissingKeyFallbackAnswer.strongClaimsDowngraded,
-              definitionSectionUsed: verifiedMissingKeyFallbackAnswer.definitionSectionUsed,
-              operationalSectionUsed: verifiedMissingKeyFallbackAnswer.operationalSectionUsed,
-              definitionOverrodeOperation: verifiedMissingKeyFallbackAnswer.definitionOverrodeOperation,
-              definitionBasedAnswer: verifiedMissingKeyFallbackAnswer.definitionBasedAnswer,
-              applicationClaimDetected: verifiedMissingKeyFallbackAnswer.applicationClaimDetected,
-              applicationClaimSupported: verifiedMissingKeyFallbackAnswer.applicationClaimSupported,
-              applicationClaimDowngraded: verifiedMissingKeyFallbackAnswer.applicationClaimDowngraded,
-              answerDowngradedToCaution: finalizedMissingKeyScenarioAnswer.debug.answerDowngradedToCaution,
-              downgradeReasons: finalizedMissingKeyScenarioAnswer.debug.downgradeReasons,
-              answerReferencedSections: finalizedMissingKeyScenarioAnswer.debug.answerReferencedSections,
-              supportInjectedFromAnswer: finalizedMissingKeyScenarioAnswer.debug.supportInjectedFromAnswer,
-              supportMissingForReferencedSection:
-                finalizedMissingKeyScenarioAnswer.debug.supportMissingForReferencedSection,
-              controllingSectionLocked: finalizedMissingKeyScenarioAnswer.debug.controllingSectionLocked,
-              controllingSectionDisplay: finalizedMissingKeyScenarioAnswer.debug.controllingSectionDisplay,
-              controllingSectionQuoteAttached:
-                finalizedMissingKeyScenarioAnswer.debug.controllingSectionQuoteAttached,
-              controllingSectionQuote: finalizedMissingKeyScenarioAnswer.debug.controllingSectionQuote,
-              controllingSectionMissingExactText:
-                finalizedMissingKeyScenarioAnswer.debug.controllingSectionMissingExactText,
-              xDayScenario,
-              xDayAnchorFound: finalizedMissingKeyScenarioAnswer.debug.xDayAnchorFound,
-              xDayGroupingScenario,
-              xDayGroupingAnchorFound: finalizedMissingKeyScenarioAnswer.debug.xDayGroupingAnchorFound,
-              xDayGroupingMissingSupportReason:
-                finalizedMissingKeyScenarioAnswer.debug.xDayGroupingMissingSupportReason,
-              pbRerouteXdayScenario,
-              pbAnchorFound: finalizedMissingKeyScenarioAnswer.debug.pbAnchorFound,
-              pbProcessingAnchorFound: finalizedMissingKeyScenarioAnswer.debug.pbProcessingAnchorFound,
-              notificationAnchorFound: finalizedMissingKeyScenarioAnswer.debug.notificationAnchorFound,
-              pbScenarioMissingSupportReason:
-                finalizedMissingKeyScenarioAnswer.debug.pbScenarioMissingSupportReason,
-              futureRotationChangeScenario,
-              futureRotationChangeAnchorFound:
-                finalizedMissingKeyScenarioAnswer.debug.futureRotationChangeAnchorFound,
-              cpoOverrideAnchorFound: finalizedMissingKeyScenarioAnswer.debug.cpoOverrideAnchorFound,
-              knownAbsenceAnchorFound: finalizedMissingKeyScenarioAnswer.debug.knownAbsenceAnchorFound,
-              payProtectionAnchorFound: finalizedMissingKeyScenarioAnswer.debug.payProtectionAnchorFound,
-              futureRotationMissingSupportReason:
-                finalizedMissingKeyScenarioAnswer.debug.futureRotationMissingSupportReason,
-              governingSectionIncludesXDay,
-              pcsSwapScenario,
-              pcsSwapAnchorFound: finalizedMissingKeyScenarioAnswer.debug.pcsSwapAnchorFound,
-              pcsSwapMissingSupportReason: finalizedMissingKeyScenarioAnswer.debug.pcsSwapMissingSupportReason,
-              governingSectionIncludesPcsSwap,
-              vacationBankScenario,
-              vacationBankAnchorFound: finalizedMissingKeyScenarioAnswer.debug.vacationBankAnchorFound,
-              vacationBankMissingSupportReason:
-                finalizedMissingKeyScenarioAnswer.debug.vacationBankMissingSupportReason,
-              governingSectionIncludesVacationBank,
-              oeNotificationScenario: finalizedMissingKeyScenarioAnswer.debug.oeNotificationScenario,
-              oeNotificationAnchorFound: finalizedMissingKeyScenarioAnswer.debug.oeNotificationAnchorFound,
-              oeNotificationMissingSupportReason:
-                finalizedMissingKeyScenarioAnswer.debug.oeNotificationMissingSupportReason,
-              oeNotificationSupportRejectedReasons:
-                finalizedMissingKeyScenarioAnswer.debug.oeNotificationSupportRejectedReasons,
-              shortCallDutyScenario,
-              shortCallDutyAnchorFound: finalizedMissingKeyScenarioAnswer.debug.shortCallDutyAnchorFound,
-              governingSectionIncludesDutyLegality,
-              ...rerankedMissingKeySupport.debug,
-              ...missingKeyFinalVisibleSupportDebug,
-              ...intentDebugBase,
-              toolsUsed: Array.from(new Set([...(intentDebugBase.toolsUsed ?? []), "section_aware_retrieval"])),
-              retrievalPassCounts: {
-                primary: primaryMatches.length,
-                expanded: expandedMatches.length,
-                linked: linkedMatches.length,
-              },
-            }
-          : undefined,
-    });
-  }
-
-  const model = process.env.OPENAI_MODEL ?? "gpt-4.1-mini";
-  let lastAIOutput: ContractCopilotAIOutput | null = null;
-  let weakResponseGateFired = false;
-
+  const productionResponse = await executeScenarioPipelineLegacyCompat(legacyCompatArgs);
+  let productionPayload: ContractCopilotApiSuccessResponse | null = null;
   try {
-    aiSynthesisAttempted = true;
-    modelClientCalled = true;
-    const modelClient = createOpenAIModelClient({
-      apiKey,
-      model,
-      baseUrl: process.env.OPENAI_BASE_URL,
-    });
-
-    const aiResult = await runAIWorkflow(
-      contractCopilotAIWorkflow,
-      {
-        question: parsedRequest.question,
-        rememberedFacts: session.facts,
-        deterministicScenario: fallbackResult.answer.scenarioLabel,
-        deterministicShortAnswer: fallbackResult.answer.shortAnswer,
-        deterministicSupport: fallbackResult.answer.references.map((reference) => ({
-          sourceLabel: sourceLabelFromReference(reference),
-          section: reference.section,
-          quoteSnippet: reference.quoteSnippet,
-          note: reference.label,
-        })),
-        retrievedSupport,
-        groundingPack,
-        knownInteractionRules,
-      },
-      {
-        modelClient,
-        logger: consoleAIWorkflowLogger,
-      }
-    );
-
-    console.log("=== AI OUTPUT AFTER WORKFLOW ===");
-    console.dir(aiResult.output, { depth: null });
-    modelClientSucceeded = true;
-    lastAIOutput = aiResult.output;
-
-    if (isWeakContractCopilotAIResponse(aiResult.output)) {
-      weakResponseGateFired = true;
-      console.log("=== WEAK RESPONSE GATE FAILED ===");
-      console.dir(
-        {
-          shortAnswer: aiResult.output.shortAnswer,
-          needsClarification: aiResult.output.needsClarification,
-          clarifyingQuestion: aiResult.output.clarifyingQuestion,
-        },
-        { depth: null }
-      );
-      throw new Error("weak_ai_response");
-    }
-
-    const aiDetectedScenario = mapScenarioLabelToFamily(aiResult.output.detectedScenario);
-    const aiFacts = normalizeExtractedFacts(aiResult.output.extractedFacts);
-    const mergedFactsForValidation = {
-      ...fallbackResult.nextSession.facts,
-      ...session.facts,
-      ...(inferredPilotStatus && !session.facts.status ? { status: inferredPilotStatus } : {}),
-      ...aiFacts,
-    };
-    const scenarioValidation = resolveScenarioValidation({
-      question: parsedRequest.question,
-      facts: mergedFactsForValidation,
-      governingPacket: governingPacketUsed,
-      matchedInteractionRule,
-    });
-    const inferredClarifyingQuestions = inferClarifyingQuestion(
-      aiResult.output,
-      fallbackResult.answer.clarifyingQuestions,
-      parsedRequest.question,
-      session.clarificationCount
-    );
-    const clarifyingQuestions = filterClarifyingQuestionsForInference(
-      parsedRequest.question,
-      isComplexScenarioQuestion
-        ? inferredClarifyingQuestions
-        :
-      scenarioValidation.gatingQuestion && session.clarificationCount < 2
-        ? [scenarioValidation.gatingQuestion]
-        : inferredClarifyingQuestions
-    );
-
-    const nextSession: ContractCopilotSession = {
-      ...fallbackResult.nextSession,
-      currentScenario: aiDetectedScenario ?? fallbackResult.nextSession.currentScenario,
-      facts: {
-        ...fallbackResult.nextSession.facts,
-        ...(inferredPilotStatus && !fallbackResult.nextSession.facts.status ? { status: inferredPilotStatus } : {}),
-        ...aiFacts,
-      },
-      clarificationCount:
-        Boolean(clarifyingQuestions?.length) &&
-        (aiResult.output.needsClarification || scenarioValidation.answerIsConditional) &&
-        session.clarificationCount < 2
-          ? session.clarificationCount + 1
-          : 0,
-      unresolvedQuestion:
-        Boolean(clarifyingQuestions?.length) &&
-        (aiResult.output.needsClarification || scenarioValidation.answerIsConditional) &&
-        session.clarificationCount < 2
-          ? (session.unresolvedQuestion ?? parsedRequest.question)
-          : undefined,
-      lastAskedClarifyingField: clarifyingQuestions?.[0]?.factField,
-      lastClarifyingQuestionId: clarifyingQuestions?.[0]?.id,
-      status:
-        Boolean(clarifyingQuestions?.length) &&
-        (aiResult.output.needsClarification || scenarioValidation.answerIsConditional) &&
-        session.clarificationCount < 2
-          ? "awaiting_reply"
-          : "answered",
-    };
-
-    const canAskFollowUp =
-      Boolean(clarifyingQuestions?.length) &&
-      (aiResult.output.needsClarification || scenarioValidation.answerIsConditional) &&
-      session.clarificationCount < 2;
-    const nextAnswerStatus = canAskFollowUp
-      ? "needs_clarification"
-      : fallbackResult.answer.status;
-    const preferredShortAnswer = buildBestGuessShortAnswer({
-      aiShortAnswer: aiResult.output.shortAnswer,
-      deterministicShortAnswer: fallbackResult.answer.shortAnswer,
-      whatCouldChange: aiResult.output.whatCouldChange,
-      needsClarification: aiResult.output.needsClarification,
-    });
-    const synthesizedTopAnswer = synthesizeContractCopilotTopAnswer({
-      groundedShortAnswer: preferredShortAnswer,
-      deterministicShortAnswer: fallbackResult.answer.shortAnswer,
-      scenarioBreakdown: aiResult.output.scenarioBreakdown,
-      payBreakdown: aiResult.output.payBreakdown,
-      whatCouldChange: aiResult.output.whatCouldChange,
-      whyItApplies: aiResult.output.whyItApplies,
-      needsClarification: aiResult.output.needsClarification,
-    });
-    const strongerRuleBasedBottomLine = buildRuleLedBottomLine({
-      question: parsedRequest.question,
-      facts: mergedFactsForValidation,
-      governingPacket: governingPacketUsed,
-      workedExamplePacket: workedExamplePacketUsed,
-      preferredShortAnswer: synthesizedTopAnswer,
-      deterministicShortAnswer: fallbackResult.answer.shortAnswer,
-      scenarioBreakdown: aiResult.output.scenarioBreakdown,
-      payBreakdown: aiResult.output.payBreakdown,
-      whyItApplies: aiResult.output.whyItApplies,
-    });
-    let finalSynthesis = {
-      bottomLine: strongerRuleBasedBottomLine,
-      scenarioBreakdown:
-        aiResult.output.scenarioBreakdown && aiResult.output.scenarioBreakdown.length > 0
-          ? aiResult.output.scenarioBreakdown
-          : fallbackResult.answer.scenarioBreakdown ?? [],
-      payBreakdown:
-        aiResult.output.payBreakdown && aiResult.output.payBreakdown.length > 0
-          ? aiResult.output.payBreakdown
-          : fallbackResult.answer.payBreakdown ?? [],
-      whatCouldChange:
-        aiResult.output.whatCouldChange && aiResult.output.whatCouldChange.length > 0
-          ? aiResult.output.whatCouldChange
-          : fallbackResult.answer.whatCouldChangeThisAnswer ?? [],
-      why:
-        aiResult.output.whyItApplies && aiResult.output.whyItApplies.length > 0
-          ? aiResult.output.whyItApplies
-          : fallbackResult.answer.plainEnglishExplanation,
-      contractSupport: aiResult.output.contractSupport,
-      practicalBreakdown:
-        aiResult.output.practicalBreakdown && aiResult.output.practicalBreakdown.length > 0
-          ? aiResult.output.practicalBreakdown
-          : fallbackResult.answer.breakItDown ?? [],
-      followUpSuggestion:
-        aiResult.output.followUpSuggestion && aiResult.output.followUpSuggestion.length > 0
-          ? aiResult.output.followUpSuggestion
-          : fallbackResult.answer.followUpSuggestion ?? "",
-    };
-
-    try {
-      const synthesisResult = await runAIWorkflow(
-        contractCopilotFinalSynthesisWorkflow,
-      {
-        question: parsedRequest.question,
-        groundedReasoning: aiResult.output,
-        governingSectionUsed: governingPacketUsed
-            ? {
-                sourceLabel: governingPacketUsed.sourceLabel,
-                section: governingPacketUsed.section,
-                title: governingPacketUsed.title,
-              content: governingPacketUsed.content,
-            }
-          : undefined,
-        scenarioValidation: {
-          missingGatingFacts: scenarioValidation.missingGatingFacts,
-          answerIsConditional: scenarioValidation.answerIsConditional,
-          turningCondition: scenarioValidation.turningCondition,
-          conditionalBottomLine: scenarioValidation.conditionalBottomLine,
-          conditionalWhy: scenarioValidation.conditionalWhy,
-          gatingQuestion: scenarioValidation.gatingQuestion?.prompt,
-        },
-      },
-      {
-        modelClient,
-          logger: consoleAIWorkflowLogger,
-        }
-      );
-      finalSynthesis = synthesisResult.output;
-      aiSynthesisUsedDebug = true;
-    } catch (synthesisError) {
-      aiSynthesisRejected = true;
-      aiRejectionReason = synthesisError instanceof Error ? synthesisError.message : "unknown_synthesis_error";
-      console.log("=== FINAL SYNTHESIS FAILED ===");
-      console.dir(
-        {
-          reason: synthesisError instanceof Error ? synthesisError.message : "unknown_error",
-        },
-        { depth: null }
-      );
-    }
-
-    const strongerRuleBasedAnswerAvailableButNotUsed =
-      Boolean(governingPacketUsed) &&
-      normalizeForComparison(strongerRuleBasedBottomLine) !== normalizeForComparison(finalSynthesis.bottomLine) &&
-      bottomLineLooksGeneric(finalSynthesis.bottomLine);
-    const concreteRuleBasedAnswerAvailable =
-      Boolean(governingPacketUsed) && !bottomLineIsClassificationOnly(strongerRuleBasedBottomLine);
-    if (strongerRuleBasedAnswerAvailableButNotUsed) {
-      finalSynthesis.bottomLine = strongerRuleBasedBottomLine;
-    }
-    if (!isComplexScenarioQuestion && scenarioValidation.answerIsConditional && scenarioValidation.conditionalBottomLine) {
-      finalSynthesis.bottomLine = scenarioValidation.conditionalBottomLine;
-    }
-    if (!isComplexScenarioQuestion && scenarioValidation.answerIsConditional && scenarioValidation.conditionalWhy) {
-      finalSynthesis.why = scenarioValidation.conditionalWhy;
-    }
-    const finalBottomLineMode =
-      governingPacketUsed && !bottomLineLooksGeneric(finalSynthesis.bottomLine) ? "section_led" : "generic";
-    const finalBottomLineReflectsGoverningRule = bottomLineReflectsGoverningRule({
-      bottomLine: finalSynthesis.bottomLine,
-      governingPacket: governingPacketUsed,
-    });
-    const classificationLevelOnly = bottomLineIsClassificationOnly(finalSynthesis.bottomLine);
-    const finalAnswerUsedConcreteRule = concreteRuleBasedAnswerAvailable && !classificationLevelOnly;
-    const concreteInteractionRuleAvailable =
-      Boolean(matchedInteractionRule) && !bottomLineIsClassificationOnly(strongerRuleBasedBottomLine);
-    const finalAnswerUsedConcreteInteractionRule =
-      concreteInteractionRuleAvailable && !bottomLineLooksGeneric(finalSynthesis.bottomLine);
-    const answerStillGenericDespiteInteractionRule =
-      Boolean(matchedInteractionRule) && bottomLineLooksGeneric(finalSynthesis.bottomLine);
-
-    const groundedSupport = buildGroundedReferences({
-      aiSupportItems: finalSynthesis.contractSupport,
-      retrievedSupport,
-      fallbackReferences: fallbackResult.answer.references,
-      preferredSection: workedExamplePacketUsed?.section ?? governingPacketUsed?.section,
-      preferredPacket: workedExamplePacketUsed ?? governingPacketUsed,
-    });
-    const aiAnswerSupport = mergeAnswerReferencedSupport({
-      answerText: `${finalSynthesis.bottomLine} ${finalSynthesis.why ?? ""}`,
-      references: groundedSupport.references,
-      chunks: searchableChunks,
-    });
-    const rerankedGroundedSupport = rerankSupportReferences({
-      question: parsedRequest.question,
-      answerText: `${finalSynthesis.bottomLine} ${finalSynthesis.why ?? ""}`,
-      references: [
-        ...aiAnswerSupport.references,
-        ...(controllingSectionLock?.reference ? [controllingSectionLock.reference] : []),
-        ...supportFocusedReferences,
-      ],
-      selectedLane: intentResolution.selectedLane,
-    });
-    const visibleGroundedReferences = selectVisibleContractReferences(rerankedGroundedSupport.references);
-    const groundedFinalVisibleSupportDebug = buildFinalVisibleSupportDebug(
-      visibleGroundedReferences,
-      rerankedGroundedSupport.debug as Record<string, unknown>
-    );
-
-    console.log("=== ACCEPTED AI ANSWER ===");
-    console.dir(
-      {
-        detectedScenario: aiDetectedScenario,
-        aiFacts,
-        parsedKeys: Object.keys(aiResult.output),
-      },
-      { depth: null }
-    );
-
-    const aiAnswer: ContractAnswerCard = {
-      ...fallbackResult.answer,
-      status: nextAnswerStatus,
-      answerCompleteness:
-        aiResult.output.answerCompleteness === "resolved" || !canAskFollowUp ? "resolved" : "provisional",
-      scenarioLabel: aiResult.output.detectedScenario || fallbackResult.answer.scenarioLabel,
-      shortAnswer: finalSynthesis.bottomLine,
-      plainEnglishExplanation:
-        trimToTwoSentences(
-          finalSynthesis.why && finalSynthesis.why.length > 0
-            ? finalSynthesis.why
-            : fallbackResult.answer.plainEnglishExplanation
-        ),
-      confidence: aiResult.output.confidence,
-      supportLevel: selectVisibleSupportLevel(groundedSupport.references),
-      references: visibleGroundedReferences,
-      assumptions: Array.from(
-        new Set([...(fallbackResult.answer.assumptions ?? []), ...(aiResult.output.assumptions ?? [])])
-      ),
-      scenarioBreakdown:
-        finalSynthesis.scenarioBreakdown && finalSynthesis.scenarioBreakdown.length > 0
-          ? finalSynthesis.scenarioBreakdown
-          : fallbackResult.answer.scenarioBreakdown,
-      payBreakdown:
-        finalSynthesis.payBreakdown && finalSynthesis.payBreakdown.length > 0
-          ? finalSynthesis.payBreakdown
-          : fallbackResult.answer.payBreakdown,
-      clarifyingQuestions,
-      whatCouldChangeThisAnswer:
-        finalSynthesis.whatCouldChange && finalSynthesis.whatCouldChange.length > 0
-          ? finalSynthesis.whatCouldChange
-          : fallbackResult.answer.whatCouldChangeThisAnswer,
-      breakItDown: [],
-      followUpSuggestion: undefined,
-    };
-    const verifiedAIAnswer = applyScenarioAnswerVerifier({
-      question: parsedRequest.question,
-      selectedLane: intentResolution.selectedLane,
-      answer: aiAnswer,
-      contractIndex,
-      sourceUsageDebug,
-    });
-    const aiAnswerWithComparisonNote = applyComparisonSupportNote({
-      question: parsedRequest.question,
-      answer: verifiedAIAnswer.answer,
-      references: verifiedAIAnswer.answer.references,
-    });
-    const aiAnswerWithControllingSection = applyControllingSectionLock({
-      answer: aiAnswerWithComparisonNote,
-      controllingSectionLock,
-    });
-    const finalizedAIScenarioAnswer = finalizeScenarioSafetyPipeline({
-      question: parsedRequest.question,
-      answer: aiAnswerWithControllingSection,
-      verified: verifiedAIAnswer,
-      supportDebug: {
-        ...rerankedGroundedSupport.debug,
-        ...groundedFinalVisibleSupportDebug,
-        answerReferencedSections: aiAnswerSupport.answerReferencedSections,
-        supportInjectedFromAnswer: aiAnswerSupport.supportInjectedFromAnswer,
-        supportMissingForReferencedSection: aiAnswerSupport.missingSections.length > 0,
-        controllingSectionLocked: Boolean(controllingSectionLock),
-        controllingSectionDisplay: controllingSectionLock?.displaySection,
-        controllingSectionQuoteAttached: Boolean(controllingSectionLock?.quoteSnippet),
-        controllingSectionQuote: controllingSectionLock?.quoteSnippet,
-        controllingSectionMissingExactText: controllingSectionLock?.exactAttached === false,
-      },
-    });
-
-    return jsonResponse(200, {
-      ok: true,
-      mode: "ai",
-      answer: finalizedAIScenarioAnswer.answer,
-      detectedScenario: aiDetectedScenario ?? fallbackResult.detectedScenario,
-      nextSession,
-      meta: {
-        modelUsed: model,
-      },
-      debug:
-        process.env.NODE_ENV !== "production"
-          ? {
-              mode: "ai",
-              parsedKeys: Object.keys(aiResult.output),
-              missingRequiredFields: [],
-              weakResponseGateFired,
-              retrievedSnippetCount: retrievedSupport.length,
-              retrievedSections: retrievedSupport.map((item) => item.section),
-              knownInteractionRuleIds: knownInteractionRules.map((item) => item.id),
-              matchedInteractionRuleId: matchedInteractionRule?.id,
-              matchedInteractionRuleTitle: matchedInteractionRule?.title,
-              matchedInteractionRuleGoverningSources: matchedInteractionRule?.governingSources.map(
-                (source) => `${source.source}:${source.section}`
-              ),
-              matchedInteractionRuleReasoningSteps: matchedInteractionRule?.reasoningSteps,
-              routedGoverningSections,
-              searchMode,
-              routingFallbackOccurred,
-              governingSectionsSelected,
-              governingSectionUsed:
-                visibleGroundedReferences[0]
-                  ? `${visibleGroundedReferences[0].sourceId}:${visibleGroundedReferences[0].section}`
-                  : finalGoverningSectionUsed,
-              bottomLineMode: finalBottomLineMode,
-              bottomLineReflectsGoverningRule: finalBottomLineReflectsGoverningRule,
-              strongerRuleBasedAnswerAvailableButNotUsed,
-              classificationLevelOnly,
-              concreteRuleBasedAnswerAvailable,
-              finalAnswerUsedConcreteRule,
-              concreteInteractionRuleAvailable,
-              finalAnswerUsedConcreteInteractionRule,
-              answerStillGenericDespiteInteractionRule,
-              missingGatingFacts: scenarioValidation.missingGatingFacts,
-              answerIsConditional: scenarioValidation.answerIsConditional,
-              gatingQuestionUsed: clarifyingQuestions?.[0]?.prompt,
-              sectionExpansionUsed: groundingPack.retrievalMeta.sectionExpansionUsed,
-              crossReferencesFollowed: groundingPack.retrievalMeta.crossReferencesFollowed,
-              contextPacketSummary,
-              governingSourcePriorityUsed,
-              reasoningMode: matchedInteractionRule ? "interaction_led" : "generic_retrieval_led",
-              answerMode: finalBottomLineMode,
-              retrievedSnippets: selectDebugRetrievedSnippets({
-                question: parsedRequest.question,
-                retrievedSupport,
-                visibleReferences: finalizedAIScenarioAnswer.references,
-              }),
-              groundingSource: groundedSupport.usedRetrievedSupport
-                ? "retrieved_contract_snippets"
-                : "deterministic_support",
-              usedRetrievedSupport: groundedSupport.usedRetrievedSupport,
-              externalAllowed: groundingPack.retrievalMeta.externalAllowed,
-              externalUsed: groundingPack.retrievalMeta.externalUsed,
-              externalReason: groundingPack.retrievalMeta.externalReason,
-              externalSnippetCount:
-                groundingPack.external.webDiscussion.length + groundingPack.external.forumUnofficial.length,
-              externalLabels: [
-                ...groundingPack.external.webDiscussion.map((item) => item.section),
-                ...groundingPack.external.forumUnofficial.map((item) => item.section),
-              ],
-              hasPwaIndex: contractIndex.hasPwaIndex,
-              hasCompensationIndex: contractIndex.hasCompensationIndex,
-              hasSchedulerIndex: contractIndex.hasSchedulerIndex,
-              retrievalSourcesUsed: buildRetrievalSourcesUsed({
-                groundingPack,
-                usedRetrievedSupport: groundedSupport.usedRetrievedSupport,
-              }),
-              ...augmentSourceUsageWithReferences(sourceUsageDebug, finalizedAIScenarioAnswer.answer.references),
-              structuredRowsUsed: sourceUsageDebug.structuredRowsUsed,
-              aiSynthesisUsed: true,
-              OPENAI_API_KEYPresent: Boolean(apiKey),
-              modelClientCalled,
-              modelClientSucceeded,
-              modelClientError,
-              aiSynthesisAttempted,
-              aiSynthesisRejected,
-              aiRejectionReason,
-              laneEnforced: laneExecution.laneDebug.laneEnforced,
-              expectedTool: laneExecution.laneDebug.expectedTool,
-              retrievalAttempted: laneExecution.laneDebug.retrievalAttempted,
-              laneExecutionResult: laneExecution.laneDebug.laneExecutionResult,
-              documentShortcutUsed,
-              clarificationReason,
-              fallbackUsed: laneExecution.laneDebug.fallbackUsed,
-              fallthroughPrevented: laneExecution.laneDebug.fallthroughPrevented,
-              retryAttempts: laneExecution.laneDebug.retryAttempts,
-              sourceAvailability: laneExecution.laneDebug.sourceAvailability,
-              verifierRan: verifiedAIAnswer.verifierRan,
-              verifierPassed: verifiedAIAnswer.verifierPassed,
-              verifierWarnings: verifiedAIAnswer.verifierWarnings,
-              verifierFailureReasons: verifiedAIAnswer.verifierFailureReasons,
-              verifierAdjustedAnswer: verifiedAIAnswer.verifierAdjustedAnswer,
-              finalSafetyPipelineRan: finalizedAIScenarioAnswer.debug.finalSafetyPipelineRan,
-              truthGuardRan: verifiedAIAnswer.truthGuardRan,
-              definitionApplicationGuardRan: finalizedAIScenarioAnswer.debug.definitionApplicationGuardRan,
-              strongClaimsDetected: verifiedAIAnswer.strongClaimsDetected,
-              strongClaimsSupported: verifiedAIAnswer.strongClaimsSupported,
-              strongClaimsDowngraded: verifiedAIAnswer.strongClaimsDowngraded,
-              definitionSectionUsed: verifiedAIAnswer.definitionSectionUsed,
-              operationalSectionUsed: verifiedAIAnswer.operationalSectionUsed,
-              definitionOverrodeOperation: verifiedAIAnswer.definitionOverrodeOperation,
-              definitionBasedAnswer: verifiedAIAnswer.definitionBasedAnswer,
-              applicationClaimDetected: verifiedAIAnswer.applicationClaimDetected,
-              applicationClaimSupported: verifiedAIAnswer.applicationClaimSupported,
-                  applicationClaimDowngraded: verifiedAIAnswer.applicationClaimDowngraded,
-                  answerDowngradedToCaution: finalizedAIScenarioAnswer.debug.answerDowngradedToCaution,
-                  downgradeReasons: finalizedAIScenarioAnswer.debug.downgradeReasons,
-                  answerReferencedSections: finalizedAIScenarioAnswer.debug.answerReferencedSections,
-                  supportInjectedFromAnswer: finalizedAIScenarioAnswer.debug.supportInjectedFromAnswer,
-                  supportMissingForReferencedSection:
-                    finalizedAIScenarioAnswer.debug.supportMissingForReferencedSection,
-                  controllingSectionLocked: finalizedAIScenarioAnswer.debug.controllingSectionLocked,
-                  controllingSectionDisplay: finalizedAIScenarioAnswer.debug.controllingSectionDisplay,
-                  controllingSectionQuoteAttached:
-                    finalizedAIScenarioAnswer.debug.controllingSectionQuoteAttached,
-                  controllingSectionQuote: finalizedAIScenarioAnswer.debug.controllingSectionQuote,
-                  controllingSectionMissingExactText:
-                    finalizedAIScenarioAnswer.debug.controllingSectionMissingExactText,
-                  xDayScenario,
-                  xDayAnchorFound: finalizedAIScenarioAnswer.debug.xDayAnchorFound,
-                  xDayGroupingScenario,
-                  xDayGroupingAnchorFound: finalizedAIScenarioAnswer.debug.xDayGroupingAnchorFound,
-                  xDayGroupingMissingSupportReason:
-                    finalizedAIScenarioAnswer.debug.xDayGroupingMissingSupportReason,
-                  pbRerouteXdayScenario,
-                  pbAnchorFound: finalizedAIScenarioAnswer.debug.pbAnchorFound,
-                  pbProcessingAnchorFound: finalizedAIScenarioAnswer.debug.pbProcessingAnchorFound,
-                  notificationAnchorFound: finalizedAIScenarioAnswer.debug.notificationAnchorFound,
-                  pbScenarioMissingSupportReason:
-                    finalizedAIScenarioAnswer.debug.pbScenarioMissingSupportReason,
-                  futureRotationChangeScenario,
-                  futureRotationChangeAnchorFound:
-                    finalizedAIScenarioAnswer.debug.futureRotationChangeAnchorFound,
-                  cpoOverrideAnchorFound: finalizedAIScenarioAnswer.debug.cpoOverrideAnchorFound,
-                  knownAbsenceAnchorFound: finalizedAIScenarioAnswer.debug.knownAbsenceAnchorFound,
-                  payProtectionAnchorFound: finalizedAIScenarioAnswer.debug.payProtectionAnchorFound,
-                  futureRotationMissingSupportReason:
-                    finalizedAIScenarioAnswer.debug.futureRotationMissingSupportReason,
-                  governingSectionIncludesXDay,
-                  pcsSwapScenario,
-                  pcsSwapAnchorFound: finalizedAIScenarioAnswer.debug.pcsSwapAnchorFound,
-                  pcsSwapMissingSupportReason: finalizedAIScenarioAnswer.debug.pcsSwapMissingSupportReason,
-                  governingSectionIncludesPcsSwap,
-                  vacationBankScenario,
-                  vacationBankAnchorFound: finalizedAIScenarioAnswer.debug.vacationBankAnchorFound,
-                  vacationBankMissingSupportReason:
-                    finalizedAIScenarioAnswer.debug.vacationBankMissingSupportReason,
-                  governingSectionIncludesVacationBank,
-                  oeNotificationScenario: finalizedAIScenarioAnswer.debug.oeNotificationScenario,
-                  oeNotificationAnchorFound: finalizedAIScenarioAnswer.debug.oeNotificationAnchorFound,
-                  oeNotificationMissingSupportReason:
-                    finalizedAIScenarioAnswer.debug.oeNotificationMissingSupportReason,
-                  oeNotificationSupportRejectedReasons:
-                    finalizedAIScenarioAnswer.debug.oeNotificationSupportRejectedReasons,
-                  shortCallDutyScenario,
-                  shortCallDutyAnchorFound: finalizedAIScenarioAnswer.debug.shortCallDutyAnchorFound,
-                  governingSectionIncludesDutyLegality,
-              ...rerankedGroundedSupport.debug,
-              ...groundedFinalVisibleSupportDebug,
-              ...intentDebugBase,
-              toolsUsed: buildContractScenarioToolsUsed({
-                intent: intentResolution,
-                matchedInteractionRule,
-                missingGatingFacts: scenarioValidation.missingGatingFacts,
-                aiSynthesisUsed: true,
-              }),
-              retrievalPassCounts: {
-                primary: primaryMatches.length,
-                expanded: expandedMatches.length,
-                linked: linkedMatches.length,
-              },
-            }
-          : undefined,
-    });
-  } catch (error) {
-    modelClientError = error instanceof Error ? error.message : "model_failure";
-    if (!modelClientSucceeded) {
-      aiSynthesisRejected = aiSynthesisAttempted;
-      if (!aiRejectionReason) {
-        aiRejectionReason = modelClientError;
-      }
-    }
-    const partial =
-      error instanceof AIValidationError
-        ? tryParsePartialAIOutput(error.rawText, error.partialOutput)
-        : lastAIOutput
-          ? (lastAIOutput as Partial<ContractCopilotAIOutput>)
-          : null;
-
-    if (partial) {
-      const partialShortAnswer =
-        partial && typeof partial.shortAnswer === "string" && partial.shortAnswer.trim().length > 0
-          ? partial.shortAnswer.trim()
-          : null;
-
-      if (partialShortAnswer) {
-        const partialFacts = normalizeExtractedFacts(
-          partial && partial.extractedFacts ? partial.extractedFacts : undefined
-        );
-        const partialScenarioValidation = resolveScenarioValidation({
-          question: parsedRequest.question,
-          facts: {
-            ...fallbackResult.nextSession.facts,
-            ...session.facts,
-            ...(inferredPilotStatus && !session.facts.status ? { status: inferredPilotStatus } : {}),
-            ...partialFacts,
-          },
-          governingPacket: governingPacketUsed,
-          matchedInteractionRule,
-        });
-        const preferredPartialShortAnswer = buildBestGuessShortAnswer({
-          aiShortAnswer: partialShortAnswer,
-          deterministicShortAnswer: fallbackResult.answer.shortAnswer,
-          whatCouldChange: Array.isArray(partial.whatCouldChange)
-            ? partial.whatCouldChange.filter((item): item is string => typeof item === "string")
-            : undefined,
-          needsClarification: partial.needsClarification,
-        });
-        const synthesizedPartialTopAnswer = synthesizeContractCopilotTopAnswer({
-          groundedShortAnswer: preferredPartialShortAnswer,
-          deterministicShortAnswer: fallbackResult.answer.shortAnswer,
-          scenarioBreakdown: Array.isArray(partial.scenarioBreakdown)
-            ? partial.scenarioBreakdown.filter((item): item is string => typeof item === "string")
-            : undefined,
-          payBreakdown: Array.isArray(partial.payBreakdown)
-            ? partial.payBreakdown.filter((item): item is string => typeof item === "string")
-            : undefined,
-          whatCouldChange: Array.isArray(partial.whatCouldChange)
-            ? partial.whatCouldChange.filter((item): item is string => typeof item === "string")
-            : undefined,
-          whyItApplies:
-            typeof partial.whyItApplies === "string" && partial.whyItApplies.trim().length > 0
-              ? partial.whyItApplies.trim()
-            : undefined,
-          needsClarification: partial.needsClarification,
-        });
-        const strongerRuleBasedPartialBottomLine = buildRuleLedBottomLine({
-          question: parsedRequest.question,
-          facts: {
-            ...fallbackResult.nextSession.facts,
-            ...session.facts,
-            ...(inferredPilotStatus && !session.facts.status ? { status: inferredPilotStatus } : {}),
-            ...partialFacts,
-          },
-          governingPacket: governingPacketUsed,
-          workedExamplePacket: workedExamplePacketUsed,
-          preferredShortAnswer: synthesizedPartialTopAnswer,
-          deterministicShortAnswer: fallbackResult.answer.shortAnswer,
-          scenarioBreakdown: Array.isArray(partial.scenarioBreakdown)
-            ? partial.scenarioBreakdown.filter((item): item is string => typeof item === "string")
-            : undefined,
-          payBreakdown: Array.isArray(partial.payBreakdown)
-            ? partial.payBreakdown.filter((item): item is string => typeof item === "string")
-            : undefined,
-          whyItApplies:
-            typeof partial.whyItApplies === "string" && partial.whyItApplies.trim().length > 0
-              ? partial.whyItApplies.trim()
-              : undefined,
-        });
-        const partialDetectedScenario = mapScenarioLabelToFamily(
-          typeof partial.detectedScenario === "string" ? partial.detectedScenario : undefined
-        );
-        const partialAISupport = Array.isArray(partial.contractSupport)
-          ? partial.contractSupport.flatMap((item) => {
-              if (!item || typeof item !== "object") {
-                return [];
-              }
-              const supportItem = item as Record<string, unknown>;
-              const sourceLabel = supportItem.sourceLabel;
-              const section = supportItem.section;
-              if (typeof sourceLabel === "string" && typeof section === "string" && section.trim().length > 0) {
-                return [
-                  {
-                    sourceLabel: sourceLabel.trim(),
-                    section: section.trim(),
-                    quoteSnippet:
-                      typeof supportItem.quoteSnippet === "string" && supportItem.quoteSnippet.trim().length > 0
-                        ? supportItem.quoteSnippet.trim()
-                        : undefined,
-                    note:
-                      typeof supportItem.note === "string" && supportItem.note.trim().length > 0
-                        ? supportItem.note.trim()
-                        : undefined,
-                  },
-                ];
-              }
-              return [];
-            })
-          : [];
-        const groundedPartialSupport = buildGroundedReferences({
-          aiSupportItems: partialAISupport,
-          retrievedSupport,
-          fallbackReferences: fallbackResult.answer.references,
-          preferredSection: workedExamplePacketUsed?.section ?? governingPacketUsed?.section,
-          preferredPacket: workedExamplePacketUsed ?? governingPacketUsed,
-        });
-
-        const missingRequiredFields = [
-          typeof partial.shortAnswer !== "string" ? "shortAnswer" : null,
-          typeof partial.confidence !== "string" ? "confidence" : null,
-        ].filter((item): item is string => Boolean(item));
-        const strongerRuleBasedAnswerAvailableButNotUsed =
-          Boolean(governingPacketUsed) &&
-          normalizeForComparison(strongerRuleBasedPartialBottomLine) !==
-            normalizeForComparison(synthesizedPartialTopAnswer) &&
-          bottomLineLooksGeneric(synthesizedPartialTopAnswer);
-        const concreteRuleBasedAnswerAvailable =
-          Boolean(governingPacketUsed) && !bottomLineIsClassificationOnly(strongerRuleBasedPartialBottomLine);
-        const finalPartialBottomLine = strongerRuleBasedAnswerAvailableButNotUsed
-          ? strongerRuleBasedPartialBottomLine
-          : synthesizedPartialTopAnswer;
-        const conditionalPartialBottomLine =
-          !isComplexScenarioQuestion &&
-          partialScenarioValidation.answerIsConditional &&
-          partialScenarioValidation.conditionalBottomLine
-            ? partialScenarioValidation.conditionalBottomLine
-            : finalPartialBottomLine;
-        const partialBottomLineMode =
-          governingPacketUsed && !bottomLineLooksGeneric(conditionalPartialBottomLine) ? "section_led" : "generic";
-        const partialBottomLineReflectsGoverningRule = bottomLineReflectsGoverningRule({
-          bottomLine: conditionalPartialBottomLine,
-          governingPacket: governingPacketUsed,
-        });
-        const classificationLevelOnly = bottomLineIsClassificationOnly(conditionalPartialBottomLine);
-        const finalAnswerUsedConcreteRule = concreteRuleBasedAnswerAvailable && !classificationLevelOnly;
-        const concreteInteractionRuleAvailable =
-          Boolean(matchedInteractionRule) && !bottomLineIsClassificationOnly(strongerRuleBasedPartialBottomLine);
-        const finalAnswerUsedConcreteInteractionRule =
-          concreteInteractionRuleAvailable && !bottomLineLooksGeneric(conditionalPartialBottomLine);
-        const answerStillGenericDespiteInteractionRule =
-          Boolean(matchedInteractionRule) && bottomLineLooksGeneric(conditionalPartialBottomLine);
-        const partialAnswerSupport = mergeAnswerReferencedSupport({
-          answerText: `${conditionalPartialBottomLine} ${
-            typeof partial.whyItApplies === "string" ? partial.whyItApplies : ""
-          }`,
-          references: groundedPartialSupport.references,
-          chunks: searchableChunks,
-        });
-        const rerankedPartialSupport = rerankSupportReferences({
-          question: parsedRequest.question,
-          answerText: `${conditionalPartialBottomLine} ${
-            typeof partial.whyItApplies === "string" ? partial.whyItApplies : ""
-          }`,
-          references: [
-            ...partialAnswerSupport.references,
-            ...(controllingSectionLock?.reference ? [controllingSectionLock.reference] : []),
-            ...supportFocusedReferences,
-          ],
-          selectedLane: intentResolution.selectedLane,
-        });
-        const visiblePartialReferences = selectVisibleContractReferences(rerankedPartialSupport.references);
-        const partialFinalVisibleSupportDebug = buildFinalVisibleSupportDebug(
-          visiblePartialReferences,
-          rerankedPartialSupport.debug as Record<string, unknown>
-        );
-        const partialClarifyingQuestions = filterClarifyingQuestionsForInference(
-          parsedRequest.question,
-          isComplexScenarioQuestion
-            ? inferClarifyingQuestion(
-                {
-                  ...aiResultFromPartial(partial),
-                },
-                fallbackResult.answer.clarifyingQuestions,
-                parsedRequest.question,
-                session.clarificationCount
-              )
-            : partialScenarioValidation.gatingQuestion && session.clarificationCount < 2
-              ? [partialScenarioValidation.gatingQuestion]
-              : inferClarifyingQuestion(
-                  {
-                    ...aiResultFromPartial(partial),
-                  },
-                  fallbackResult.answer.clarifyingQuestions,
-                  parsedRequest.question,
-                  session.clarificationCount
-                )
-        );
-
-        console.log("=== AI_UNVERIFIED AVAILABLE ===");
-        console.dir(
-          {
-            validationError: error instanceof Error ? error.message : "unknown_error",
-            parsedKeys: Object.keys(partial),
-            missingRequiredFields,
-            weakResponseGateFired,
-          },
-          { depth: null }
-        );
-
-        const aiUnverifiedAnswer: ContractAnswerCard = {
-          ...fallbackResult.answer,
-          status:
-            !isComplexScenarioQuestion &&
-            Boolean(partialClarifyingQuestions?.length) &&
-            (partial.needsClarification || partialScenarioValidation.answerIsConditional) &&
-            session.clarificationCount < 2
-              ? "needs_clarification"
-              : fallbackResult.answer.status,
-          answerCompleteness:
-            partial.answerCompleteness === "resolved" ||
-            (!partial.needsClarification && !partialScenarioValidation.answerIsConditional) ||
-            session.clarificationCount >= 2
-              ? "resolved"
-              : "provisional",
-          shortAnswer: conditionalPartialBottomLine,
-          confidence:
-            partial.confidence === "high" || partial.confidence === "medium" || partial.confidence === "low"
-              ? partial.confidence
-              : fallbackResult.answer.confidence,
-          scenarioLabel:
-            typeof partial.detectedScenario === "string" && partial.detectedScenario.trim().length > 0
-              ? partial.detectedScenario.trim()
-              : fallbackResult.answer.scenarioLabel,
-          references: visiblePartialReferences,
-          supportLevel: selectVisibleSupportLevel(groundedPartialSupport.references),
-          assumptions: Array.from(
-            new Set([
-              ...(fallbackResult.answer.assumptions ?? []),
-              ...(Array.isArray(partial.assumptions) ? partial.assumptions.filter((item): item is string => typeof item === "string") : []),
-              weakResponseGateFired
-                ? "AI (unverified): this answer was shown for debugging after the weak-response gate rejected it."
-                : "AI (unverified): this answer came from a model response that did not fully pass schema validation.",
-            ])
-          ),
-          scenarioBreakdown:
-            Array.isArray(partial.scenarioBreakdown) && partial.scenarioBreakdown.length > 0
-              ? partial.scenarioBreakdown.filter((item): item is string => typeof item === "string")
-              : fallbackResult.answer.scenarioBreakdown,
-          payBreakdown:
-            Array.isArray(partial.payBreakdown) && partial.payBreakdown.length > 0
-              ? partial.payBreakdown.filter((item): item is string => typeof item === "string")
-              : fallbackResult.answer.payBreakdown,
-          plainEnglishExplanation:
-            trimToTwoSentences(
-              partialScenarioValidation.answerIsConditional && partialScenarioValidation.conditionalWhy
-                ? partialScenarioValidation.conditionalWhy
-                : typeof partial.whyItApplies === "string" && partial.whyItApplies.trim().length > 0
-                ? partial.whyItApplies.trim()
-                : fallbackResult.answer.plainEnglishExplanation
-            ),
-          whatCouldChangeThisAnswer:
-            Array.isArray(partial.whatCouldChange)
-              ? partial.whatCouldChange.filter((item): item is string => typeof item === "string")
-              : fallbackResult.answer.whatCouldChangeThisAnswer,
-          breakItDown: [],
-          followUpSuggestion: undefined,
-          clarifyingQuestions: partialClarifyingQuestions,
-          caveats: Array.from(new Set([...(fallbackResult.answer.caveats ?? []), "AI (unverified)"])),
-        };
-        const verifiedAIUnverifiedAnswer = applyScenarioAnswerVerifier({
-          question: parsedRequest.question,
-          selectedLane: intentResolution.selectedLane,
-          answer: aiUnverifiedAnswer,
-          contractIndex,
-          sourceUsageDebug,
-        });
-        const aiUnverifiedAnswerWithComparisonNote = applyComparisonSupportNote({
-          question: parsedRequest.question,
-          answer: verifiedAIUnverifiedAnswer.answer,
-          references: verifiedAIUnverifiedAnswer.answer.references,
-        });
-        const aiUnverifiedAnswerWithControllingSection = applyControllingSectionLock({
-          answer: aiUnverifiedAnswerWithComparisonNote,
-          controllingSectionLock,
-        });
-        const finalizedAIUnverifiedScenarioAnswer = finalizeScenarioSafetyPipeline({
-          question: parsedRequest.question,
-          answer: aiUnverifiedAnswerWithControllingSection,
-          verified: verifiedAIUnverifiedAnswer,
-          supportDebug: {
-            ...rerankedPartialSupport.debug,
-            ...partialFinalVisibleSupportDebug,
-            answerReferencedSections: partialAnswerSupport.answerReferencedSections,
-            supportInjectedFromAnswer: partialAnswerSupport.supportInjectedFromAnswer,
-            supportMissingForReferencedSection: partialAnswerSupport.missingSections.length > 0,
-            controllingSectionLocked: Boolean(controllingSectionLock),
-            controllingSectionDisplay: controllingSectionLock?.displaySection,
-            controllingSectionQuoteAttached: Boolean(controllingSectionLock?.quoteSnippet),
-            controllingSectionQuote: controllingSectionLock?.quoteSnippet,
-            controllingSectionMissingExactText: controllingSectionLock?.exactAttached === false,
-          },
-        });
-
-        return jsonResponse(200, {
-          ok: true,
-          mode: "ai_unverified",
-          answer: finalizedAIUnverifiedScenarioAnswer.answer,
-          detectedScenario: partialDetectedScenario ?? fallbackResult.detectedScenario,
-          nextSession: {
-            ...fallbackResult.nextSession,
-            clarificationCount:
-              Boolean(partialClarifyingQuestions?.length) &&
-              (partial.needsClarification || partialScenarioValidation.answerIsConditional) &&
-              session.clarificationCount < 2
-                ? session.clarificationCount + 1
-                : 0,
-            unresolvedQuestion:
-              Boolean(partialClarifyingQuestions?.length) &&
-              (partial.needsClarification || partialScenarioValidation.answerIsConditional) &&
-              session.clarificationCount < 2
-                ? (session.unresolvedQuestion ?? parsedRequest.question)
-                : undefined,
-            lastAskedClarifyingField: partialClarifyingQuestions?.[0]?.factField,
-            lastClarifyingQuestionId: partialClarifyingQuestions?.[0]?.id,
-            status:
-              Boolean(partialClarifyingQuestions?.length) &&
-              (partial.needsClarification || partialScenarioValidation.answerIsConditional) &&
-              session.clarificationCount < 2
-                ? "awaiting_reply"
-                : "answered",
-          },
-          meta: {
-            fallbackReason: "partial_ai_output",
-            modelUsed: model,
-          },
-          debug:
-            process.env.NODE_ENV !== "production"
-              ? {
-                  mode: "ai_unverified",
-                  fallbackReason: weakResponseGateFired ? "weak_ai_response" : "partial_ai_output",
-                  validationError: error instanceof Error ? error.message : "unknown_error",
-                  rawModelText:
-                    error instanceof AIValidationError
-                      ? error.rawText?.slice(0, 2000)
-                      : undefined,
-                  parsedKeys: Object.keys(partial),
-                  missingRequiredFields,
-                  weakResponseGateFired,
-                  retrievedSnippetCount: retrievedSupport.length,
-                  retrievedSections: retrievedSupport.map((item) => item.section),
-                  knownInteractionRuleIds: knownInteractionRules.map((item) => item.id),
-                  matchedInteractionRuleId: matchedInteractionRule?.id,
-                  matchedInteractionRuleTitle: matchedInteractionRule?.title,
-                  matchedInteractionRuleGoverningSources: matchedInteractionRule?.governingSources.map(
-                    (source) => `${source.source}:${source.section}`
-                  ),
-                  matchedInteractionRuleReasoningSteps: matchedInteractionRule?.reasoningSteps,
-                  routedGoverningSections,
-                  searchMode,
-                  routingFallbackOccurred,
-                  governingSectionsSelected,
-                  governingSectionUsed:
-                    visiblePartialReferences[0]
-                      ? `${visiblePartialReferences[0].sourceId}:${visiblePartialReferences[0].section}`
-                      : finalGoverningSectionUsed,
-                  bottomLineMode: partialBottomLineMode,
-                  bottomLineReflectsGoverningRule: partialBottomLineReflectsGoverningRule,
-                  strongerRuleBasedAnswerAvailableButNotUsed,
-                  classificationLevelOnly,
-                  concreteRuleBasedAnswerAvailable,
-                  finalAnswerUsedConcreteRule,
-                  concreteInteractionRuleAvailable,
-                  finalAnswerUsedConcreteInteractionRule,
-                  answerStillGenericDespiteInteractionRule,
-                  missingGatingFacts: partialScenarioValidation.missingGatingFacts,
-                  answerIsConditional: partialScenarioValidation.answerIsConditional,
-                  gatingQuestionUsed: partialClarifyingQuestions?.[0]?.prompt,
-                  sectionExpansionUsed: groundingPack.retrievalMeta.sectionExpansionUsed,
-                  crossReferencesFollowed: groundingPack.retrievalMeta.crossReferencesFollowed,
-                  contextPacketSummary,
-                  governingSourcePriorityUsed,
-                  reasoningMode: matchedInteractionRule ? "interaction_led" : "generic_retrieval_led",
-                  answerMode: partialBottomLineMode,
-                  retrievedSnippets: selectDebugRetrievedSnippets({
-                    question: parsedRequest.question,
-                    retrievedSupport,
-                    visibleReferences: finalizedAIUnverifiedScenarioAnswer.references,
-                  }),
-                  groundingSource: groundedPartialSupport.usedRetrievedSupport
-                    ? "retrieved_contract_snippets"
-                    : "deterministic_support",
-                  usedRetrievedSupport: groundedPartialSupport.usedRetrievedSupport,
-                  externalAllowed: groundingPack.retrievalMeta.externalAllowed,
-                  externalUsed: groundingPack.retrievalMeta.externalUsed,
-                  externalReason: groundingPack.retrievalMeta.externalReason,
-                  externalSnippetCount:
-                    groundingPack.external.webDiscussion.length + groundingPack.external.forumUnofficial.length,
-                  externalLabels: [
-                    ...groundingPack.external.webDiscussion.map((item) => item.section),
-                    ...groundingPack.external.forumUnofficial.map((item) => item.section),
-                  ],
-                  hasPwaIndex: contractIndex.hasPwaIndex,
-                  retrievalSourcesUsed: buildRetrievalSourcesUsed({
-                    groundingPack,
-                    usedRetrievedSupport: groundedPartialSupport.usedRetrievedSupport,
-                  }),
-                  ...augmentSourceUsageWithReferences(sourceUsageDebug, finalizedAIUnverifiedScenarioAnswer.answer.references),
-                  structuredRowsUsed: sourceUsageDebug.structuredRowsUsed,
-                  aiSynthesisUsed: true,
-                  OPENAI_API_KEYPresent: Boolean(apiKey),
-                  modelClientCalled,
-                  modelClientSucceeded,
-                  modelClientError,
-                  aiSynthesisAttempted,
-                  aiSynthesisRejected: true,
-                  aiRejectionReason: weakResponseGateFired ? "weak_ai_response" : modelClientError,
-                  laneEnforced: laneExecution.laneDebug.laneEnforced,
-                  expectedTool: laneExecution.laneDebug.expectedTool,
-                  retrievalAttempted: laneExecution.laneDebug.retrievalAttempted,
-                  laneExecutionResult: laneExecution.laneDebug.laneExecutionResult,
-                  documentShortcutUsed,
-                  clarificationReason,
-                  fallbackUsed: true,
-                  fallthroughPrevented: laneExecution.laneDebug.fallthroughPrevented,
-                  retryAttempts: laneExecution.laneDebug.retryAttempts,
-                  sourceAvailability: laneExecution.laneDebug.sourceAvailability,
-                  verifierRan: verifiedAIUnverifiedAnswer.verifierRan,
-                  verifierPassed: verifiedAIUnverifiedAnswer.verifierPassed,
-                  verifierWarnings: verifiedAIUnverifiedAnswer.verifierWarnings,
-                  verifierFailureReasons: verifiedAIUnverifiedAnswer.verifierFailureReasons,
-                  verifierAdjustedAnswer: verifiedAIUnverifiedAnswer.verifierAdjustedAnswer,
-                  finalSafetyPipelineRan: finalizedAIUnverifiedScenarioAnswer.debug.finalSafetyPipelineRan,
-                  truthGuardRan: verifiedAIUnverifiedAnswer.truthGuardRan,
-                  definitionApplicationGuardRan: finalizedAIUnverifiedScenarioAnswer.debug.definitionApplicationGuardRan,
-                  strongClaimsDetected: verifiedAIUnverifiedAnswer.strongClaimsDetected,
-                  strongClaimsSupported: verifiedAIUnverifiedAnswer.strongClaimsSupported,
-                  strongClaimsDowngraded: verifiedAIUnverifiedAnswer.strongClaimsDowngraded,
-                  definitionSectionUsed: verifiedAIUnverifiedAnswer.definitionSectionUsed,
-                  operationalSectionUsed: verifiedAIUnverifiedAnswer.operationalSectionUsed,
-                  definitionOverrodeOperation: verifiedAIUnverifiedAnswer.definitionOverrodeOperation,
-                  definitionBasedAnswer: verifiedAIUnverifiedAnswer.definitionBasedAnswer,
-                  applicationClaimDetected: verifiedAIUnverifiedAnswer.applicationClaimDetected,
-                  applicationClaimSupported: verifiedAIUnverifiedAnswer.applicationClaimSupported,
-                  applicationClaimDowngraded: verifiedAIUnverifiedAnswer.applicationClaimDowngraded,
-                  answerDowngradedToCaution: finalizedAIUnverifiedScenarioAnswer.debug.answerDowngradedToCaution,
-                  downgradeReasons: finalizedAIUnverifiedScenarioAnswer.debug.downgradeReasons,
-                  answerReferencedSections: finalizedAIUnverifiedScenarioAnswer.debug.answerReferencedSections,
-                  supportInjectedFromAnswer: finalizedAIUnverifiedScenarioAnswer.debug.supportInjectedFromAnswer,
-                  supportMissingForReferencedSection:
-                    finalizedAIUnverifiedScenarioAnswer.debug.supportMissingForReferencedSection,
-                  controllingSectionLocked: finalizedAIUnverifiedScenarioAnswer.debug.controllingSectionLocked,
-                  controllingSectionDisplay: finalizedAIUnverifiedScenarioAnswer.debug.controllingSectionDisplay,
-                  controllingSectionQuoteAttached:
-                    finalizedAIUnverifiedScenarioAnswer.debug.controllingSectionQuoteAttached,
-                  controllingSectionQuote: finalizedAIUnverifiedScenarioAnswer.debug.controllingSectionQuote,
-                  controllingSectionMissingExactText:
-                    finalizedAIUnverifiedScenarioAnswer.debug.controllingSectionMissingExactText,
-                  xDayScenario,
-                  xDayAnchorFound: finalizedAIUnverifiedScenarioAnswer.debug.xDayAnchorFound,
-                  xDayGroupingScenario,
-                  xDayGroupingAnchorFound: finalizedAIUnverifiedScenarioAnswer.debug.xDayGroupingAnchorFound,
-                  xDayGroupingMissingSupportReason:
-                    finalizedAIUnverifiedScenarioAnswer.debug.xDayGroupingMissingSupportReason,
-                  pbRerouteXdayScenario,
-                  pbAnchorFound: finalizedAIUnverifiedScenarioAnswer.debug.pbAnchorFound,
-                  pbProcessingAnchorFound: finalizedAIUnverifiedScenarioAnswer.debug.pbProcessingAnchorFound,
-                  notificationAnchorFound: finalizedAIUnverifiedScenarioAnswer.debug.notificationAnchorFound,
-                  pbScenarioMissingSupportReason:
-                    finalizedAIUnverifiedScenarioAnswer.debug.pbScenarioMissingSupportReason,
-                  futureRotationChangeScenario,
-                  futureRotationChangeAnchorFound:
-                    finalizedAIUnverifiedScenarioAnswer.debug.futureRotationChangeAnchorFound,
-                  cpoOverrideAnchorFound: finalizedAIUnverifiedScenarioAnswer.debug.cpoOverrideAnchorFound,
-                  knownAbsenceAnchorFound: finalizedAIUnverifiedScenarioAnswer.debug.knownAbsenceAnchorFound,
-                  payProtectionAnchorFound: finalizedAIUnverifiedScenarioAnswer.debug.payProtectionAnchorFound,
-                  futureRotationMissingSupportReason:
-                    finalizedAIUnverifiedScenarioAnswer.debug.futureRotationMissingSupportReason,
-                  governingSectionIncludesXDay,
-                  pcsSwapScenario,
-                  pcsSwapAnchorFound: finalizedAIUnverifiedScenarioAnswer.debug.pcsSwapAnchorFound,
-                  pcsSwapMissingSupportReason:
-                    finalizedAIUnverifiedScenarioAnswer.debug.pcsSwapMissingSupportReason,
-                  governingSectionIncludesPcsSwap,
-                  vacationBankScenario,
-                  vacationBankAnchorFound: finalizedAIUnverifiedScenarioAnswer.debug.vacationBankAnchorFound,
-                  vacationBankMissingSupportReason:
-                    finalizedAIUnverifiedScenarioAnswer.debug.vacationBankMissingSupportReason,
-                  governingSectionIncludesVacationBank,
-                  oeNotificationScenario: finalizedAIUnverifiedScenarioAnswer.debug.oeNotificationScenario,
-                  oeNotificationAnchorFound: finalizedAIUnverifiedScenarioAnswer.debug.oeNotificationAnchorFound,
-                  oeNotificationMissingSupportReason:
-                    finalizedAIUnverifiedScenarioAnswer.debug.oeNotificationMissingSupportReason,
-                  oeNotificationSupportRejectedReasons:
-                    finalizedAIUnverifiedScenarioAnswer.debug.oeNotificationSupportRejectedReasons,
-                  shortCallDutyScenario,
-                  shortCallDutyAnchorFound: finalizedAIUnverifiedScenarioAnswer.debug.shortCallDutyAnchorFound,
-                  governingSectionIncludesDutyLegality,
-                  ...rerankedPartialSupport.debug,
-                  ...partialFinalVisibleSupportDebug,
-                  ...intentDebugBase,
-                  toolsUsed: buildContractScenarioToolsUsed({
-                    intent: intentResolution,
-                    matchedInteractionRule,
-                    missingGatingFacts: partialScenarioValidation.missingGatingFacts,
-                    aiSynthesisUsed: true,
-                  }),
-                  hasCompensationIndex: contractIndex.hasCompensationIndex,
-                  hasSchedulerIndex: contractIndex.hasSchedulerIndex,
-                  retrievalPassCounts: {
-                    primary: primaryMatches.length,
-                    expanded: expandedMatches.length,
-                    linked: linkedMatches.length,
-                  },
-                }
-              : undefined,
-        });
-      }
-    }
-
-    console.log("=== FALLBACK CHOSEN BECAUSE ===");
-    console.dir(
-      {
-        reason: error instanceof Error ? error.message : "model_failure",
-        weakResponseGateFired,
-        aiUnverifiedAvailable: Boolean(partial && typeof partial.shortAnswer === "string" && partial.shortAnswer.trim().length > 0),
-      },
-      { depth: null }
-    );
-
-    const fallbackScenarioValidation = resolveScenarioValidation({
-      question: parsedRequest.question,
-      facts: {
-        ...fallbackResult.nextSession.facts,
-        ...session.facts,
-        ...(inferredPilotStatus && !session.facts.status ? { status: inferredPilotStatus } : {}),
-      },
-      governingPacket: governingPacketUsed,
-      matchedInteractionRule,
-    });
-
-    const verifiedFallbackAnswer = applyScenarioAnswerVerifier({
-      question: parsedRequest.question,
-      selectedLane: intentResolution.selectedLane,
-      answer: buildSafeScenarioFallbackAnswer({
-        question: parsedRequest.question,
-        answer: {
-          ...fallbackResult.answer,
-          assumptions: [
-            ...fallbackResult.answer.assumptions,
-            "AI fallback mode is active because the model response could not be used safely.",
-          ],
-        },
-        retrievedSupport,
-        sourceUsageDebug,
-        missingGatingFacts: fallbackScenarioValidation.missingGatingFacts,
-      }),
-      contractIndex,
-      sourceUsageDebug,
-    });
-    const fallbackAnswerSupport = mergeAnswerReferencedSupport({
-      answerText: `${verifiedFallbackAnswer.answer.shortAnswer} ${verifiedFallbackAnswer.answer.plainEnglishExplanation}`,
-      references: verifiedFallbackAnswer.answer.references,
-      chunks: searchableChunks,
-    });
-    const rerankedFallbackSupport = rerankSupportReferences({
-      question: parsedRequest.question,
-      answerText: `${verifiedFallbackAnswer.answer.shortAnswer} ${verifiedFallbackAnswer.answer.plainEnglishExplanation}`,
-      references: [
-        ...fallbackAnswerSupport.references,
-        ...(controllingSectionLock?.reference ? [controllingSectionLock.reference] : []),
-        ...supportFocusedReferences,
-      ],
-      selectedLane: intentResolution.selectedLane,
-    });
-    const fallbackVisibleReferences = selectVisibleContractReferences(rerankedFallbackSupport.references);
-    const fallbackFinalVisibleSupportDebug = buildFinalVisibleSupportDebug(
-      fallbackVisibleReferences,
-      rerankedFallbackSupport.debug as Record<string, unknown>
-    );
-    const fallbackAnswerWithComparisonNote = applyComparisonSupportNote({
-      question: parsedRequest.question,
-      answer: {
-        ...verifiedFallbackAnswer.answer,
-        references: fallbackVisibleReferences,
-      },
-      references: fallbackVisibleReferences,
-    });
-    const fallbackAnswerWithControllingSection = applyControllingSectionLock({
-      answer: fallbackAnswerWithComparisonNote,
-      controllingSectionLock,
-    });
-    const finalizedFallbackScenarioAnswer = finalizeScenarioSafetyPipeline({
-      question: parsedRequest.question,
-      answer: fallbackAnswerWithControllingSection,
-      verified: verifiedFallbackAnswer,
-      supportDebug: {
-        ...rerankedFallbackSupport.debug,
-        ...fallbackFinalVisibleSupportDebug,
-        answerReferencedSections: fallbackAnswerSupport.answerReferencedSections,
-        supportInjectedFromAnswer: fallbackAnswerSupport.supportInjectedFromAnswer,
-        supportMissingForReferencedSection: fallbackAnswerSupport.missingSections.length > 0,
-        controllingSectionLocked: Boolean(controllingSectionLock),
-        controllingSectionDisplay: controllingSectionLock?.displaySection,
-        controllingSectionQuoteAttached: Boolean(controllingSectionLock?.quoteSnippet),
-        controllingSectionQuote: controllingSectionLock?.quoteSnippet,
-        controllingSectionMissingExactText: controllingSectionLock?.exactAttached === false,
-      },
-    });
-
-    return jsonResponse(200, {
-      ok: true,
-      mode: "fallback",
-      answer: finalizedFallbackScenarioAnswer.answer,
-      detectedScenario: fallbackResult.detectedScenario,
-      nextSession: fallbackResult.nextSession,
-      meta: {
-        fallbackReason: error instanceof Error ? error.message : "model_failure",
-      },
-      debug:
-        process.env.NODE_ENV !== "production"
-          ? {
-              mode: "fallback",
-              fallbackReason: error instanceof Error ? error.message : "model_failure",
-              validationError: error instanceof Error ? error.message : undefined,
-              rawModelText: error instanceof AIValidationError ? error.rawText?.slice(0, 2000) : undefined,
-              parsedKeys:
-                error instanceof AIValidationError && error.partialOutput && typeof error.partialOutput === "object"
-                  ? Object.keys(error.partialOutput as Record<string, unknown>)
-                  : lastAIOutput && typeof lastAIOutput === "object"
-                    ? Object.keys(lastAIOutput as Record<string, unknown>)
-                  : undefined,
-              missingRequiredFields:
-                partial && typeof partial === "object"
-                  ? [
-                      typeof (partial as Record<string, unknown>).shortAnswer !== "string" ? "shortAnswer" : null,
-                      typeof (partial as Record<string, unknown>).confidence !== "string" ? "confidence" : null,
-                    ].filter((item): item is string => Boolean(item))
-                  : undefined,
-              weakResponseGateFired,
-              retrievedSnippetCount: retrievedSupport.length,
-              retrievedSections: retrievedSupport.map((item) => item.section),
-              knownInteractionRuleIds: knownInteractionRules.map((item) => item.id),
-              matchedInteractionRuleId: matchedInteractionRule?.id,
-              matchedInteractionRuleTitle: matchedInteractionRule?.title,
-              matchedInteractionRuleGoverningSources: matchedInteractionRule?.governingSources.map(
-                (source) => `${source.source}:${source.section}`
-              ),
-              matchedInteractionRuleReasoningSteps: matchedInteractionRule?.reasoningSteps,
-              routedGoverningSections,
-              searchMode,
-              routingFallbackOccurred,
-              governingSectionsSelected,
-              governingSectionUsed: finalGoverningSectionUsed,
-              sectionExpansionUsed: groundingPack.retrievalMeta.sectionExpansionUsed,
-              crossReferencesFollowed: groundingPack.retrievalMeta.crossReferencesFollowed,
-              contextPacketSummary,
-              governingSourcePriorityUsed,
-              reasoningMode: matchedInteractionRule ? "interaction_led" : "generic_retrieval_led",
-              answerMode: groundingPack.retrievalMeta.sectionLed ? "section_led" : "generic",
-              retrievedSnippets: selectDebugRetrievedSnippets({
-                question: parsedRequest.question,
-                retrievedSupport,
-                visibleReferences: finalizedFallbackScenarioAnswer.references,
-              }),
-              groundingSource: "fallback",
-              usedRetrievedSupport: false,
-              externalAllowed: groundingPack.retrievalMeta.externalAllowed,
-              externalUsed: groundingPack.retrievalMeta.externalUsed,
-              externalReason: groundingPack.retrievalMeta.externalReason,
-              externalSnippetCount:
-                groundingPack.external.webDiscussion.length + groundingPack.external.forumUnofficial.length,
-              externalLabels: [
-                ...groundingPack.external.webDiscussion.map((item) => item.section),
-                ...groundingPack.external.forumUnofficial.map((item) => item.section),
-              ],
-              hasPwaIndex: contractIndex.hasPwaIndex,
-              hasCompensationIndex: contractIndex.hasCompensationIndex,
-              hasSchedulerIndex: contractIndex.hasSchedulerIndex,
-              retrievalSourcesUsed: buildRetrievalSourcesUsed({
-                groundingPack,
-                usedRetrievedSupport: false,
-              }),
-              ...augmentSourceUsageWithReferences(sourceUsageDebug, finalizedFallbackScenarioAnswer.answer.references),
-              structuredRowsUsed: sourceUsageDebug.structuredRowsUsed,
-              aiSynthesisUsed: false,
-              OPENAI_API_KEYPresent: Boolean(apiKey),
-              modelClientCalled,
-              modelClientSucceeded,
-              modelClientError,
-              aiSynthesisAttempted,
-              aiSynthesisRejected: true,
-              aiRejectionReason: aiRejectionReason ?? modelClientError,
-              laneEnforced: laneExecution.laneDebug.laneEnforced,
-              expectedTool: laneExecution.laneDebug.expectedTool,
-              retrievalAttempted: laneExecution.laneDebug.retrievalAttempted,
-              laneExecutionResult: laneExecution.laneDebug.laneExecutionResult,
-              documentShortcutUsed,
-              clarificationReason,
-              fallbackUsed: true,
-              fallthroughPrevented: laneExecution.laneDebug.fallthroughPrevented,
-              retryAttempts: laneExecution.laneDebug.retryAttempts,
-              sourceAvailability: laneExecution.laneDebug.sourceAvailability,
-              verifierRan: verifiedFallbackAnswer.verifierRan,
-              verifierPassed: verifiedFallbackAnswer.verifierPassed,
-              verifierWarnings: verifiedFallbackAnswer.verifierWarnings,
-              verifierFailureReasons: verifiedFallbackAnswer.verifierFailureReasons,
-              verifierAdjustedAnswer: verifiedFallbackAnswer.verifierAdjustedAnswer,
-              finalSafetyPipelineRan: finalizedFallbackScenarioAnswer.debug.finalSafetyPipelineRan,
-              truthGuardRan: verifiedFallbackAnswer.truthGuardRan,
-              definitionApplicationGuardRan: finalizedFallbackScenarioAnswer.debug.definitionApplicationGuardRan,
-              strongClaimsDetected: verifiedFallbackAnswer.strongClaimsDetected,
-              strongClaimsSupported: verifiedFallbackAnswer.strongClaimsSupported,
-              strongClaimsDowngraded: verifiedFallbackAnswer.strongClaimsDowngraded,
-              definitionSectionUsed: verifiedFallbackAnswer.definitionSectionUsed,
-              operationalSectionUsed: verifiedFallbackAnswer.operationalSectionUsed,
-              definitionOverrodeOperation: verifiedFallbackAnswer.definitionOverrodeOperation,
-              definitionBasedAnswer: verifiedFallbackAnswer.definitionBasedAnswer,
-              applicationClaimDetected: verifiedFallbackAnswer.applicationClaimDetected,
-              applicationClaimSupported: verifiedFallbackAnswer.applicationClaimSupported,
-              applicationClaimDowngraded: verifiedFallbackAnswer.applicationClaimDowngraded,
-              answerDowngradedToCaution: finalizedFallbackScenarioAnswer.debug.answerDowngradedToCaution,
-              downgradeReasons: finalizedFallbackScenarioAnswer.debug.downgradeReasons,
-              answerReferencedSections: finalizedFallbackScenarioAnswer.debug.answerReferencedSections,
-              supportInjectedFromAnswer: finalizedFallbackScenarioAnswer.debug.supportInjectedFromAnswer,
-              supportMissingForReferencedSection:
-                finalizedFallbackScenarioAnswer.debug.supportMissingForReferencedSection,
-              controllingSectionLocked: finalizedFallbackScenarioAnswer.debug.controllingSectionLocked,
-              controllingSectionDisplay: finalizedFallbackScenarioAnswer.debug.controllingSectionDisplay,
-              controllingSectionQuoteAttached:
-                finalizedFallbackScenarioAnswer.debug.controllingSectionQuoteAttached,
-              controllingSectionQuote: finalizedFallbackScenarioAnswer.debug.controllingSectionQuote,
-              controllingSectionMissingExactText:
-                finalizedFallbackScenarioAnswer.debug.controllingSectionMissingExactText,
-              xDayScenario,
-              xDayAnchorFound: finalizedFallbackScenarioAnswer.debug.xDayAnchorFound,
-              xDayGroupingScenario,
-              xDayGroupingAnchorFound: finalizedFallbackScenarioAnswer.debug.xDayGroupingAnchorFound,
-              xDayGroupingMissingSupportReason:
-                finalizedFallbackScenarioAnswer.debug.xDayGroupingMissingSupportReason,
-              pbRerouteXdayScenario,
-              pbAnchorFound: finalizedFallbackScenarioAnswer.debug.pbAnchorFound,
-              pbProcessingAnchorFound: finalizedFallbackScenarioAnswer.debug.pbProcessingAnchorFound,
-              notificationAnchorFound: finalizedFallbackScenarioAnswer.debug.notificationAnchorFound,
-              pbScenarioMissingSupportReason:
-                finalizedFallbackScenarioAnswer.debug.pbScenarioMissingSupportReason,
-              futureRotationChangeScenario,
-              futureRotationChangeAnchorFound:
-                finalizedFallbackScenarioAnswer.debug.futureRotationChangeAnchorFound,
-              cpoOverrideAnchorFound: finalizedFallbackScenarioAnswer.debug.cpoOverrideAnchorFound,
-              knownAbsenceAnchorFound: finalizedFallbackScenarioAnswer.debug.knownAbsenceAnchorFound,
-              payProtectionAnchorFound: finalizedFallbackScenarioAnswer.debug.payProtectionAnchorFound,
-              futureRotationMissingSupportReason:
-                finalizedFallbackScenarioAnswer.debug.futureRotationMissingSupportReason,
-              governingSectionIncludesXDay,
-              pcsSwapScenario,
-              pcsSwapAnchorFound: finalizedFallbackScenarioAnswer.debug.pcsSwapAnchorFound,
-              pcsSwapMissingSupportReason: finalizedFallbackScenarioAnswer.debug.pcsSwapMissingSupportReason,
-              governingSectionIncludesPcsSwap,
-              vacationBankScenario,
-              vacationBankAnchorFound: finalizedFallbackScenarioAnswer.debug.vacationBankAnchorFound,
-              vacationBankMissingSupportReason:
-                finalizedFallbackScenarioAnswer.debug.vacationBankMissingSupportReason,
-              governingSectionIncludesVacationBank,
-              oeNotificationScenario: finalizedFallbackScenarioAnswer.debug.oeNotificationScenario,
-              oeNotificationAnchorFound: finalizedFallbackScenarioAnswer.debug.oeNotificationAnchorFound,
-              oeNotificationMissingSupportReason:
-                finalizedFallbackScenarioAnswer.debug.oeNotificationMissingSupportReason,
-              oeNotificationSupportRejectedReasons:
-                finalizedFallbackScenarioAnswer.debug.oeNotificationSupportRejectedReasons,
-              shortCallDutyScenario,
-              shortCallDutyAnchorFound: finalizedFallbackScenarioAnswer.debug.shortCallDutyAnchorFound,
-              governingSectionIncludesDutyLegality,
-              ...rerankedFallbackSupport.debug,
-              ...fallbackFinalVisibleSupportDebug,
-              ...intentDebugBase,
-              toolsUsed: buildContractScenarioToolsUsed({
-                intent: intentResolution,
-                matchedInteractionRule,
-                missingGatingFacts: [],
-                aiSynthesisUsed: false,
-              }),
-              retrievalPassCounts: {
-                primary: primaryMatches.length,
-                expanded: expandedMatches.length,
-                linked: linkedMatches.length,
-              },
-            }
-          : undefined,
-    });
+    productionPayload = (await productionResponse.clone().json()) as ContractCopilotApiSuccessResponse;
+  } catch {
+    return productionResponse;
   }
+
+  if (!productionPayload?.ok) {
+    return productionResponse;
+  }
+
+  const productionScenarioFamily =
+    productionPayload.debug?.selectedScenarioFamilyFinal ??
+    productionPayload.debug?.scenarioFamilySelected;
+  const productionAnswerHash = hashShadowValue(
+    `${productionPayload.answer.shortAnswer ?? ""}\n${productionPayload.answer.plainEnglishExplanation ?? ""}`,
+  );
+  const productionSupportSections = extractSupportSections(productionPayload.answer);
+
+  let shadowDebugPatch: Record<string, unknown> = {};
+  try {
+    const shadowResponse = await runContractCopilot({
+      input: {
+        request: parsedRequest,
+        session,
+      },
+      intentResult: intentResolution,
+      legacyCompatArgs,
+    });
+    const shadowPayload = (await shadowResponse.clone().json()) as ContractCopilotApiSuccessResponse;
+    if (shadowPayload?.ok) {
+      const shadowScenarioFamily =
+        shadowPayload.debug?.selectedScenarioFamilyFinal ??
+        shadowPayload.debug?.scenarioFamilySelected;
+      const shadowSupportSections = extractSupportSections(shadowPayload.answer);
+      const shadowAnswerHash = hashShadowValue(
+        `${shadowPayload.answer.shortAnswer ?? ""}\n${shadowPayload.answer.plainEnglishExplanation ?? ""}`,
+      );
+      const shadowDiffFromProduction: string[] = [];
+      if (productionScenarioFamily !== shadowScenarioFamily) {
+        shadowDiffFromProduction.push("scenario_family");
+      }
+      if (productionAnswerHash !== shadowAnswerHash) {
+        shadowDiffFromProduction.push("answer_hash");
+      }
+      if (JSON.stringify(productionSupportSections) !== JSON.stringify(shadowSupportSections)) {
+        shadowDiffFromProduction.push("support_sections");
+      }
+      shadowDebugPatch = {
+        productionScenarioFamily,
+        shadowScenarioFamily,
+        shadowSubScenario:
+          shadowPayload.debug?.payCreditSubScenario ??
+          shadowPayload.debug?.answerSubScenario ??
+          shadowPayload.debug?.supportSubScenario,
+        shadowAnswerSummary: summarizeShadowAnswer(shadowPayload.answer),
+        shadowSupportSections,
+        shadowAiPathUsed: shadowPayload.debug?.aiPathUsed,
+        shadowFallbackUsed: shadowPayload.debug?.fallbackUsed,
+        shadowCoherenceFailed: shadowPayload.debug?.finalResponseCoherenceFailed,
+        shadowDiffFromProduction,
+        shadowMismatchDetected: shadowDiffFromProduction.length > 0,
+        productionAnswerHash,
+        shadowAnswerHash,
+        productionSupportSections,
+      };
+    }
+  } catch (error) {
+    shadowDebugPatch = {
+      productionScenarioFamily,
+      shadowMismatchDetected: true,
+      shadowDiffFromProduction: ["shadow_execution_error"],
+      shadowAnswerSummary: error instanceof Error ? error.message : "shadow_execution_error",
+      productionAnswerHash,
+      productionSupportSections,
+    };
+  }
+
+  return jsonResponse(productionResponse.status, {
+    ...productionPayload,
+    debug: {
+      ...(productionPayload.debug ?? {}),
+      ...shadowDebugPatch,
+    },
+  });
 }

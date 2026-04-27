@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { Text, TouchableOpacity, View } from "react-native";
 import { ContractQuestionInput } from "./ContractQuestionInput";
 import { ContractCopilotThreadView } from "./ContractCopilotThreadView";
@@ -134,9 +134,9 @@ export function ContractCopilotPanel() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isExtractingImage, setIsExtractingImage] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [debugInfo, setDebugInfo] = useState<ContractCopilotApiSuccessResponse["debug"] | null>(null);
   const [feedbackSubmittingTurnId, setFeedbackSubmittingTurnId] = useState<string | null>(null);
   const [feedbackStatusByTurnId, setFeedbackStatusByTurnId] = useState<Record<string, string | null>>({});
+  const latestSubmitRequestIdRef = useRef(0);
 
   const examples = useMemo(
     () => [
@@ -152,6 +152,15 @@ export function ContractCopilotPanel() {
     () => [...activeThread.turns].reverse().find((turn) => turn.role === "copilot"),
     [activeThread.turns],
   );
+  const latestTurnDebugSnapshot = (latestCopilotTurn?.debugSnapshot ?? null) as
+    | ContractCopilotApiSuccessResponse["debug"]
+    | null;
+  const visibleDebugInfo = latestTurnDebugSnapshot
+    ? {
+        ...latestTurnDebugSnapshot,
+        pipelineLeakDetected: latestTurnDebugSnapshot.orchestratorOwnsScenarioPipeline === true ? false : true,
+      }
+    : null;
   const mergedEvidenceFacts = useMemo(
     () =>
       (activeThread.confirmedEvidence ?? []).reduce<Partial<ParsedScenarioFacts>>(
@@ -368,6 +377,8 @@ export function ContractCopilotPanel() {
     }
 
     const baseThread = threadOverride ?? activeThread;
+    const requestId = latestSubmitRequestIdRef.current + 1;
+    latestSubmitRequestIdRef.current = requestId;
     const requestThread =
       source === "free_text"
         ? createEmptyThread(questionToAsk)
@@ -380,8 +391,15 @@ export function ContractCopilotPanel() {
 
     setIsSubmitting(true);
     setSubmitError(null);
-    setDebugInfo(null);
     resetCollapsedPanels();
+    if (source === "free_text") {
+      setActiveThread(requestThread);
+      setViewState({
+        activeThreadId: requestThread.threadId,
+        supportOpenTurnIds: [],
+        evidenceOpenTurnIds: [],
+      });
+    }
 
     try {
       const response = await fetch("/api/ai/contract-copilot", {
@@ -428,6 +446,10 @@ export function ContractCopilotPanel() {
         screenshotLifecycle: requestThread.screenshotLifecycle,
       };
 
+      if (requestId !== latestSubmitRequestIdRef.current) {
+        return;
+      }
+
       setActiveThread(nextThread);
       setViewState((currentState) => ({
         ...currentState,
@@ -435,7 +457,6 @@ export function ContractCopilotPanel() {
         supportOpenTurnIds: [],
         evidenceOpenTurnIds: [],
       }));
-      setDebugInfo(payload.debug ?? null);
 
       if (source === "free_text") {
         setQuestion("");
@@ -457,17 +478,22 @@ export function ContractCopilotPanel() {
         }
       }
     } catch (error) {
+      if (requestId !== latestSubmitRequestIdRef.current) {
+        return;
+      }
       setSubmitError(
         "Live AI route unavailable. To test Contract Copilot locally, run `npm run build:web` and then `npm run serve:web` so localhost:3000 serves both the app and /api/ai/contract-copilot.",
       );
-      setDebugInfo(null);
       runLocalFallback(requestThread, requestQuestion, userMessage, source, options?.factPatch);
     } finally {
-      setIsSubmitting(false);
+      if (requestId === latestSubmitRequestIdRef.current) {
+        setIsSubmitting(false);
+      }
     }
   };
 
   const askAnotherQuestion = () => {
+    latestSubmitRequestIdRef.current += 1;
     const nextThread = createEmptyThread();
     setActiveThread(nextThread);
     setViewState({
@@ -477,7 +503,6 @@ export function ContractCopilotPanel() {
     });
     setQuestion("");
     setSubmitError(null);
-    setDebugInfo(null);
   };
 
   const removeEvidenceAttachment = (evidenceId: string) => {
@@ -566,7 +591,7 @@ export function ContractCopilotPanel() {
           question: args.question,
           answer: args.turn.answerCard as ContractAnswerCard,
           supportCards: args.turn.answerCard.references,
-          debugPayload: args.turn.debugSnapshot ?? debugInfo ?? null,
+          debugPayload: args.turn.debugSnapshot ?? null,
           userFeedback: args.userFeedback,
           correctedAnswer: args.correctedAnswer,
           expectedSource: args.expectedSource,
@@ -623,7 +648,7 @@ export function ContractCopilotPanel() {
         </Text>
       </View>
 
-      {debugInfo ? (
+      {visibleDebugInfo ? (
         <View
           style={{
             gap: 6,
@@ -637,86 +662,196 @@ export function ContractCopilotPanel() {
           <Text style={{ fontSize: 12, fontWeight: "800", color: palette.textSecondary, textTransform: "uppercase", letterSpacing: 1.1, fontFamily: fliegerTypography.familyBody }}>
             Debug
           </Text>
-          <Text style={{ fontSize: 12, lineHeight: 18, color: palette.textSecondary, fontFamily: fliegerTypography.familyBody }}>Mode: {debugInfo.mode}</Text>
-          {debugInfo.fallbackReason ? (
+          <Text style={{ fontSize: 12, lineHeight: 18, color: palette.textSecondary, fontFamily: fliegerTypography.familyBody }}>Mode: {visibleDebugInfo.mode}</Text>
+          {visibleDebugInfo.orchestratorOwnsScenarioPipeline !== undefined ? (
             <Text style={{ fontSize: 12, lineHeight: 18, color: palette.textSecondary, fontFamily: fliegerTypography.familyBody }}>
-              Fallback reason: {debugInfo.fallbackReason}
+              Orchestrator owns scenario pipeline: {visibleDebugInfo.orchestratorOwnsScenarioPipeline ? "yes" : "no"}
+            </Text>
+          ) : null}
+          {visibleDebugInfo.legacyCompatPipelineUsed !== undefined ? (
+            <Text style={{ fontSize: 12, lineHeight: 18, color: palette.textSecondary, fontFamily: fliegerTypography.familyBody }}>
+              Legacy compat pipeline used: {visibleDebugInfo.legacyCompatPipelineUsed ? "yes" : "no"}
+            </Text>
+          ) : null}
+          {visibleDebugInfo.pipelineLeakDetected ? (
+            <Text style={{ fontSize: 12, lineHeight: 18, color: palette.red, fontFamily: fliegerTypography.familyBody }}>
+              Pipeline leak detected: yes
+            </Text>
+          ) : null}
+          {visibleDebugInfo.scenarioFamilySelected ? (
+            <Text style={{ fontSize: 12, lineHeight: 18, color: palette.textSecondary, fontFamily: fliegerTypography.familyBody }}>
+              Scenario family selected: {visibleDebugInfo.scenarioFamilySelected}
+            </Text>
+          ) : null}
+          {visibleDebugInfo.selectedScenarioFamilyFinal ? (
+            <Text style={{ fontSize: 12, lineHeight: 18, color: palette.textSecondary, fontFamily: fliegerTypography.familyBody }}>
+              Selected scenario family final: {visibleDebugInfo.selectedScenarioFamilyFinal}
+            </Text>
+          ) : null}
+          {visibleDebugInfo.answerScenarioFamily ? (
+            <Text style={{ fontSize: 12, lineHeight: 18, color: palette.textSecondary, fontFamily: fliegerTypography.familyBody }}>
+              Answer scenario family: {visibleDebugInfo.answerScenarioFamily}
+            </Text>
+          ) : null}
+          {visibleDebugInfo.supportScenarioFamily ? (
+            <Text style={{ fontSize: 12, lineHeight: 18, color: palette.textSecondary, fontFamily: fliegerTypography.familyBody }}>
+              Support scenario family: {visibleDebugInfo.supportScenarioFamily}
+            </Text>
+          ) : null}
+          {visibleDebugInfo.debugScenarioFamily ? (
+            <Text style={{ fontSize: 12, lineHeight: 18, color: palette.textSecondary, fontFamily: fliegerTypography.familyBody }}>
+              Debug scenario family: {visibleDebugInfo.debugScenarioFamily}
+            </Text>
+          ) : null}
+          {visibleDebugInfo.turnId ? (
+            <Text style={{ fontSize: 12, lineHeight: 18, color: palette.textSecondary, fontFamily: fliegerTypography.familyBody }}>
+              Turn id: {visibleDebugInfo.turnId}
+            </Text>
+          ) : null}
+          {visibleDebugInfo.questionHash ? (
+            <Text style={{ fontSize: 12, lineHeight: 18, color: palette.textSecondary, fontFamily: fliegerTypography.familyBody }}>
+              Question hash: {visibleDebugInfo.questionHash}
+            </Text>
+          ) : null}
+          {visibleDebugInfo.scenarioType ? (
+            <Text style={{ fontSize: 12, lineHeight: 18, color: palette.textSecondary, fontFamily: fliegerTypography.familyBody }}>
+              Scenario type: {visibleDebugInfo.scenarioType}
+            </Text>
+          ) : null}
+          {visibleDebugInfo.aiPathUsed !== undefined ? (
+            <Text style={{ fontSize: 12, lineHeight: 18, color: palette.textSecondary, fontFamily: fliegerTypography.familyBody }}>
+              AI path used: {visibleDebugInfo.aiPathUsed ? "yes" : "no"}
+            </Text>
+          ) : null}
+          {visibleDebugInfo.fallbackUsed !== undefined ? (
+            <Text style={{ fontSize: 12, lineHeight: 18, color: palette.textSecondary, fontFamily: fliegerTypography.familyBody }}>
+              Fallback used: {visibleDebugInfo.fallbackUsed ? "yes" : "no"}
+            </Text>
+          ) : null}
+          {visibleDebugInfo.clarificationTriggered !== undefined ? (
+            <Text style={{ fontSize: 12, lineHeight: 18, color: palette.textSecondary, fontFamily: fliegerTypography.familyBody }}>
+              Clarification triggered: {visibleDebugInfo.clarificationTriggered ? "yes" : "no"}
+            </Text>
+          ) : null}
+          {visibleDebugInfo.clarificationInsteadOfFallback !== undefined ? (
+            <Text style={{ fontSize: 12, lineHeight: 18, color: palette.textSecondary, fontFamily: fliegerTypography.familyBody }}>
+              Clarification instead of fallback: {visibleDebugInfo.clarificationInsteadOfFallback ? "yes" : "no"}
+            </Text>
+          ) : null}
+          {visibleDebugInfo.reasonForFallback ? (
+            <Text style={{ fontSize: 12, lineHeight: 18, color: palette.textSecondary, fontFamily: fliegerTypography.familyBody }}>
+              Fallback reason: {visibleDebugInfo.reasonForFallback}
+            </Text>
+          ) : null}
+          {visibleDebugInfo.aiPathSkippedReason ? (
+            <Text style={{ fontSize: 12, lineHeight: 18, color: palette.textSecondary, fontFamily: fliegerTypography.familyBody }}>
+              AI path skipped reason: {visibleDebugInfo.aiPathSkippedReason}
+            </Text>
+          ) : null}
+          {visibleDebugInfo.modelValidationFailureReason ? (
+            <Text style={{ fontSize: 12, lineHeight: 18, color: palette.textSecondary, fontFamily: fliegerTypography.familyBody }}>
+              Model validation failure reason: {visibleDebugInfo.modelValidationFailureReason}
+            </Text>
+          ) : null}
+          {visibleDebugInfo.finalResponseCoherenceFailed !== undefined ? (
+            <Text style={{ fontSize: 12, lineHeight: 18, color: visibleDebugInfo.finalResponseCoherenceFailed ? palette.red : palette.textSecondary, fontFamily: fliegerTypography.familyBody }}>
+              Final response coherence failed: {visibleDebugInfo.finalResponseCoherenceFailed ? "yes" : "no"}
+            </Text>
+          ) : null}
+          {visibleDebugInfo.finalResponseMismatchReason ? (
+            <Text style={{ fontSize: 12, lineHeight: 18, color: palette.textSecondary, fontFamily: fliegerTypography.familyBody }}>
+              Final response mismatch reason: {visibleDebugInfo.finalResponseMismatchReason}
+            </Text>
+          ) : null}
+          {visibleDebugInfo.supportFinalFilterRemoved !== undefined ? (
+            <Text style={{ fontSize: 12, lineHeight: 18, color: palette.textSecondary, fontFamily: fliegerTypography.familyBody }}>
+              Final support filter removed: {visibleDebugInfo.supportFinalFilterRemoved}
+            </Text>
+          ) : null}
+          {visibleDebugInfo.supportFinalFilterRemovedReasons && visibleDebugInfo.supportFinalFilterRemovedReasons.length > 0 ? (
+            <Text style={{ fontSize: 12, lineHeight: 18, color: palette.textSecondary, fontFamily: fliegerTypography.familyBody }}>
+              Final support filter reasons: {visibleDebugInfo.supportFinalFilterRemovedReasons.join(" | ")}
+            </Text>
+          ) : null}
+          {visibleDebugInfo.orchestratorStages ? (
+            <Text style={{ fontSize: 12, lineHeight: 18, color: palette.textSecondary, fontFamily: fliegerTypography.familyBody }}>
+              Orchestrator stages: {JSON.stringify(visibleDebugInfo.orchestratorStages)}
             </Text>
           ) : null}
           <Text style={{ fontSize: 12, lineHeight: 18, color: palette.textSecondary, fontFamily: fliegerTypography.familyBody }}>
-            OPENAI_API_KEY present: {debugInfo.OPENAI_API_KEYPresent ? "yes" : "no"}
+            OPENAI_API_KEY present: {visibleDebugInfo.OPENAI_API_KEYPresent ? "yes" : "no"}
           </Text>
           <Text style={{ fontSize: 12, lineHeight: 18, color: palette.textSecondary, fontFamily: fliegerTypography.familyBody }}>
-            Model client called: {debugInfo.modelClientCalled ? "yes" : "no"}
+            Model client called: {visibleDebugInfo.modelClientCalled ? "yes" : "no"}
           </Text>
           <Text style={{ fontSize: 12, lineHeight: 18, color: palette.textSecondary, fontFamily: fliegerTypography.familyBody }}>
-            Model client succeeded: {debugInfo.modelClientSucceeded ? "yes" : "no"}
+            Model client succeeded: {visibleDebugInfo.modelClientSucceeded ? "yes" : "no"}
           </Text>
-          {debugInfo.modelClientError ? (
+          {visibleDebugInfo.modelClientError ? (
             <Text style={{ fontSize: 12, lineHeight: 18, color: palette.textSecondary, fontFamily: fliegerTypography.familyBody }}>
-              Model client error: {debugInfo.modelClientError}
+              Model client error: {visibleDebugInfo.modelClientError}
             </Text>
           ) : null}
           <Text style={{ fontSize: 12, lineHeight: 18, color: palette.textSecondary, fontFamily: fliegerTypography.familyBody }}>
-            AI synthesis attempted: {debugInfo.aiSynthesisAttempted ? "yes" : "no"}
+            AI synthesis attempted: {visibleDebugInfo.aiSynthesisAttempted ? "yes" : "no"}
           </Text>
           <Text style={{ fontSize: 12, lineHeight: 18, color: palette.textSecondary, fontFamily: fliegerTypography.familyBody }}>
-            AI synthesis used: {debugInfo.aiSynthesisUsed ? "yes" : "no"}
+            AI synthesis used: {visibleDebugInfo.aiSynthesisUsed ? "yes" : "no"}
           </Text>
           <Text style={{ fontSize: 12, lineHeight: 18, color: palette.textSecondary, fontFamily: fliegerTypography.familyBody }}>
-            AI synthesis rejected: {debugInfo.aiSynthesisRejected ? "yes" : "no"}
+            AI synthesis rejected: {visibleDebugInfo.aiSynthesisRejected ? "yes" : "no"}
           </Text>
-          {debugInfo.aiRejectionReason ? (
+          {visibleDebugInfo.aiRejectionReason ? (
             <Text style={{ fontSize: 12, lineHeight: 18, color: palette.textSecondary, fontFamily: fliegerTypography.familyBody }}>
-              AI rejection reason: {debugInfo.aiRejectionReason}
+              AI rejection reason: {visibleDebugInfo.aiRejectionReason}
             </Text>
           ) : null}
           <Text style={{ fontSize: 12, lineHeight: 18, color: palette.textSecondary, fontFamily: fliegerTypography.familyBody }}>
-            Truth guard ran: {debugInfo.truthGuardRan ? "yes" : "no"}
+            Truth guard ran: {visibleDebugInfo.truthGuardRan ? "yes" : "no"}
           </Text>
-          {debugInfo.strongClaimsDetected && debugInfo.strongClaimsDetected.length > 0 ? (
+          {visibleDebugInfo.strongClaimsDetected && visibleDebugInfo.strongClaimsDetected.length > 0 ? (
             <Text style={{ fontSize: 12, lineHeight: 18, color: palette.textSecondary, fontFamily: fliegerTypography.familyBody }}>
-              Strong claims detected: {debugInfo.strongClaimsDetected.join(" | ")}
+              Strong claims detected: {visibleDebugInfo.strongClaimsDetected.join(" | ")}
             </Text>
           ) : null}
-          {debugInfo.strongClaimsSupported && debugInfo.strongClaimsSupported.length > 0 ? (
+          {visibleDebugInfo.strongClaimsSupported && visibleDebugInfo.strongClaimsSupported.length > 0 ? (
             <Text style={{ fontSize: 12, lineHeight: 18, color: palette.textSecondary, fontFamily: fliegerTypography.familyBody }}>
-              Strong claims supported: {debugInfo.strongClaimsSupported.join(" | ")}
+              Strong claims supported: {visibleDebugInfo.strongClaimsSupported.join(" | ")}
             </Text>
           ) : null}
-          {debugInfo.strongClaimsDowngraded && debugInfo.strongClaimsDowngraded.length > 0 ? (
+          {visibleDebugInfo.strongClaimsDowngraded && visibleDebugInfo.strongClaimsDowngraded.length > 0 ? (
             <Text style={{ fontSize: 12, lineHeight: 18, color: palette.textSecondary, fontFamily: fliegerTypography.familyBody }}>
-              Strong claims downgraded: {debugInfo.strongClaimsDowngraded.join(" | ")}
+              Strong claims downgraded: {visibleDebugInfo.strongClaimsDowngraded.join(" | ")}
             </Text>
           ) : null}
-          {debugInfo.documentShortcutUsed ? (
+          {visibleDebugInfo.documentShortcutUsed ? (
             <Text style={{ fontSize: 12, lineHeight: 18, color: palette.textSecondary, fontFamily: fliegerTypography.familyBody }}>
               Document shortcut used: yes
             </Text>
           ) : null}
-          {debugInfo.clarificationReason ? (
+          {visibleDebugInfo.clarificationReason ? (
             <Text style={{ fontSize: 12, lineHeight: 18, color: palette.textSecondary, fontFamily: fliegerTypography.familyBody }}>
-              Clarification reason: {debugInfo.clarificationReason}
+              Clarification reason: {visibleDebugInfo.clarificationReason}
             </Text>
           ) : null}
-          {debugInfo.validationError ? (
+          {visibleDebugInfo.validationError ? (
             <Text style={{ fontSize: 12, lineHeight: 18, color: palette.textSecondary, fontFamily: fliegerTypography.familyBody }}>
-              Validation error: {debugInfo.validationError}
+              Validation error: {visibleDebugInfo.validationError}
             </Text>
           ) : null}
-          {debugInfo.governingSectionUsed ? (
+          {visibleDebugInfo.governingSectionUsed ? (
             <Text style={{ fontSize: 12, lineHeight: 18, color: palette.textSecondary, fontFamily: fliegerTypography.familyBody }}>
-              Governing section used: {debugInfo.governingSectionUsed}
+              Governing section used: {visibleDebugInfo.governingSectionUsed}
             </Text>
           ) : null}
-          {debugInfo.missingGatingFacts && debugInfo.missingGatingFacts.length > 0 ? (
+          {visibleDebugInfo.missingGatingFacts && visibleDebugInfo.missingGatingFacts.length > 0 ? (
             <Text style={{ fontSize: 12, lineHeight: 18, color: palette.textSecondary, fontFamily: fliegerTypography.familyBody }}>
-              Missing gating facts: {debugInfo.missingGatingFacts.join(" | ")}
+              Missing gating facts: {visibleDebugInfo.missingGatingFacts.join(" | ")}
             </Text>
           ) : null}
-          {debugInfo.gatingQuestionUsed ? (
+          {visibleDebugInfo.gatingQuestionUsed ? (
             <Text style={{ fontSize: 12, lineHeight: 18, color: palette.textSecondary, fontFamily: fliegerTypography.familyBody }}>
-              Gating question used: {debugInfo.gatingQuestionUsed}
+              Gating question used: {visibleDebugInfo.gatingQuestionUsed}
             </Text>
           ) : null}
           <Text style={{ fontSize: 12, lineHeight: 18, color: palette.textSecondary, fontFamily: fliegerTypography.familyBody }}>

@@ -3251,5 +3251,1191 @@
       "riskLevel": "medium",
       "category": "beta_reported"
     }
+  },
+  {
+    "submittedAt": "2026-04-26T20:39:41.267Z",
+    "question": "Later",
+    "answer": {
+      "status": "needs_clarification",
+      "scenarioLabel": "Reroute after report for lineholder",
+      "shortAnswer": "No, since the reroute happened after you reported and after the first flight segment airborne, you should be pay protected to the greater of the original 24:35 or the rerouted 21:50 trip value.",
+      "plainEnglishExplanation": "What controls: PWA Section 23 K.\nQuote: \"for any rotation(s) that is removed during the line adjustment process due to an FAR, block hour limit, or PWA conflict arising from the pilot's: 1) reroute, 2) inverse assignment, 3) reserve assignment, or 4)…\"\nThe key issue is the timing; reroutes after the first flight segment airborne trigger pay protection to the higher rotation value.\nI do not have the exact reroute / continuation / RRPay rule attached for this question.",
+      "confidence": "low",
+      "supportLevel": "mixed",
+      "assumptions": [
+        "The tool reused facts from this session where your new question did not override them.",
+        "The reroute was a change to the original rotation after report and after the first flight segment airborne.",
+        "The pilot is a regular lineholder, not reserve.",
+        "The original trip value of 24:35 is the scheduled credit before reroute.",
+        "The rerouted trip value of 21:50 is the scheduled credit after reroute.",
+        "Final safety pipeline downgraded this answer to caution.",
+        "I do not have the exact reroute / continuation / RRPay rule attached for this question."
+      ],
+      "missingFacts": [
+        "eventTiming"
+      ],
+      "evidenceSummary": [
+        "Reroute analysis depends on comparing original schedule value and changed value."
+      ],
+      "references": [
+        {
+          "label": "23. Scheduling",
+          "sourceId": "pwa",
+          "section": "Section 23 K",
+          "quoteSnippet": "for any rotation(s) that is removed during the line adjustment process due to an FAR, block hour limit, or PWA conflict arising from the pilot's: 1) reroute, 2) inverse assignment, 3) reserve assignment, or 4)…",
+          "ruleType": "contract"
+        },
+        {
+          "label": "COMPENSATION",
+          "sourceId": "compensation_manual",
+          "section": "reroute pay",
+          "quoteSnippet": "COMPENSATION\n REFERENCE HANDBOOK delta\n Reroute Pay\n RRPY\n This pilot received RRPY (reroute pay under Section 23 L. 4.) on 19Dec totaling 1:51 of pay, no credit.\n This is in addition to any reroute pay in the REROUTE PAY entry in the premium pay summary section of\n the Time Card.\n REROUTE PAY\n This pilot received 8:17 of reroute pay under Section 23 L. 8. This is pay, no credit. This is in addition\n to any reroute p",
+          "ruleType": "scheduler_practice"
+        },
+        {
+          "label": "Reroute Pay",
+          "sourceId": "compensation_manual",
+          "section": "reroute pay",
+          "quoteSnippet": "delta COMPENSATION\n REFERENCE HANDBOOK\n Deadheads (8 B., 8 C., and 8 D.)\n A pilot who deadheads will be paid the hourly rate of this position they hold. If their position has more\n than one rate, they will be paid the rate for the aircraft model used on the first non-deadhead segment\n following the deadhead, or in the case of a deadhead ending a rotation, the rate of the aircraft model\n used on the last non-deadhead ",
+          "ruleType": "scheduler_practice"
+        }
+      ],
+      "whatCouldChangeThisAnswer": [
+        "If the reroute had occurred before the first flight segment airborne, recovery pay rules would apply instead.",
+        "If the reroute was due to a trip buy, different rules may apply.",
+        "If you declined the reroute proffer before report, pay treatment would differ.",
+        "If the reroute involved tag-on flying not previously removed, pay treatment may differ."
+      ],
+      "breakItDown": [],
+      "answerCompleteness": "provisional",
+      "clarifyingQuestions": [
+        {
+          "id": "reroute-timing",
+          "prompt": "Did the change happen the same day or later?",
+          "factField": "eventTiming",
+          "required": false,
+          "quickReplies": [
+            {
+              "id": "same-day",
+              "label": "Same day",
+              "factPatch": {
+                "eventTiming": "same_day"
+              }
+            },
+            {
+              "id": "later",
+              "label": "Later",
+              "factPatch": {
+                "eventTiming": "later"
+              }
+            },
+            {
+              "id": "not-sure",
+              "label": "Not sure",
+              "factPatch": {
+                "eventTiming": "not_sure"
+              }
+            }
+          ]
+        }
+      ],
+      "scenarioBreakdown": [
+        "You were originally scheduled for a 4-day trip worth 24:35.",
+        "Delays and cancellations caused a reroute after you had reported and after the first flight segment airborne.",
+        "The reroute resulted in a new rotation showing 21:50 credit.",
+        "You were notified of the reroute and flew or deadheaded on the rerouted segments.",
+        "You are entitled to pay protection to the greater of the original or rerouted rotation value."
+      ],
+      "payBreakdown": [
+        "Reroute pay applies because the change occurred after the first flight segment airborne.",
+        "You should receive reroute pay for all rerouted flight segments flown.",
+        "You are pay protected to the greater of the original rotation credit or the rerouted rotation credit.",
+        "If the rerouted rotation pays less, you should receive pay to match the original rotation value."
+      ],
+      "caveats": [
+        "I do not have the exact reroute / continuation / RRPay rule attached for this question."
+      ]
+    },
+    "supportCards": [
+      {
+        "label": "23. Scheduling",
+        "sourceId": "pwa",
+        "section": "Section 23 K",
+        "quoteSnippet": "for any rotation(s) that is removed during the line adjustment process due to an FAR, block hour limit, or PWA conflict arising from the pilot's: 1) reroute, 2) inverse assignment, 3) reserve assignment, or 4)…",
+        "ruleType": "contract"
+      },
+      {
+        "label": "COMPENSATION",
+        "sourceId": "compensation_manual",
+        "section": "reroute pay",
+        "quoteSnippet": "COMPENSATION\n REFERENCE HANDBOOK delta\n Reroute Pay\n RRPY\n This pilot received RRPY (reroute pay under Section 23 L. 4.) on 19Dec totaling 1:51 of pay, no credit.\n This is in addition to any reroute pay in the REROUTE PAY entry in the premium pay summary section of\n the Time Card.\n REROUTE PAY\n This pilot received 8:17 of reroute pay under Section 23 L. 8. This is pay, no credit. This is in addition\n to any reroute p",
+        "ruleType": "scheduler_practice"
+      },
+      {
+        "label": "Reroute Pay",
+        "sourceId": "compensation_manual",
+        "section": "reroute pay",
+        "quoteSnippet": "delta COMPENSATION\n REFERENCE HANDBOOK\n Deadheads (8 B., 8 C., and 8 D.)\n A pilot who deadheads will be paid the hourly rate of this position they hold. If their position has more\n than one rate, they will be paid the rate for the aircraft model used on the first non-deadhead segment\n following the deadhead, or in the case of a deadhead ending a rotation, the rate of the aircraft model\n used on the last non-deadhead ",
+        "ruleType": "scheduler_practice"
+      }
+    ],
+    "debugPayload": {
+      "mode": "ai",
+      "parsedKeys": [
+        "detectedScenario",
+        "questionType",
+        "answerCompleteness",
+        "shortAnswer",
+        "confidence",
+        "needsClarification",
+        "clarifyingQuestion",
+        "clarifyingField",
+        "quickReplies",
+        "whyItApplies",
+        "contractSupport",
+        "extractedFacts",
+        "assumptions",
+        "scenarioBreakdown",
+        "payBreakdown",
+        "whatCouldChange",
+        "practicalBreakdown",
+        "followUpSuggestion"
+      ],
+      "missingRequiredFields": [],
+      "weakResponseGateFired": false,
+      "retrievedSnippetCount": 10,
+      "retrievedSections": [
+        "reroute pay",
+        "reroute pay",
+        "reroute pay",
+        "reroute pay",
+        "reroute pay",
+        "reroute pay",
+        "reroute pay",
+        "reroute pay",
+        "reroute pay",
+        "23. Scheduling"
+      ],
+      "knownInteractionRuleIds": [
+        "reroute_timing_and_pay_impact"
+      ],
+      "matchedInteractionRuleId": "reroute_timing_and_pay_impact",
+      "matchedInteractionRuleTitle": "Reroute timing and pay impact",
+      "matchedInteractionRuleGoverningSources": [
+        "pwa:Section 23 K",
+        "compensation_manual:Reroute pay application",
+        "scheduler_manual:Reroute handling procedures"
+      ],
+      "matchedInteractionRuleReasoningSteps": [
+        "Classify whether the event is reroute or reassignment before describing pay effects.",
+        "Use timing, especially before report versus after report, as part of the governing analysis rather than as a side note.",
+        "Compare the original duty sequence with the changed sequence before describing pay or credit impact."
+      ],
+      "routedGoverningSections": [
+        "pwa:Section 23 K",
+        "compensation_manual:Reroute pay application",
+        "pwa:Section 23 L",
+        "pwa:Section 4 F",
+        "scheduler_manual:Reroute handling procedures"
+      ],
+      "searchMode": "constrained",
+      "routingFallbackOccurred": false,
+      "governingSectionsSelected": [
+        "PWA:Section 23 K",
+        "PWA:Section 23 L",
+        "PWA:Section 4 F"
+      ],
+      "governingSectionUsed": "compensation_manual:reroute pay",
+      "bottomLineMode": "section_led",
+      "bottomLineReflectsGoverningRule": false,
+      "strongerRuleBasedAnswerAvailableButNotUsed": false,
+      "classificationLevelOnly": false,
+      "concreteRuleBasedAnswerAvailable": true,
+      "finalAnswerUsedConcreteRule": true,
+      "concreteInteractionRuleAvailable": true,
+      "finalAnswerUsedConcreteInteractionRule": true,
+      "answerStillGenericDespiteInteractionRule": false,
+      "scenarioFamilySelected": "genericScenario",
+      "aiPathUsed": true,
+      "fallbackUsed": false,
+      "missingGatingFacts": [],
+      "missingRequiredFacts": [],
+      "clarificationInsteadOfFallback": false,
+      "answerIsConditional": false,
+      "gatingQuestionUsed": "Did the change happen the same day or later?",
+      "sectionExpansionUsed": true,
+      "crossReferencesFollowed": [
+        "Section 23 K",
+        "Section 4 E",
+        "Section 2 A",
+        "Section 23 L",
+        "Section 4 F",
+        "Section 12 L",
+        "Section 23 N",
+        "Section 23 H",
+        "Section 11 B",
+        "Section 5 E",
+        "Section 18"
+      ],
+      "contextPacketSummary": {
+        "governingSections": [
+          "PWA:Section 23 K",
+          "PWA:Section 23 L",
+          "PWA:Section 4 F"
+        ],
+        "exceptionsNotes": [],
+        "workedExamples": [],
+        "interactionRuleLinkedSections": [],
+        "compensationSupport": [
+          "Compensation Manual:Reroute pay application"
+        ],
+        "schedulerSupport": [
+          "Scheduler Manual:Reroute handling procedures",
+          "Scheduler Manual:Rerouted Rotations"
+        ]
+      },
+      "governingSourcePriorityUsed": [
+        "PWA",
+        "Compensation Manual",
+        "Scheduler Manual",
+        "CrewTools Logic"
+      ],
+      "reasoningMode": "interaction_led",
+      "answerMode": "section_led",
+      "retrievedSnippets": [
+        "reroute pay: deltaOF CONTENTS\nTABLE\n COMPENSATION\n REFERENCE HANDBOOK\n Paid the Day Of .................................................................................................. 21\n Paid the Last Day ................................................................................................ 21\n Common Examples where Rotations are Paid by Day ...................................................... 22\n RESERVE PAY .....",
+        "reroute pay: delta COMPENSATION\n REFERENCE HANDBOOK\n Deadheads (8 B., 8 C., and 8 D.)\n A pilot who deadheads will be paid the hourly rate of this position they hold. If their position has more\n than one rate, they will be paid the rate for the aircraft model used on the first non-deadhead segment\n following the deadhead, or in the case of a deadhead ending a rotation, the rate of the aircraft model\n used on the last non-deadhead ",
+        "reroute pay: COMPENSATION\n REFERENCE HANDBOOK delta\n � The sum, on a daily basis, of the greater of duty period credit (Section 12 J.), DPM (Section 12\n H.), minimum calendar day (Section 12 U.), or the scheduled flight time for each duty period:\n � A-day � flight time 6:46 (6:46 Block)\n � B-day � flight time 4:49 (4:36 plus Block 0:13 minutes under)\n � C-day � flight time 5:06 (4:58 plus Block 0:08 minutes under)\n � D-day � flig",
+        "reroute pay: TABLE OF CONTENTS\n COMPENSATION\n REFERENCE HANDBOOK\n Duty Period Credit (DTY) Example 2 .......................................................................\n delta 42\n Duty Period Minimum (DPM) Example...................................................................... 43\n Minimum Calendar Day (MCD) Example 1 ................................................................. 44\n Minimum Calendar Day (MCD) Example",
+        "reroute pay: COMPENSATION\n REFERENCE HANDBOOK delta\n Rotation Examples\n Archived Rotation Display Example\n The total pay for a rotation is the sum of:\n � The pay and credit for the rotation (same for both regular and reserve and annotated with TL)\n � Additional pay items, if applicable (HOL, CARVE, SIT, and/or EDP)\n � Reroute pay, if applicable. This will be shown on the pilot's Time Card instead of the rotation.\n Section 12 L.\n ",
+        "reroute pay: COMPENSATION\n REFERENCE HANDBOOK delta\n Reroute Pay\n RRPY\n This pilot received RRPY (reroute pay under Section 23 L. 4.) on 19Dec totaling 1:51 of pay, no credit.\n This is in addition to any reroute pay in the REROUTE PAY entry in the premium pay summary section of\n the Time Card.\n REROUTE PAY\n This pilot received 8:17 of reroute pay under Section 23 L. 8. This is pay, no credit. This is in addition\n to any reroute p",
+        "reroute pay: delta COMPENSATION\n REFERENCE HANDBOOK\n � 0531 06DEC: 5:15\n � 0581 08DEC: 15:45\n � 6854 11DEC: 16:32\n � 6621 15DEC: 15:55\n � 6980 18DEC: 15:45\n The total of these assignments is 90:49, which is displayed on the credit summary line. The ALV for the\n month was 79:00, resulting in a reserve guarantee of 77:00. Because the pilot credited more than the\n guarantee, they will receive the full amount of pay and credit that t",
+        "reroute pay: COMPENSATION\n REFERENCE HANDBOOK delta\n � Reroute pay from 23 L. 8. and 23 L. 9.\n � Silver slip pay\n � PBS premium rotation pay\n � Additional short calls or on-call days\n Miscellaneous Information\n The bottom of the Time Card includes the following miscellaneous information:\n � Full service bank transactions\n � Vacation days and time available at the start and end of the bid period\n � Pay for distributed training\n � ",
+        "reroute pay: Example 2:\n 2\n1) Assumption:\na) An ATL-based pilot currently holds the following rotation, (either from\ntheir line or a previous reroute):\n 6\n A Day B Day C Day\n ATL-MSY LGA-ORD MCO-ATL\n MSY-ATL ORD-CVG ATL-SAV\n ATL-LGA CVG-MCO SAV-ATL\n 7\nb) On arrival in CVG on B day, the pilot is notified of a reroute, removing\nthe last two flight segments (ATL-SAV-ATL) from their rotation.\n10\n A Day B Day C Day\n ATL-MSY LGA-ORD MC",
+        "23. Scheduling: Exception one: If such rerouted pilot is not scheduled to release at their base within such\nfour hour time limitation due to their origin or destination airport being closed or weather\non their routing, the pilot will receive only single pay and credit (or the applicable pay, no\ncredit for a GS, QS, GSWC, IA, or IAWC) for the rotation as flown.\nException two: The time limitation will be 25 hours for a pilot when rero"
+      ],
+      "groundingSource": "retrieved_contract_snippets",
+      "usedRetrievedSupport": true,
+      "externalAllowed": false,
+      "externalUsed": false,
+      "externalSnippetCount": 0,
+      "externalLabels": [],
+      "hasPwaIndex": true,
+      "hasCompensationIndex": true,
+      "hasSchedulerIndex": true,
+      "retrievalSourcesUsed": [
+        "PWA",
+        "Compensation Manual",
+        "Scheduler Manual",
+        "CrewTools Logic",
+        "Retrieved contract snippets"
+      ],
+      "sourcesUsed": [
+        "PWA",
+        "Compensation Manual",
+        "Scheduler Manual"
+      ],
+      "pwaSectionsUsed": [
+        "Section 23 K",
+        "Section 23 L",
+        "Section 4 F",
+        "4. Duration",
+        "1. 2"
+      ],
+      "compensationChunksUsed": [
+        "Reroute pay application",
+        "Section 23 L",
+        "Section 12 L",
+        "reroute pay"
+      ],
+      "schedulerChunksUsed": [
+        "Reroute handling procedures",
+        "Rerouted Rotations",
+        "Section 23"
+      ],
+      "structuredRowsUsed": [],
+      "missingSourceWarnings": [],
+      "aiSynthesisUsed": true,
+      "OPENAI_API_KEYPresent": true,
+      "modelClientCalled": true,
+      "modelClientSucceeded": true,
+      "aiSynthesisAttempted": true,
+      "aiSynthesisRejected": false,
+      "laneEnforced": true,
+      "expectedTool": "multi_source_scenario_packet",
+      "retrievalAttempted": true,
+      "laneExecutionResult": "success",
+      "documentShortcutUsed": false,
+      "fallthroughPrevented": true,
+      "retryAttempts": [],
+      "sourceAvailability": {
+        "hasPwaIndex": true,
+        "hasCompensationIndex": true,
+        "hasSchedulerIndex": true,
+        "compensationRowsAvailable": 432
+      },
+      "verifierRan": true,
+      "verifierPassed": true,
+      "verifierWarnings": [],
+      "verifierFailureReasons": [],
+      "verifierAdjustedAnswer": false,
+      "finalSafetyPipelineRan": true,
+      "truthGuardRan": true,
+      "definitionApplicationGuardRan": true,
+      "strongClaimsDetected": [],
+      "strongClaimsSupported": [],
+      "strongClaimsDowngraded": [],
+      "definitionSectionUsed": false,
+      "operationalSectionUsed": true,
+      "definitionOverrodeOperation": false,
+      "definitionBasedAnswer": false,
+      "applicationClaimDetected": true,
+      "applicationClaimSupported": true,
+      "applicationClaimDowngraded": false,
+      "answerDowngradedToCaution": true,
+      "downgradeReasons": [
+        "weak_support_match",
+        "reroute_support_incomplete"
+      ],
+      "answerReferencedSections": [],
+      "supportInjectedFromAnswer": false,
+      "supportMissingForReferencedSection": false,
+      "controllingSectionLocked": true,
+      "controllingSectionDisplay": "PWA Section 23 K",
+      "controllingSectionQuoteAttached": true,
+      "controllingSectionQuote": "for any rotation(s) that is removed during the line adjustment process due to an FAR, block hour limit, or PWA conflict arising from the pilot's: 1) reroute, 2) inverse assignment, 3) reserve assignment, or 4)…",
+      "controllingSectionMissingExactText": false,
+      "xDayScenario": false,
+      "xDayAnchorFound": false,
+      "xDayGroupingScenario": false,
+      "xDayGroupingAnchorFound": false,
+      "pbRerouteXdayScenario": false,
+      "pbAnchorFound": true,
+      "pbProcessingAnchorFound": false,
+      "notificationAnchorFound": false,
+      "futureRotationChangeScenario": false,
+      "futureRotationChangeAnchorFound": false,
+      "cpoOverrideAnchorFound": false,
+      "knownAbsenceAnchorFound": false,
+      "payProtectionAnchorFound": true,
+      "governingSectionIncludesXDay": false,
+      "pcsSwapScenario": false,
+      "pcsSwapAnchorFound": true,
+      "governingSectionIncludesPcsSwap": false,
+      "vacationBankScenario": false,
+      "vacationBankAnchorFound": false,
+      "governingSectionIncludesVacationBank": false,
+      "oeNotificationScenario": false,
+      "oeNotificationAnchorFound": false,
+      "oeNotificationSupportRejectedReasons": [],
+      "shortCallDutyScenario": false,
+      "shortCallDutyAnchorFound": false,
+      "governingSectionIncludesDutyLegality": false,
+      "supportRerankerRan": true,
+      "supportQualityGateRan": true,
+      "supportCandidatesBefore": 20,
+      "supportCandidatesAfter": 4,
+      "supportTopScores": [
+        {
+          "section": "reroute pay",
+          "score": 703
+        },
+        {
+          "section": "reroute pay",
+          "score": 703
+        },
+        {
+          "section": "reroute pay",
+          "score": 518
+        },
+        {
+          "section": "reroute pay",
+          "score": 518
+        }
+      ],
+      "supportWeakMatchWarning": true,
+      "supportMatchedTerms": [
+        "reroute"
+      ],
+      "supportMatchedSections": [
+        "reroute pay"
+      ],
+      "supportMatchedAnswerTerms": [
+        "reroute",
+        "pay protection"
+      ],
+      "supportMatchedAnswerSections": [],
+      "retrievalSilverSlipAnchorsFound": [
+        "reroute pay"
+      ],
+      "retrievalGreenSlipAnchorsFound": [],
+      "retrievalComparisonMode": false,
+      "silverSlipPrimarySupportFound": false,
+      "greenSlipComparisonSupportFound": false,
+      "silverSlipSupportMissing": false,
+      "supportCardsFilteredOut": 1,
+      "supportDroppedReasons": [],
+      "supportPrimaryAnchorMissing": false,
+      "primarySupportForcedByExactAnchor": false,
+      "pcsSwapVisibleSupportTerms": [],
+      "pcsSwapSupportPromoted": false,
+      "pcsSwapSupportMissingAnchors": [],
+      "pickupLimitScenario": false,
+      "pickupLimitAnchorFound": false,
+      "finalSupportReorderedForSpecificAnchor": false,
+      "vacationBankVisibleSupportTerms": [],
+      "vacationBankSupportPromoted": false,
+      "vacationBankSupportMissingAnchors": [],
+      "domicileLayoverScenario": false,
+      "domicileLayoverAnchorFound": false,
+      "sickLookbackScenario": false,
+      "sickLookbackAnchorFound": false,
+      "restLegalityScenario": false,
+      "restLegalityAnchorFound": false,
+      "farVsPwaIssueDetected": false,
+      "deadheadRerouteConsequenceScenario": false,
+      "deadheadRerouteAnchorFound": false,
+      "payCreditConsistencyScenario": false,
+      "payCreditAnchorFound": false,
+      "rerouteConsistencyScenario": true,
+      "rerouteAnchorFound": false,
+      "rerouteMissingSupportReason": "I do not have the exact reroute / continuation / RRPay rule attached for this question.",
+      "rerouteVisibleSupportTerms": [
+        "reroute",
+        "reroute pay",
+        "credit",
+        "deadhead"
+      ],
+      "qsCallOrderScenario": false,
+      "qsCallOrderAnchorFound": false,
+      "qsCallOrderVisibleSupportTerms": [],
+      "oeNotificationVisibleSupportTerms": [],
+      "contactabilityScenario": false,
+      "contactabilityAnchorFound": false,
+      "shortCallNotificationScenario": false,
+      "shortCallNotificationAnchorFound": false,
+      "shortCallNotificationVisibleSupportTerms": [],
+      "apdDiagnosticScenario": false,
+      "apdThresholdExplained": false,
+      "apdDriftDetected": false,
+      "visibleSupportAnchorPromoted": false,
+      "visibleSupportOriginalSection": [
+        "reroute pay",
+        "reroute pay",
+        "reroute pay",
+        "reroute pay"
+      ],
+      "visibleSupportPromotedSection": [
+        "reroute pay",
+        "reroute pay",
+        "reroute pay",
+        "reroute pay"
+      ],
+      "supportFinalRankingReason": "quality_gate_kept only cards matching answer anchors or strong question anchors",
+      "finalVisibleSupportSections": [
+        "reroute pay",
+        "reroute pay",
+        "reroute pay"
+      ],
+      "finalVisibleSupportPromotionApplied": false,
+      "intentType": "contract_scenario",
+      "selectedLane": "contract_scenario_retrieval",
+      "requiredFieldsFound": [
+        "question"
+      ],
+      "missingFields": [],
+      "toolsUsed": [
+        "scenario_classifier",
+        "section_aware_retrieval",
+        "interaction_rule_ranking",
+        "openai_contract_synthesis"
+      ],
+      "scenarioProceedWithPartialContext": false,
+      "evidenceParsingAttempted": true,
+      "evidenceParsingSucceeded": false,
+      "evidenceParsingForcedFallback": false,
+      "retrievalPassCounts": {
+        "primary": 8,
+        "expanded": 10,
+        "linked": 4
+      },
+      "selectedScenarioFamilyFinal": "genericScenario",
+      "answerScenarioFamily": "genericScenario",
+      "supportScenarioFamily": "restLegalityScenario",
+      "debugScenarioFamily": "genericScenario",
+      "finalResponseCoherenceFailed": false,
+      "orchestratorOwnsScenarioPipeline": true,
+      "legacyCompatPipelineUsed": true,
+      "orchestratorStages": {
+        "buildScenarioContext": {
+          "entered": true,
+          "details": {
+            "question": "I am a lineholder and I had a 4 day trip that was worth 24:35.  due to delays and cancelations, we were rerouted after report and now the trip is showing worth 21:50 is it possible for the trip to be worth less?\n\nFollow-up: Later",
+            "selectedLane": "contract_scenario_retrieval"
+          },
+          "completed": true
+        },
+        "runScenarioAI": {
+          "entered": true,
+          "details": {
+            "model": "gpt-4.1-mini",
+            "question": "I am a lineholder and I had a 4 day trip that was worth 24:35.  due to delays and cancelations, we were rerouted after report and now the trip is showing worth 21:50 is it possible for the trip to be worth less?\n\nFollow-up: Later"
+          },
+          "completed": true
+        },
+        "verifyScenarioOutput": {
+          "entered": true,
+          "details": {
+            "mode": "ai"
+          },
+          "completed": true
+        },
+        "attachScenarioSupport": {
+          "entered": true,
+          "details": {
+            "mode": "ai"
+          },
+          "completed": true
+        }
+      },
+      "turnId": "copilot-turn-1777235912789-sy2o8g",
+      "questionHash": "qfc8fa11",
+      "supportFinalFilterRemoved": 0,
+      "supportFinalFilterRemovedReasons": []
+    },
+    "userFeedback": "looks_right",
+    "correctedAnswer": null,
+    "expectedSource": null,
+    "draft": {
+      "id": "beta-feedback-1777235981263",
+      "question": "Later",
+      "expectedLane": "contract_scenario_retrieval",
+      "expectedSupportAnchors": [
+        {
+          "source": "Compensation Manual",
+          "section": "Section 23 K",
+          "terms": [
+            "later"
+          ],
+          "required": false,
+          "role": "primary"
+        }
+      ],
+      "mustInclude": [
+        "Later"
+      ],
+      "mustNotInclude": [],
+      "riskLevel": "low",
+      "category": "beta_reported"
+    }
+  },
+  {
+    "submittedAt": "2026-04-26T21:18:12.474Z",
+    "question": "I was rerouted on a trip, and when I finished the trip it was worth less credit due to the reroute. Am I still pay protected for the original pairing?",
+    "answer": {
+      "status": "insufficient_support",
+      "scenarioLabel": "Reroute pay and credit impact",
+      "shortAnswer": "This looks like a bank-eligibility question, and the key issue is whether the SS credit on that 2 hours deposit request is being treated as credit that doesn't count for bank posting.",
+      "plainEnglishExplanation": "What this appears to be:\n- A question about whether SS credit on a 2 hours deposit request counts as bank-eligible credit or is being treated as credit that doesn't count.\nWhat this depends on:\n- Whether the 2 hours showing in iCrew are pay credit, bank-eligible credit, or a credit type that does not post to the bank.\n- Whether the Silver Slip generated premium pay, straight credit, or a non-bank-eligible credit type for this transaction.\nLikely paths:\n- If Silver Slip credit is coded differently from regular credit or replacement credit, iCrew can reject the bank deposit even though the trip produced pay or apparent credit.\n- If the packet never says Silver Slip credit is bank-eligible, treat the rejection as a credit-type eligibility question rather than assuming the system is wrong.\nWhat to check in iCrew/MiCrew/DBMS/timecard:\n- Check whether iCrew labels the 2 hours as bank-eligible credit, premium pay only, straight credit, or some Silver Slip-specific code.\n- Check whether DBMS or the bank request detail explains the rejection as credit-type ineligibility rather than a balance issue.\nSource limitation:\n- I do not have the exact bank-eligibility rule attached that says whether Silver Slip credit can be deposited, so I would keep the answer cautious.\nSources used:\n- Start with Compensation Manual pay/credit treatment and any PWA bank-eligibility language before assuming Silver Slip credit counts the same as regular credit.\nWhat controls: PWA, Compensation Manual, Scheduler Manual; reroute pay: deltaOF CONTENTS TABLE COMPENSATION REFERENCE HANDBOOK Paid the Day Of ................................................. | reroute pay: delta COMPENSATION REFERENCE HANDBOOK Deadheads (8 B., 8 C., and 8 D.) A pilot who deadheads will be paid the hourly rat.\nHow it likely applies here: The safe read is to separate pay, credit, and bank-eligible credit. A Silver Slip may generate credit for some purposes without that credit being bank-eligible in the same way as regular line or replacement credit.\nWhat I can't confirm from available sources: the original, projected, and final credit values; what changed between the projected and final versions.\nSources used: PWA, Compensation Manual, Scheduler Manual.",
+      "confidence": "low",
+      "supportLevel": "mixed",
+      "assumptions": [
+        "Pilot is a regular line holder.",
+        "Reroute qualifies as a reroute under Section 23 L.",
+        "No other overlapping leaves or absences affect pay.",
+        "Final safety pipeline downgraded this answer to caution.",
+        "I do not have the exact pay/credit/bank-eligibility rule attached for this question.",
+        "I do not have the exact reroute / continuation / RRPay rule attached for this question."
+      ],
+      "missingFacts": [
+        "status",
+        "eventTiming"
+      ],
+      "evidenceSummary": [
+        "Reroute analysis depends on comparing original schedule value and changed value.",
+        "Report timing and when the change occurred may affect the applicable rule path."
+      ],
+      "references": [
+        {
+          "label": "23. Scheduling",
+          "sourceId": "pwa",
+          "section": "Section 23 K",
+          "quoteSnippet": "for any rotation(s) that is removed during the line adjustment process due to an FAR, block hour limit, or PWA conflict arising from the pilot's: 1) reroute, 2) inverse assignment, 3) reserve assignment, or 4)…",
+          "ruleType": "contract"
+        },
+        {
+          "label": "COMPENSATION",
+          "sourceId": "compensation_manual",
+          "section": "reroute pay",
+          "quoteSnippet": "COMPENSATION\n REFERENCE HANDBOOK delta\n Reroute Pay\n RRPY\n This pilot received RRPY (reroute pay under Section 23 L. 4.) on 19Dec totaling 1:51 of pay, no credit.\n This is in addition to any reroute pay in the REROUTE PAY entry in the premium pay summary section of\n the Time Card.\n REROUTE PAY\n This pilot received 8:17 of reroute pay under Section 23 L. 8. This is pay, no credit. This is in addition\n to any reroute p",
+          "ruleType": "scheduler_practice"
+        },
+        {
+          "label": "COMPENSATION",
+          "sourceId": "compensation_manual",
+          "section": "reroute pay",
+          "quoteSnippet": "COMPENSATION\n REFERENCE HANDBOOK delta\n � The sum, on a daily basis, of the greater of duty period credit (Section 12 J.), DPM (Section 12\n H.), minimum calendar day (Section 12 U.), or the scheduled flight time for each duty period:\n � A-day � flight time 6:46 (6:46 Block)\n � B-day � flight time 4:49 (4:36 plus Block 0:13 minutes under)\n � C-day � flight time 5:06 (4:58 plus Block 0:08 minutes under)\n � D-day � flig",
+          "ruleType": "scheduler_practice"
+        },
+        {
+          "label": "COMPENSATION",
+          "sourceId": "compensation_manual",
+          "section": "reroute pay",
+          "quoteSnippet": "TABLE OF CONTENTS\n COMPENSATION\n REFERENCE HANDBOOK\n Duty Period Credit (DTY) Example 2 .......................................................................\n delta 42\n Duty Period Minimum (DPM) Example...................................................................... 43\n Minimum Calendar Day (MCD) Example 1 ................................................................. 44\n Minimum Calendar Day (MCD) Example",
+          "ruleType": "scheduler_practice"
+        }
+      ],
+      "whatCouldChangeThisAnswer": [
+        "Providing status.",
+        "Providing event timing."
+      ],
+      "breakItDown": [],
+      "answerCompleteness": "provisional",
+      "clarifyingQuestions": [
+        {
+          "id": "reroute-status",
+          "prompt": "Were you reserve or lineholder that month?",
+          "factField": "status",
+          "required": true,
+          "quickReplies": [
+            {
+              "id": "reserve",
+              "label": "I'm reserve",
+              "factPatch": {
+                "status": "reserve"
+              }
+            },
+            {
+              "id": "lineholder",
+              "label": "I'm lineholder",
+              "factPatch": {
+                "status": "lineholder"
+              }
+            }
+          ]
+        }
+      ],
+      "payBreakdown": [
+        "Rotation guarantee protects your pay and credit when rerouted.",
+        "You receive pay for the greater of original scheduled credit or rerouted credit.",
+        "Reroute pay premiums may also apply if conditions are met.",
+        "Deleted segments don't generate extra pay but trigger reroute pay rules.",
+        "If reroute extends your release time beyond limits, extra pay but no extra credit may apply."
+      ],
+      "caveats": [
+        "I do not have the exact pay/credit/bank-eligibility rule attached for this question.",
+        "I do not have the exact reroute / continuation / RRPay rule attached for this question.",
+        "Answer was rebuilt from the selected scenario family before rendering."
+      ]
+    },
+    "supportCards": [
+      {
+        "label": "23. Scheduling",
+        "sourceId": "pwa",
+        "section": "Section 23 K",
+        "quoteSnippet": "for any rotation(s) that is removed during the line adjustment process due to an FAR, block hour limit, or PWA conflict arising from the pilot's: 1) reroute, 2) inverse assignment, 3) reserve assignment, or 4)…",
+        "ruleType": "contract"
+      },
+      {
+        "label": "COMPENSATION",
+        "sourceId": "compensation_manual",
+        "section": "reroute pay",
+        "quoteSnippet": "COMPENSATION\n REFERENCE HANDBOOK delta\n Reroute Pay\n RRPY\n This pilot received RRPY (reroute pay under Section 23 L. 4.) on 19Dec totaling 1:51 of pay, no credit.\n This is in addition to any reroute pay in the REROUTE PAY entry in the premium pay summary section of\n the Time Card.\n REROUTE PAY\n This pilot received 8:17 of reroute pay under Section 23 L. 8. This is pay, no credit. This is in addition\n to any reroute p",
+        "ruleType": "scheduler_practice"
+      },
+      {
+        "label": "COMPENSATION",
+        "sourceId": "compensation_manual",
+        "section": "reroute pay",
+        "quoteSnippet": "COMPENSATION\n REFERENCE HANDBOOK delta\n � The sum, on a daily basis, of the greater of duty period credit (Section 12 J.), DPM (Section 12\n H.), minimum calendar day (Section 12 U.), or the scheduled flight time for each duty period:\n � A-day � flight time 6:46 (6:46 Block)\n � B-day � flight time 4:49 (4:36 plus Block 0:13 minutes under)\n � C-day � flight time 5:06 (4:58 plus Block 0:08 minutes under)\n � D-day � flig",
+        "ruleType": "scheduler_practice"
+      },
+      {
+        "label": "COMPENSATION",
+        "sourceId": "compensation_manual",
+        "section": "reroute pay",
+        "quoteSnippet": "TABLE OF CONTENTS\n COMPENSATION\n REFERENCE HANDBOOK\n Duty Period Credit (DTY) Example 2 .......................................................................\n delta 42\n Duty Period Minimum (DPM) Example...................................................................... 43\n Minimum Calendar Day (MCD) Example 1 ................................................................. 44\n Minimum Calendar Day (MCD) Example",
+        "ruleType": "scheduler_practice"
+      }
+    ],
+    "debugPayload": {
+      "mode": "ai",
+      "parsedKeys": [
+        "detectedScenario",
+        "questionType",
+        "answerCompleteness",
+        "shortAnswer",
+        "confidence",
+        "needsClarification",
+        "clarifyingQuestion",
+        "clarifyingField",
+        "quickReplies",
+        "whyItApplies",
+        "contractSupport",
+        "extractedFacts",
+        "assumptions",
+        "scenarioBreakdown",
+        "payBreakdown",
+        "whatCouldChange",
+        "practicalBreakdown",
+        "followUpSuggestion"
+      ],
+      "missingRequiredFields": [],
+      "weakResponseGateFired": false,
+      "retrievedSnippetCount": 10,
+      "retrievedSections": [
+        "reroute pay",
+        "reroute pay",
+        "reroute pay",
+        "reroute pay",
+        "reroute pay",
+        "reroute pay",
+        "reroute pay",
+        "Section 12 L",
+        "Section 4 F",
+        "Section 12 K"
+      ],
+      "knownInteractionRuleIds": [
+        "reroute_timing_and_pay_impact"
+      ],
+      "matchedInteractionRuleId": "reroute_timing_and_pay_impact",
+      "matchedInteractionRuleTitle": "Reroute timing and pay impact",
+      "matchedInteractionRuleGoverningSources": [
+        "pwa:Section 23 K",
+        "compensation_manual:Reroute pay application",
+        "scheduler_manual:Reroute handling procedures"
+      ],
+      "matchedInteractionRuleReasoningSteps": [
+        "Classify whether the event is reroute or reassignment before describing pay effects.",
+        "Use timing, especially before report versus after report, as part of the governing analysis rather than as a side note.",
+        "Compare the original duty sequence with the changed sequence before describing pay or credit impact."
+      ],
+      "routedGoverningSections": [
+        "pwa:Section 23 K",
+        "compensation_manual:Reroute pay application",
+        "pwa:Section 23 L",
+        "pwa:Section 4 F",
+        "scheduler_manual:Reroute handling procedures"
+      ],
+      "searchMode": "constrained",
+      "routingFallbackOccurred": false,
+      "governingSectionsSelected": [
+        "PWA:Section 23 K",
+        "PWA:Section 23 L",
+        "PWA:Section 4 F"
+      ],
+      "governingSectionUsed": "compensation_manual:reroute pay",
+      "bottomLineMode": "section_led",
+      "bottomLineReflectsGoverningRule": false,
+      "strongerRuleBasedAnswerAvailableButNotUsed": false,
+      "classificationLevelOnly": false,
+      "concreteRuleBasedAnswerAvailable": true,
+      "finalAnswerUsedConcreteRule": true,
+      "concreteInteractionRuleAvailable": true,
+      "finalAnswerUsedConcreteInteractionRule": true,
+      "answerStillGenericDespiteInteractionRule": false,
+      "scenarioFamilySelected": "payCreditConsistencyScenario",
+      "aiPathUsed": true,
+      "fallbackUsed": false,
+      "missingGatingFacts": [
+        "the original, projected, and final credit values",
+        "what changed between the projected and final versions"
+      ],
+      "missingRequiredFacts": [
+        "the original, projected, and final credit values",
+        "what changed between the projected and final versions"
+      ],
+      "clarificationInsteadOfFallback": false,
+      "answerIsConditional": true,
+      "gatingQuestionUsed": "Were you reserve or lineholder that month?",
+      "sectionExpansionUsed": true,
+      "crossReferencesFollowed": [
+        "Section 23 L",
+        "Section 23 K",
+        "Section 4 F",
+        "Section 23 P",
+        "Section 11 B",
+        "Section 5 E",
+        "Section 22 B",
+        "Section 13",
+        "Section 23 N",
+        "Section 12 L",
+        "Section 4 E",
+        "Section 2 A",
+        "Section 23 H",
+        "Section 18"
+      ],
+      "contextPacketSummary": {
+        "governingSections": [
+          "PWA:Section 23 K",
+          "PWA:Section 23 L",
+          "PWA:Section 4 F"
+        ],
+        "exceptionsNotes": [],
+        "workedExamples": [],
+        "interactionRuleLinkedSections": [],
+        "compensationSupport": [
+          "Compensation Manual:Reroute pay application"
+        ],
+        "schedulerSupport": [
+          "Scheduler Manual:Reroute handling procedures",
+          "Scheduler Manual:Rerouted Rotations"
+        ]
+      },
+      "governingSourcePriorityUsed": [
+        "PWA",
+        "Compensation Manual",
+        "Scheduler Manual",
+        "CrewTools Logic"
+      ],
+      "reasoningMode": "interaction_led",
+      "answerMode": "section_led",
+      "retrievedSnippets": [
+        "reroute pay: deltaOF CONTENTS\nTABLE\n COMPENSATION\n REFERENCE HANDBOOK\n Paid the Day Of .................................................................................................. 21\n Paid the Last Day ................................................................................................ 21\n Common Examples where Rotations are Paid by Day ...................................................... 22\n RESERVE PAY .....",
+        "reroute pay: delta COMPENSATION\n REFERENCE HANDBOOK\n Deadheads (8 B., 8 C., and 8 D.)\n A pilot who deadheads will be paid the hourly rate of this position they hold. If their position has more\n than one rate, they will be paid the rate for the aircraft model used on the first non-deadhead segment\n following the deadhead, or in the case of a deadhead ending a rotation, the rate of the aircraft model\n used on the last non-deadhead ",
+        "reroute pay: COMPENSATION\n REFERENCE HANDBOOK delta\n � The sum, on a daily basis, of the greater of duty period credit (Section 12 J.), DPM (Section 12\n H.), minimum calendar day (Section 12 U.), or the scheduled flight time for each duty period:\n � A-day � flight time 6:46 (6:46 Block)\n � B-day � flight time 4:49 (4:36 plus Block 0:13 minutes under)\n � C-day � flight time 5:06 (4:58 plus Block 0:08 minutes under)\n � D-day � flig",
+        "reroute pay: TABLE OF CONTENTS\n COMPENSATION\n REFERENCE HANDBOOK\n Duty Period Credit (DTY) Example 2 .......................................................................\n delta 42\n Duty Period Minimum (DPM) Example...................................................................... 43\n Minimum Calendar Day (MCD) Example 1 ................................................................. 44\n Minimum Calendar Day (MCD) Example",
+        "reroute pay: COMPENSATION\n REFERENCE HANDBOOK delta\n Rotation Examples\n Archived Rotation Display Example\n The total pay for a rotation is the sum of:\n � The pay and credit for the rotation (same for both regular and reserve and annotated with TL)\n � Additional pay items, if applicable (HOL, CARVE, SIT, and/or EDP)\n � Reroute pay, if applicable. This will be shown on the pilot's Time Card instead of the rotation.\n Section 12 L.\n ",
+        "reroute pay: COMPENSATION\n REFERENCE HANDBOOK delta\n Reroute Pay\n RRPY\n This pilot received RRPY (reroute pay under Section 23 L. 4.) on 19Dec totaling 1:51 of pay, no credit.\n This is in addition to any reroute pay in the REROUTE PAY entry in the premium pay summary section of\n the Time Card.\n REROUTE PAY\n This pilot received 8:17 of reroute pay under Section 23 L. 8. This is pay, no credit. This is in addition\n to any reroute p",
+        "reroute pay: delta COMPENSATION\n REFERENCE HANDBOOK\n � 0531 06DEC: 5:15\n � 0581 08DEC: 15:45\n � 6854 11DEC: 16:32\n � 6621 15DEC: 15:55\n � 6980 18DEC: 15:45\n The total of these assignments is 90:49, which is displayed on the credit summary line. The ALV for the\n month was 79:00, resulting in a reserve guarantee of 77:00. Because the pilot credited more than the\n guarantee, they will receive the full amount of pay and credit that t",
+        "Section 12 L: COMPENSATION\n REFERENCE HANDBOOK delta\nROTATION PAY\n ROTATION PAY\n Rotation Pay (12 L.)\n The total pay and credit for a rotation is defined in Section 12 L. When a rotation is constructed, the\n total pay and credit is the greater of:\n � Average daily guarantee, or\n � Rotation credit, or\n � The sum, on a duty period basis, of the greater of:\n � Duty period credit,\n � Duty period minimum, or\n � The scheduled flight tim",
+        "Section 4 F: delta COMPENSATION\n REFERENCE HANDBOOK\n A regular pilot who is removed from a rotation due to a conflict with a reserve assignment will receive\n pay and credit for the greater of the scheduled credit of the rotation removed or the credit accumulated\n on the regular portion of their line from such reserve assignment. (Section 4 E. 2.)\n Rotation Guarantee (4 F.)\n Rotation guarantee ensures that a regular pilot is paid ",
+        "Section 12 K: delta COMPENSATION\n REFERENCE HANDBOOK\n A 4-day rotation has daily values of: 5:00/6:00/8:00/4:00. The total of the 4 days is 23:00, which is more\n than the 4-day ADG of 21:00. The rotation will pay 23:00.\n ADG Carveout Pay and Examples (12 I. Exception)\n For the purposes of calculating ADG, a \"day\" is defined as a calendar day except as follows:\n � A pilot will not be entitled to ADG for the last day of a rotation t"
+      ],
+      "groundingSource": "retrieved_contract_snippets",
+      "usedRetrievedSupport": true,
+      "externalAllowed": false,
+      "externalUsed": false,
+      "externalSnippetCount": 0,
+      "externalLabels": [],
+      "hasPwaIndex": true,
+      "hasCompensationIndex": true,
+      "hasSchedulerIndex": true,
+      "retrievalSourcesUsed": [
+        "PWA",
+        "Compensation Manual",
+        "Scheduler Manual",
+        "CrewTools Logic",
+        "Retrieved contract snippets"
+      ],
+      "sourcesUsed": [
+        "PWA",
+        "Compensation Manual",
+        "Scheduler Manual"
+      ],
+      "pwaSectionsUsed": [
+        "Section 23 K",
+        "Section 23 L",
+        "Section 4 F",
+        "1. 2"
+      ],
+      "compensationChunksUsed": [
+        "Reroute pay application",
+        "Section 23 L",
+        "reroute pay"
+      ],
+      "schedulerChunksUsed": [
+        "Reroute handling procedures",
+        "Rerouted Rotations",
+        "Section 23"
+      ],
+      "structuredRowsUsed": [],
+      "missingSourceWarnings": [],
+      "aiSynthesisUsed": true,
+      "OPENAI_API_KEYPresent": true,
+      "modelClientCalled": true,
+      "modelClientSucceeded": true,
+      "aiSynthesisAttempted": true,
+      "aiSynthesisRejected": false,
+      "laneEnforced": true,
+      "expectedTool": "multi_source_scenario_packet",
+      "retrievalAttempted": true,
+      "laneExecutionResult": "success",
+      "documentShortcutUsed": false,
+      "fallthroughPrevented": true,
+      "retryAttempts": [],
+      "sourceAvailability": {
+        "hasPwaIndex": true,
+        "hasCompensationIndex": true,
+        "hasSchedulerIndex": true,
+        "compensationRowsAvailable": 432
+      },
+      "verifierRan": true,
+      "verifierPassed": true,
+      "verifierWarnings": [],
+      "verifierFailureReasons": [],
+      "verifierAdjustedAnswer": false,
+      "finalSafetyPipelineRan": true,
+      "truthGuardRan": true,
+      "definitionApplicationGuardRan": true,
+      "strongClaimsDetected": [
+        "Without those credit values and the change driver, I cannot tell whether this was a temporary display issue, a deadhead/deviation effect, or a final closeout recalculation."
+      ],
+      "strongClaimsSupported": [],
+      "strongClaimsDowngraded": [],
+      "definitionSectionUsed": false,
+      "operationalSectionUsed": true,
+      "definitionOverrodeOperation": false,
+      "definitionBasedAnswer": false,
+      "applicationClaimDetected": true,
+      "applicationClaimSupported": true,
+      "applicationClaimDowngraded": false,
+      "answerDowngradedToCaution": true,
+      "downgradeReasons": [
+        "weak_support_match",
+        "pay_credit_support_incomplete",
+        "reroute_support_incomplete"
+      ],
+      "answerReferencedSections": [],
+      "supportInjectedFromAnswer": false,
+      "supportMissingForReferencedSection": false,
+      "controllingSectionLocked": true,
+      "controllingSectionDisplay": "PWA Section 23 K",
+      "controllingSectionQuoteAttached": true,
+      "controllingSectionQuote": "for any rotation(s) that is removed during the line adjustment process due to an FAR, block hour limit, or PWA conflict arising from the pilot's: 1) reroute, 2) inverse assignment, 3) reserve assignment, or 4)…",
+      "controllingSectionMissingExactText": false,
+      "xDayScenario": false,
+      "xDayAnchorFound": false,
+      "xDayGroupingScenario": false,
+      "xDayGroupingAnchorFound": false,
+      "pbRerouteXdayScenario": false,
+      "pbAnchorFound": true,
+      "pbProcessingAnchorFound": false,
+      "notificationAnchorFound": false,
+      "futureRotationChangeScenario": false,
+      "futureRotationChangeAnchorFound": false,
+      "cpoOverrideAnchorFound": false,
+      "knownAbsenceAnchorFound": false,
+      "payProtectionAnchorFound": true,
+      "governingSectionIncludesXDay": false,
+      "pcsSwapScenario": false,
+      "pcsSwapAnchorFound": true,
+      "governingSectionIncludesPcsSwap": false,
+      "vacationBankScenario": false,
+      "vacationBankAnchorFound": false,
+      "governingSectionIncludesVacationBank": false,
+      "oeNotificationScenario": false,
+      "oeNotificationAnchorFound": false,
+      "oeNotificationSupportRejectedReasons": [],
+      "shortCallDutyScenario": false,
+      "shortCallDutyAnchorFound": false,
+      "governingSectionIncludesDutyLegality": false,
+      "supportRerankerRan": true,
+      "supportQualityGateRan": true,
+      "supportCandidatesBefore": 20,
+      "supportCandidatesAfter": 5,
+      "supportTopScores": [
+        {
+          "section": "reroute pay",
+          "score": 703
+        },
+        {
+          "section": "reroute pay",
+          "score": 633
+        },
+        {
+          "section": "reroute pay",
+          "score": 633
+        },
+        {
+          "section": "reroute pay",
+          "score": 633
+        },
+        {
+          "section": "reroute pay",
+          "score": 588
+        }
+      ],
+      "supportWeakMatchWarning": true,
+      "supportMatchedTerms": [
+        "reroute",
+        "duty period",
+        "deadhead"
+      ],
+      "supportMatchedSections": [
+        "reroute pay"
+      ],
+      "supportMatchedAnswerTerms": [
+        "deadhead",
+        "duty period",
+        "credit protection",
+        "credit recalculation",
+        "deadhead deviation"
+      ],
+      "supportMatchedAnswerSections": [],
+      "retrievalSilverSlipAnchorsFound": [],
+      "retrievalGreenSlipAnchorsFound": [],
+      "retrievalComparisonMode": false,
+      "silverSlipPrimarySupportFound": false,
+      "greenSlipComparisonSupportFound": false,
+      "silverSlipSupportMissing": false,
+      "supportCardsFilteredOut": 0,
+      "supportDroppedReasons": [
+        "reroute pay"
+      ],
+      "supportPrimaryAnchorMissing": false,
+      "primarySupportForcedByExactAnchor": false,
+      "pcsSwapVisibleSupportTerms": [],
+      "pcsSwapSupportPromoted": false,
+      "pcsSwapSupportMissingAnchors": [],
+      "pickupLimitScenario": false,
+      "pickupLimitAnchorFound": false,
+      "finalSupportReorderedForSpecificAnchor": false,
+      "vacationBankVisibleSupportTerms": [],
+      "vacationBankSupportPromoted": false,
+      "vacationBankSupportMissingAnchors": [],
+      "domicileLayoverScenario": false,
+      "domicileLayoverAnchorFound": false,
+      "sickLookbackScenario": false,
+      "sickLookbackAnchorFound": false,
+      "restLegalityScenario": false,
+      "restLegalityAnchorFound": false,
+      "farVsPwaIssueDetected": false,
+      "deadheadRerouteConsequenceScenario": false,
+      "deadheadRerouteAnchorFound": false,
+      "payCreditConsistencyScenario": true,
+      "payCreditAnchorFound": false,
+      "payCreditMissingSupportReason": "I do not have the exact pay/credit/bank-eligibility rule attached for this question.",
+      "rerouteConsistencyScenario": true,
+      "rerouteAnchorFound": false,
+      "rerouteMissingSupportReason": "I do not have the exact reroute / continuation / RRPay rule attached for this question.",
+      "rerouteVisibleSupportTerms": [
+        "reroute",
+        "reroute pay",
+        "credit",
+        "deadhead"
+      ],
+      "qsCallOrderScenario": false,
+      "qsCallOrderAnchorFound": false,
+      "qsCallOrderVisibleSupportTerms": [],
+      "oeNotificationVisibleSupportTerms": [],
+      "contactabilityScenario": false,
+      "contactabilityAnchorFound": false,
+      "shortCallNotificationScenario": false,
+      "shortCallNotificationAnchorFound": false,
+      "shortCallNotificationVisibleSupportTerms": [],
+      "apdDiagnosticScenario": false,
+      "apdThresholdExplained": false,
+      "apdDriftDetected": false,
+      "visibleSupportAnchorPromoted": false,
+      "visibleSupportOriginalSection": [
+        "reroute pay",
+        "reroute pay",
+        "reroute pay",
+        "reroute pay",
+        "reroute pay"
+      ],
+      "visibleSupportPromotedSection": [
+        "reroute pay",
+        "reroute pay",
+        "reroute pay",
+        "reroute pay",
+        "reroute pay"
+      ],
+      "supportFinalRankingReason": "quality_gate_kept only cards matching answer anchors or strong question anchors",
+      "finalVisibleSupportSections": [
+        "reroute pay",
+        "reroute pay",
+        "reroute pay"
+      ],
+      "finalVisibleSupportPromotionApplied": false,
+      "intentType": "contract_scenario",
+      "selectedLane": "contract_scenario_retrieval",
+      "requiredFieldsFound": [
+        "question"
+      ],
+      "missingFields": [],
+      "toolsUsed": [
+        "intent_router",
+        "question_scope_guard",
+        "section_aware_retrieval",
+        "interaction_rule_ranking",
+        "scenario_validation",
+        "openai_contract_synthesis"
+      ],
+      "scenarioProceedWithPartialContext": true,
+      "evidenceParsingAttempted": true,
+      "evidenceParsingSucceeded": false,
+      "evidenceParsingForcedFallback": false,
+      "evidenceParsingIgnoredReason": "Ignored question_scope fallback because the original question already contained enough scenario information to continue safely.",
+      "retrievalPassCounts": {
+        "primary": 8,
+        "expanded": 10,
+        "linked": 4
+      },
+      "selectedScenarioFamilyFinal": "payCreditConsistencyScenario",
+      "answerScenarioFamily": "payCreditConsistencyScenario",
+      "supportScenarioFamily": "restLegalityScenario",
+      "debugScenarioFamily": "payCreditConsistencyScenario",
+      "finalResponseCoherenceFailed": false,
+      "orchestratorOwnsScenarioPipeline": true,
+      "legacyCompatPipelineUsed": true,
+      "orchestratorStages": {
+        "buildScenarioContext": {
+          "entered": true,
+          "details": {
+            "question": "I was rerouted on a trip, and when I finished the trip it was worth less credit due to the reroute. Am I still pay protected for the original pairing?",
+            "selectedLane": "contract_scenario_retrieval"
+          },
+          "completed": true
+        },
+        "runScenarioAI": {
+          "entered": true,
+          "details": {
+            "model": "gpt-4.1-mini",
+            "question": "I was rerouted on a trip, and when I finished the trip it was worth less credit due to the reroute. Am I still pay protected for the original pairing?"
+          },
+          "completed": true
+        },
+        "verifyScenarioOutput": {
+          "entered": true,
+          "details": {
+            "mode": "ai"
+          },
+          "completed": true
+        },
+        "attachScenarioSupport": {
+          "entered": true,
+          "details": {
+            "mode": "ai"
+          },
+          "completed": true
+        }
+      },
+      "turnId": "copilot-turn-1777238220486-dzuqsv",
+      "questionHash": "qc0e58bc9",
+      "supportFinalFilterRemoved": 0,
+      "supportFinalFilterRemovedReasons": []
+    },
+    "userFeedback": "answer_wrong",
+    "correctedAnswer": null,
+    "expectedSource": null,
+    "draft": {
+      "id": "beta-feedback-1777238292469",
+      "question": "I was rerouted on a trip, and when I finished the trip it was worth less credit due to the reroute. Am I still pay protected for the original pairing?",
+      "expectedLane": "contract_scenario_retrieval",
+      "expectedSupportAnchors": [
+        {
+          "source": "Compensation Manual",
+          "section": "Section 23 K",
+          "terms": [
+            "rerouted",
+            "trip",
+            "when",
+            "finished",
+            "worth"
+          ],
+          "required": true,
+          "role": "primary"
+        }
+      ],
+      "mustInclude": [
+        "I was rerouted on a trip",
+        "and when I finished the trip it was worth less credit due to the reroute. Am I still pay protected for the original pairing?"
+      ],
+      "mustNotInclude": [],
+      "riskLevel": "high",
+      "category": "beta_reported"
+    }
   }
 ]

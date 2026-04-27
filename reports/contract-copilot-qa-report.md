@@ -1,19 +1,19 @@
 # Contract Copilot QA Report
 
-Generated: 2026-04-26T15:58:37.050Z
+Generated: 2026-04-27T14:13:25.616Z
 
 ## Answer QA Summary
 
 - PASS: 20
-- WARN: 73
-- FAIL: 0
+- WARN: 75
+- FAIL: 2
 - CRITICAL_FAIL: 0
 
 ## Support QA Summary
 
-- PASS: 74
+- PASS: 77
 - WARN: 19
-- FAIL: 0
+- FAIL: 1
 
 ## Per-Test Results
 
@@ -60,7 +60,7 @@ Generated: 2026-04-26T15:58:37.050Z
 | qa-cc-039 | WARN | PASS | contract_scenario_retrieval | false | PWA, Compensation Manual, Scheduler Manual |
 | qa-cc-040 | PASS | WARN | document_section_explanation | false | PWA, Scheduler Manual |
 | qa-cc-041 | PASS | WARN | document_section_explanation | false | PWA, Compensation Manual, Scheduler Manual |
-| qa-rw-001 | WARN | PASS | contract_scenario_retrieval | false | PWA, Compensation Manual, Scheduler Manual |
+| qa-rw-001 | FAIL | PASS | contract_scenario_retrieval | false | PWA, Compensation Manual, Scheduler Manual |
 | qa-rw-002 | WARN | PASS | contract_scenario_retrieval | false | PWA, Scheduler Manual |
 | qa-rw-003 | WARN | PASS | contract_scenario_retrieval | false | PWA, Compensation Manual, Scheduler Manual |
 | qa-rw-004 | WARN | PASS | contract_scenario_retrieval | false | PWA, Compensation Manual, Scheduler Manual |
@@ -70,7 +70,7 @@ Generated: 2026-04-26T15:58:37.050Z
 | qa-rw-008 | WARN | PASS | contract_scenario_retrieval | false | PWA, Compensation Manual, Scheduler Manual |
 | qa-rw-009 | WARN | PASS | contract_scenario_retrieval | false | PWA, Compensation Manual, Scheduler Manual |
 | qa-rw-010 | WARN | PASS | contract_scenario_retrieval | false | PWA, Scheduler Manual |
-| qa-rw-golden-day-lc-001 | WARN | WARN | contract_scenario_retrieval | false | PWA, Compensation Manual, Scheduler Manual |
+| qa-rw-golden-day-lc-001 | FAIL | FAIL | contract_scenario_retrieval | false | PWA, Compensation Manual, Scheduler Manual |
 | qa-rw-wocl-8d3-001 | WARN | PASS | contract_scenario_retrieval | false | PWA, Compensation Manual, Scheduler Manual |
 | qa-rw-011 | WARN | WARN | contract_scenario_retrieval | false | PWA, Scheduler Manual |
 | qa-rw-012 | WARN | PASS | contract_scenario_retrieval | false | PWA, Compensation Manual, Scheduler Manual |
@@ -112,10 +112,14 @@ Generated: 2026-04-26T15:58:37.050Z
 | qa-rw-batch2-018 | WARN | PASS | contract_scenario_retrieval | false | PWA, Compensation Manual, Scheduler Manual |
 | qa-rw-batch2-019 | WARN | PASS | contract_scenario_retrieval | false | PWA, Compensation Manual, Scheduler Manual |
 | qa-rw-batch2-020 | WARN | PASS | contract_scenario_retrieval | false | PWA, Compensation Manual, Scheduler Manual |
+| qa-rw-regression-thread-isolation-001 | WARN | PASS | contract_scenario_retrieval | false | PWA, Compensation Manual, Scheduler Manual |
+| qa-rw-regression-thread-isolation-002 | WARN | PASS | contract_scenario_retrieval | false | PWA, Compensation Manual, Scheduler Manual |
+| qa-rw-regression-paycredit-subscenario-001 | WARN | WARN | contract_scenario_retrieval | false | PWA, Compensation Manual, Scheduler Manual |
+| qa-rw-regression-paycredit-subscenario-002 | WARN | PASS | contract_scenario_retrieval | false | PWA, Compensation Manual, Scheduler Manual |
 
 ## Support Failures Grouped By Missing Anchor
 
-- None
+- PWA | 2 A.129 | golden day | hard non-fly day: 1
 
 ## Support Failures Grouped By Wrong Primary Section
 
@@ -123,7 +127,7 @@ Generated: 2026-04-26T15:58:37.050Z
 
 ## Top 10 Missing Terms/Sections
 
-- None
+- PWA | 2 A.129 | golden day | hard non-fly day: 1
 
 ## Tests Where Answer Passed But Support Failed
 
@@ -131,8 +135,19 @@ Generated: 2026-04-26T15:58:37.050Z
 
 ## Failed Answer Tests
 
-- None
+- qa-rw-001: Hey gang! Picked up a 2-day QS on 22 April, originally ending with a DH back to ATL on 23 April. Was rerouted prior to DH (ACARS notification) for an LAX-SFO-LAX turn, then layover and DH home on 24 April (now a 3-day trip). Upon award, my PB days were applied to 24-25 April for my 2 interrupted X-days and a little bit of a PR on the 26th. CS has converted by PB back to LC on the 24th (totes legit) however my PB day didn’t get re-applied to a later date (should be Sunday?). I revert to LC upon release and now only show a PR on the 26th. When awarded, I had two full PBs plus my PR remainder. Now I have less even though I flew more and had more impact on my X-days due to the reroute. Called CS and they were polite and stated the “system” might just be behind and to submit a DART. Obviously less than ideal since the (perceived?) infraction will come and go prior to any resolution if they get it wrong. I’m seldom correct on these things so just wanted a sanity check before I confuse. TYIA. FWIW - also did not receive any notification (robot or human) for this trip award again so doesn’t look like that is fixed.
+  - Score: FAIL
+  - Lane: contract_scenario_retrieval
+  - Red flags: none
+- qa-rw-golden-day-lc-001: golden day before first LC... golden day is defined as a hard non-fly day (PWA Section 2 A.129.) doesn't that mean you can't be assigned anything earlier than 6pm day one of LC? Or Day before worthless
+  - Score: FAIL
+  - Lane: contract_scenario_retrieval
+  - Red flags: none
 
 ## Support-Failed Tests
 
-- None
+- qa-rw-golden-day-lc-001: golden day before first LC... golden day is defined as a hard non-fly day (PWA Section 2 A.129.) doesn't that mean you can't be assigned anything earlier than 6pm day one of LC? Or Day before worthless
+  - Support score: FAIL
+  - Support checks: supportAnchorMatch=fail, primarySupportMatch=fail, wrongSupportPenalty=pass
+  - Missing anchors: PWA | 2 A.129 | golden day | hard non-fly day
+  - Wrong primary: none

@@ -9,6 +9,7 @@ export * from "./contractCopilotGoldScenarioTrainingSet.ts";
 export * from "./retrieval.ts";
 export * from "./intentRouter.ts";
 export * from "./executionController.ts";
+export * from "./runContractCopilot.ts";
 export * from "./answerVerifier.ts";
 export * from "./finalAnswerSynthesizer.ts";
 export * from "./finalSynthesisSchema.ts";

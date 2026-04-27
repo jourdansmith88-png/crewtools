@@ -1026,10 +1026,25 @@ function executeDirectTermLookup(args: {
     maxMatches: 8,
   });
   const lower = args.question.toLowerCase();
+  const shortCallNotificationOverride =
+    (lower.includes("short call assignment") || lower.includes("short call") || lower.includes("long call") || /\blc\b/.test(lower)) &&
+    (
+      lower.includes("notification") ||
+      lower.includes("no notification") ||
+      lower.includes("vacation") ||
+      lower.includes("non-fly day") ||
+      lower.includes("non fly day") ||
+      lower.includes("micrew placement") ||
+      lower.includes("icrew placement") ||
+      lower.includes("acknowledge") ||
+      lower.includes("acknowledgment") ||
+      lower.includes("cno") ||
+      lower.includes("call duty pilot")
+    );
   const termType =
     lower.includes("silver slip") && (lower.includes("what does") || lower.includes("status")) && (/\b['"]?[a-z]['"]?\b/.test(lower) || lower.includes("mean"))
       ? "silver_slip_status"
-      : lower.includes("short call")
+      : lower.includes("short call") && !shortCallNotificationOverride
       ? "short_call"
       : lower.includes("airport standby")
         ? "airport_standby"

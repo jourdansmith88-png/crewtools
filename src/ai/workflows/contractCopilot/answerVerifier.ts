@@ -139,11 +139,10 @@ function hasDecisionPathFallback(explanation: string | undefined) {
 function detectShortCallNotificationScenarioFromHaystack(haystack: string) {
   const hasShortCallContext =
     /\bshort call assignment\b/.test(haystack) ||
-    /\bshort call\b/.test(haystack) ||
-    (/\blong call\b/.test(haystack) &&
-      (/\bvacation\b/.test(haystack) || /\bnon-fly day\b/.test(haystack) || /\bnon fly day\b/.test(haystack))) ||
-    (/\blc\b/.test(haystack) &&
-      (/\bvacation\b/.test(haystack) || /\bnon-fly day\b/.test(haystack) || /\bnon fly day\b/.test(haystack)));
+    /\bshort call\b/.test(haystack);
+  const hasReserveOnCallContext =
+    /\blong call\b/.test(haystack) ||
+    /\blc\b/.test(haystack);
   const hasNotificationTerms =
     /\bnotification\b/.test(haystack) ||
     /\bno notification\b/.test(haystack) ||
@@ -161,6 +160,21 @@ function detectShortCallNotificationScenarioFromHaystack(haystack: string) {
     /\bvacation\b/.test(haystack) ||
     /\bnon-fly day\b/.test(haystack) ||
     /\bnon fly day\b/.test(haystack);
+  const hardNotificationOverride =
+    (hasShortCallContext || hasReserveOnCallContext) &&
+    (
+      /\bnotification\b/.test(haystack) ||
+      /\bno notification\b/.test(haystack) ||
+      /\bvacation\b/.test(haystack) ||
+      /\bnon-fly day\b/.test(haystack) ||
+      /\bnon fly day\b/.test(haystack) ||
+      /\bmicrew placement\b/.test(haystack) ||
+      /\bicrew placement\b/.test(haystack) ||
+      /\backnowledge\b/.test(haystack) ||
+      /\backnowledgment\b/.test(haystack) ||
+      /\bcno\b/.test(haystack) ||
+      /\bcall duty pilot\b/.test(haystack)
+    );
   const hasDutyLegalitySignals =
     /\bsame-day trip\b/.test(haystack) ||
     /\bsame day trip\b/.test(haystack) ||
@@ -171,6 +185,10 @@ function detectShortCallNotificationScenarioFromHaystack(haystack: string) {
     /\blegality\b/.test(haystack) ||
     /\bboth remain on schedule\b/.test(haystack) ||
     /\bshort call window\b/.test(haystack);
+
+  if (hardNotificationOverride) {
+    return true;
+  }
 
   if (hasDutyLegalitySignals) {
     return false;
@@ -235,13 +253,80 @@ function detectPayCreditConsistencyScenarioFromQuestion(questionText: string) {
     /\bsilver slip credit\b/.test(questionText) ||
     /\btimecard\b/.test(questionText) ||
     /\bmicrew\b/.test(questionText) ||
+    /\bmicrew credit\b/.test(questionText) ||
     /\bprojected credit\b/.test(questionText) ||
     /\bfinal credit\b/.test(questionText) ||
+    /\bfinal closeout\b/.test(questionText) ||
+    /\bcredit jumped\b/.test(questionText) ||
     /\bcredit recalculation\b/.test(questionText) ||
     /\bdeadhead deviation\b/.test(questionText) ||
     /\blayover less than 13 hours\b/.test(questionText) ||
-    /\breverted to\b/.test(questionText)
+    /\breverted to\b/.test(questionText) ||
+    (/\bwent back\b/.test(questionText) && /\bcredit\b/.test(questionText)) ||
+    (/\bdeadhead\b/.test(questionText) && /\bshort layover\b/.test(questionText))
   );
+}
+
+function detectPayCreditSubScenarioFromQuestion(questionText: string):
+  | "sickBankAfterCalledWell"
+  | "bankDepositSilverSlipCredit"
+  | "projectedVsFinalCreditCloseout"
+  | "rerouteCreditProtection"
+  | "timecardCreditDiscrepancy"
+  | "unknownPayCredit" {
+  if (
+    (/\breroute\b/.test(questionText) || /\brerouted\b/.test(questionText)) &&
+    (
+      /\bworth less credit\b/.test(questionText) ||
+      /\bless credit\b/.test(questionText) ||
+      /\boriginal pairing\b/.test(questionText) ||
+      /\bpay protected\b/.test(questionText) ||
+      /\btrip worth less\b/.test(questionText) ||
+      /\bafter report\b/.test(questionText) ||
+      /\brotation guarantee\b/.test(questionText)
+    )
+  ) {
+    return "rerouteCreditProtection";
+  }
+  if (
+    /\bbank deposit\b/.test(questionText) ||
+    /\bdeposit\b/.test(questionText) ||
+    /\bss credit\b/.test(questionText) ||
+    /\bsilver slip credit\b/.test(questionText) ||
+    /\b2 hours deposit\b/.test(questionText) ||
+    /\bbank eligible\b/.test(questionText) ||
+    /\bbank eligibility\b/.test(questionText)
+  ) {
+    return "bankDepositSilverSlipCredit";
+  }
+  if (
+    /\bprojected credit\b/.test(questionText) ||
+    /\bfinal credit\b/.test(questionText) ||
+    /\bcloseout\b/.test(questionText) ||
+    /\bmicrew showed\b/.test(questionText) ||
+    /\bdropped back\b/.test(questionText) ||
+    /\bcredit recalculation\b/.test(questionText) ||
+    /\bdid not deviate deadhead\b/.test(questionText) ||
+    /\breverted to\b/.test(questionText) ||
+    (/\bwent back\b/.test(questionText) && /\bcredit\b/.test(questionText))
+  ) {
+    return "projectedVsFinalCreditCloseout";
+  }
+  if (
+    /\bsick bank\b/.test(questionText) ||
+    /\bcalled well\b/.test(questionText) ||
+    /\bpicked up flying\b/.test(questionText)
+  ) {
+    return "sickBankAfterCalledWell";
+  }
+  if (
+    /\btimecard\b/.test(questionText) ||
+    /\bcredit discrepancy\b/.test(questionText) ||
+    (/\bcredit\b/.test(questionText) && /\bpaid differently\b/.test(questionText))
+  ) {
+    return "timecardCreditDiscrepancy";
+  }
+  return "unknownPayCredit";
 }
 
 function detectSilverSlipStatusScenarioFromQuestion(questionText: string) {
@@ -541,6 +626,12 @@ function sentenceHasSupport(sentence: { text: string; sections: string[]; terms:
 
 function downgradeStrongClaimText(text: string) {
   return text
+    .replace(/\bpb should have been reapplied\b/gi, "PB may have been reapplied")
+    .replace(/\bpb should be reapplied\b/gi, "PB may be reapplied")
+    .replace(/\bpb was supposed to be reapplied\b/gi, "PB may have been reapplied")
+    .replace(/\bpb was supposed to reapply\b/gi, "PB may reapply")
+    .replace(/\bpb must be restored\b/gi, "PB may need to be restored")
+    .replace(/\bpb must be reapplied\b/gi, "PB may need to be reapplied")
     .replace(/\bno assignments allowed\b/gi, "it likely limits assignments")
     .replace(/\bcannot\b/gi, "likely cannot")
     .replace(/\bcan't\b/gi, "likely cannot")
@@ -787,7 +878,7 @@ function collectLikelyPaths(question: string, answer: ContractAnswerCard, hasOpe
     push("If reserve coverage blocks the swap, a CPO override may be discretionary processing, not guaranteed pay protection.");
   }
   if (/\bss credit\b|\bsilver slip credit\b|\bbank deposit\b|\bdeposit\b/.test(haystack)) {
-    push("If Silver Slip credit is coded differently from regular credit, iCrew can reject the bank deposit even though the trip produced pay or displayed credit.");
+    push("If Silver Slip credit is coded differently from regular credit, iCrew can reject the bank deposit as a bank eligibility issue even though the trip produced pay or displayed credit.");
     push("If the packet never says Silver Slip credit is bank-eligible, treat the question as a credit-type eligibility issue rather than assuming the system is wrong.");
   }
   if (/\bmicrew\b|\btimecard\b|\bcredit recalculation\b|\bdeadhead deviation\b|\b13 hours\b|\blayover\b/.test(haystack)) {
@@ -1086,26 +1177,17 @@ function buildDecisionPathExplanation(args: {
     ].join("\n");
   }
   if (payCreditConsistencyScenario) {
+    const payCreditSubScenario = detectPayCreditSubScenarioFromQuestion(questionText);
     const limitation =
       args.failureReasons[0] ??
       args.warnings[0] ??
       "I do not have the exact pay/credit/bank-eligibility rule attached for this question.";
-    const sickBankCase =
-      /\bsick bank\b/.test(questionText) || /\bcalled well\b/.test(questionText) || /\bpicked up flying\b/.test(questionText);
-    const bankDepositCase =
-      /\bbank deposit\b/.test(questionText) ||
-      /\bdeposit\b/.test(questionText) ||
-      /\bss credit\b/.test(questionText) ||
-      /\bsilver slip credit\b/.test(questionText);
+    const sickBankCase = payCreditSubScenario === "sickBankAfterCalledWell";
+    const bankDepositCase = payCreditSubScenario === "bankDepositSilverSlipCredit";
+    const rerouteCreditProtectionCase = payCreditSubScenario === "rerouteCreditProtection";
     const recalculationCase =
-      /\bmicrew\b/.test(questionText) ||
-      /\bprojected credit\b/.test(questionText) ||
-      /\bfinal credit\b/.test(questionText) ||
-      /\bcredit recalculation\b/.test(questionText) ||
-      /\btimecard\b/.test(questionText) ||
-      /\bdeadhead deviation\b/.test(questionText) ||
-      /\blayover less than 13 hours\b/.test(questionText) ||
-      /\breverted to\b/.test(questionText);
+      payCreditSubScenario === "projectedVsFinalCreditCloseout" ||
+      payCreditSubScenario === "timecardCreditDiscrepancy";
 
     if (bankDepositCase) {
       return [
@@ -1163,6 +1245,25 @@ function buildDecisionPathExplanation(args: {
         `Sources used: ${sourceSummary}.`,
       ].join("\n");
     }
+
+    if (rerouteCreditProtectionCase) {
+      return [
+        "What this depends on:",
+        "- Whether the reroute happened after report or only changed the trip before report.",
+        "- Whether the original pairing or original rotation value is protected when the rerouted or as-flown trip closes with less credit.",
+        "- Whether the attached source actually uses reroute pay, rotation guarantee, or another pay-protection rule for this sequence.",
+        "Likely paths:",
+        "- If the reroute happened after report and the packet supports reroute pay or rotation-guarantee treatment, you may still be pay protected above the lower as-flown value.",
+        "- If the packet does not attach the controlling reroute pay or rotation-guarantee rule for this fact pattern, keep the answer cautious instead of promising full pay protection.",
+        "- A trip being worth less credit after the reroute does not by itself prove the original pairing value is protected; the controlling reroute/pay rule still has to be attached.",
+        "What to check:",
+        "- The original pairing or rotation value against the rerouted or final as-flown credit.",
+        "- Whether the reroute happened after report, whether the trip remained one rotation, and whether the timecard or DBMS notes mention reroute pay, rotation guarantee, or pay protection.",
+        "- Any attached PWA Section 23 K / 23 L support and Compensation Manual reroute-pay or rotation-guarantee language.",
+        `Source limitation: ${limitation}`,
+        `Sources used: ${sourceSummary}.`,
+      ].join("\n");
+    }
   }
   if (gsTimeOffScenario) {
     const limitation =
@@ -1210,7 +1311,7 @@ function buildDecisionPathExplanation(args: {
       `Sources used: ${sourceSummary}.`,
     ].join("\n");
   }
-  if (shortCallDutyScenario) {
+  if (shortCallDutyScenario && !shortCallNotificationScenario) {
     const limitation =
       args.failureReasons[0] ??
       args.warnings[0] ??
@@ -1256,7 +1357,7 @@ function buildDecisionPathExplanation(args: {
       `Sources used: ${sourceSummary}.`,
     ].join("\n");
   }
-  if (contactabilityScenario && !pbRerouteXdayScenario) {
+  if (contactabilityScenario && !pbRerouteXdayScenario && !shortCallNotificationScenario) {
     const limitation =
       args.failureReasons[0] ??
       args.warnings[0] ??
@@ -1489,6 +1590,8 @@ function buildSaferFallbackAnswer(args: ContractCopilotAnswerVerifierInput & {
           ? "Based on the source support I found, this is a bank-deposit and Silver Slip credit-eligibility question, not just a question about whether 2 hours showed up in iCrew."
           : payCreditSickBankCase
             ? "Based on the source support I found, this is a sick-bank timing question, not just a question about whether later flying was picked up."
+            : verifierPayCreditRerouteProtectionCase
+              ? "Based on the source support I found, this is a reroute credit-protection question, not a Silver Slip bank-deposit question."
             : "Based on the source support I found, this is a projected-versus-final credit and timecard recalculation question, not a simple deadhead or rest answer."
       : gsTimeOffScenario
         ? "Based on the source support I found, a one-day Green Slip does not automatically prove you get two 24-hour periods off; that turns on the exact time-off and surrounding-day rules."
@@ -1532,6 +1635,7 @@ export function verifyContractScenarioAnswer(
   );
   const verifierPbRerouteXdayScenario = detectPbRerouteXdayScenarioFromHaystack(verifierQuestionText);
   const verifierPayCreditConsistencyScenario = detectPayCreditConsistencyScenarioFromQuestion(verifierQuestionText);
+  const verifierPayCreditSubScenario = detectPayCreditSubScenarioFromQuestion(verifierQuestionText);
   const verifierSilverSlipStatusScenario = detectSilverSlipStatusScenarioFromQuestion(verifierQuestionText);
   const verifierGsTimeOffScenario = detectGsTimeOffScenarioFromQuestion(verifierQuestionText);
   const verifierTwentyThreeM7LogLookupScenario = detectTwentyThreeM7LogLookupScenarioFromQuestion(verifierQuestionText);
@@ -1541,14 +1645,11 @@ export function verifyContractScenarioAnswer(
     !verifierPbRerouteXdayScenario &&
     !verifierPayCreditConsistencyScenario;
   const verifierPayCreditBankDepositCase =
-    verifierPayCreditConsistencyScenario &&
-    (/\bbank deposit\b/.test(verifierQuestionText) ||
-      /\bdeposit\b/.test(verifierQuestionText) ||
-      /\bss credit\b/.test(verifierQuestionText) ||
-      /\bsilver slip credit\b/.test(verifierQuestionText));
+    verifierPayCreditConsistencyScenario && verifierPayCreditSubScenario === "bankDepositSilverSlipCredit";
   const verifierPayCreditSickBankCase =
-    verifierPayCreditConsistencyScenario &&
-    (/\bsick bank\b/.test(verifierQuestionText) || /\bcalled well\b/.test(verifierQuestionText) || /\bpicked up flying\b/.test(verifierQuestionText));
+    verifierPayCreditConsistencyScenario && verifierPayCreditSubScenario === "sickBankAfterCalledWell";
+  const verifierPayCreditRerouteProtectionCase =
+    verifierPayCreditConsistencyScenario && verifierPayCreditSubScenario === "rerouteCreditProtection";
   const selectedVerifierBranch =
     verifierPbRerouteXdayScenario
       ? "pbRerouteXdayScenario"
@@ -1564,12 +1665,12 @@ export function verifyContractScenarioAnswer(
           ? "gsTimeOffScenario"
         : verifierDeadheadRerouteConsequenceScenario
           ? "deadheadRerouteConsequenceScenario"
-          : detectContactabilityScenarioFromHaystack(verifierQuestionText)
-            ? "contactabilityScenario"
-            : detectOeNotificationScenarioFromHaystack(verifierQuestionText)
-              ? "oeNotificationScenario"
-              : detectShortCallNotificationScenarioFromHaystack(verifierQuestionText)
-                ? "shortCallNotificationScenario"
+          : detectShortCallNotificationScenarioFromHaystack(verifierQuestionText)
+            ? "shortCallNotificationScenario"
+            : detectContactabilityScenarioFromHaystack(verifierQuestionText)
+              ? "contactabilityScenario"
+              : detectOeNotificationScenarioFromHaystack(verifierQuestionText)
+                ? "oeNotificationScenario"
                 : detectShortCallDutyScenarioFromHaystack(verifierQuestionText)
                   ? "shortCallDutyScenario"
                   : detectRestLegalityScenarioFromHaystack(verifierHaystack)
@@ -1765,6 +1866,8 @@ export function verifyContractScenarioAnswer(
               ? "Based on the source support I found, this is a bank-deposit and Silver Slip credit-eligibility question, not just a question about whether 2 hours showed up in iCrew."
               : verifierPayCreditSickBankCase
                 ? "Based on the source support I found, this is a sick-bank timing question, not just a question about whether later flying was picked up."
+                : verifierPayCreditRerouteProtectionCase
+                  ? "Based on the source support I found, this is a reroute credit-protection question, not a Silver Slip bank-deposit question."
                 : "Based on the source support I found, this is a projected-versus-final credit and timecard recalculation question, not a simple deadhead or rest answer."
             : verifierGsTimeOffScenario
               ? "Based on the source support I found, a one-day Green Slip does not automatically prove you get two 24-hour periods off; that turns on the exact time-off and surrounding-day rules."
