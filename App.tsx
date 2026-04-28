@@ -52,7 +52,6 @@ import {
 import { ContractCopilotPanel } from "./src/components/contractCopilot/ContractCopilotPanel";
 import { fliegerTypography, getFliegerPalette } from "./src/theme/flieger";
 import type {
-  ParsedRerouteFacts,
   RerouteAnalysisOutput,
   RerouteAnalyzerChoice,
   ReroutePayAnalyzeApiResponse,
@@ -66,17 +65,6 @@ const appStyleIsDark = appStylePalette.textPrimary === "#F2E9DC";
 const appDecisionRowSurface = appStyleIsDark ? "#303840" : "#D2D8DE";
 const appDecisionRowHighlight = appStyleIsDark ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.6)";
 const appDecisionRowShadowEdge = appStyleIsDark ? "rgba(0,0,0,0.5)" : "rgba(0,0,0,0.08)";
-const rerouteBinaryOptions: Array<{ key: RerouteAnalyzerChoice; label: string }> = [
-  { key: "unknown", label: "Unknown" },
-  { key: "yes", label: "Yes" },
-  { key: "no", label: "No" },
-];
-const rerouteTimingOptions: Array<{ key: RerouteTiming; label: string }> = [
-  { key: "unknown", label: "Unknown" },
-  { key: "before_report", label: "Before report" },
-  { key: "after_report", label: "After report" },
-  { key: "after_first_airborne", label: "After first airborne" },
-];
 const reroutePilotStatusOptions: Array<{ key: Exclude<ReroutePilotStatus, "unknown">; label: string }> = [
   { key: "lineholder", label: "Lineholder" },
   { key: "reserve", label: "Reserve" },
@@ -470,13 +458,18 @@ export default function App() {
     useState<RerouteAnalyzerChoice>("unknown");
   const [rerouteBidPeriodCrossover, setRerouteBidPeriodCrossover] =
     useState<RerouteAnalyzerChoice>("unknown");
-  const [rerouteParsedFactOverrides, setRerouteParsedFactOverrides] = useState<Partial<ParsedRerouteFacts>>({});
-  const [rerouteScreenshotNames, setRerouteScreenshotNames] = useState<string[]>([]);
+  const [rerouteOriginalScreenshotNames, setRerouteOriginalScreenshotNames] = useState<string[]>([]);
+  const [rerouteChangedScreenshotNames, setRerouteChangedScreenshotNames] = useState<string[]>([]);
   const [rerouteAnalyzeBusy, setRerouteAnalyzeBusy] = useState(false);
   const [rerouteAnalyzeError, setRerouteAnalyzeError] = useState("");
-  const [rerouteAnalysisResult, setRerouteAnalysisResult] = useState<RerouteAnalysisOutput | null>(null);
+  const [rerouteAnalysisResult, setRerouteAnalysisResult] = useState<{
+    analysisId: number;
+    result: RerouteAnalysisOutput;
+  } | null>(null);
+  const [rerouteCurrentAnalysisId, setRerouteCurrentAnalysisId] = useState<number | null>(null);
   const [rerouteEvidenceOpen, setRerouteEvidenceOpen] = useState(false);
   const [rerouteSupportOpen, setRerouteSupportOpen] = useState(false);
+  const [rerouteDetectedFactsOpen, setRerouteDetectedFactsOpen] = useState(false);
   const [perDiemHours, setPerDiemHours] = useState("0");
   const [missedBreakPay, setMissedBreakPay] = useState("0");
   const [timecardRawInput, setTimecardRawInput] = useState("");
@@ -493,6 +486,8 @@ export default function App() {
   );
   const scrollRef = useRef<ScrollView | null>(null);
   const [whatIfSectionY, setWhatIfSectionY] = useState(0);
+  const rerouteAnalysisCounterRef = useRef(0);
+  const rerouteActiveRequestIdRef = useRef<number | null>(null);
 
   const clearRerouteAnalyzer = () => {
     setRerouteOriginalRotationText("");
@@ -504,15 +499,18 @@ export default function App() {
     setRerouteTouchedXDay("unknown");
     setRerouteDeadheadInvolved("unknown");
     setRerouteBidPeriodCrossover("unknown");
-    setRerouteParsedFactOverrides({});
-    setRerouteScreenshotNames([]);
+    setRerouteOriginalScreenshotNames([]);
+    setRerouteChangedScreenshotNames([]);
     setRerouteAnalyzeError("");
     setRerouteAnalysisResult(null);
+    setRerouteCurrentAnalysisId(null);
+    rerouteActiveRequestIdRef.current = null;
     setRerouteEvidenceOpen(false);
+    setRerouteDetectedFactsOpen(false);
     setRerouteSupportOpen(false);
   };
 
-  const pickRerouteEvidence = () => {
+  const pickRerouteEvidence = (sourceType: "original" | "rerouted") => {
     if (Platform.OS !== "web" || typeof document === "undefined") {
       setRerouteAnalyzeError("Screenshot upload is currently available on web only in this V1 build.");
       return;
@@ -526,7 +524,12 @@ export default function App() {
       if (files.length === 0) {
         return;
       }
-      setRerouteScreenshotNames(files.map((file) => file.name));
+      const names = files.map((file) => file.name);
+      if (sourceType === "original") {
+        setRerouteOriginalScreenshotNames(names);
+      } else {
+        setRerouteChangedScreenshotNames(names);
+      }
       setRerouteAnalyzeError("");
     };
     input.click();
@@ -545,6 +548,36 @@ export default function App() {
 
     setRerouteAnalyzeBusy(true);
     setRerouteAnalyzeError("");
+    const analysisRunId = ++rerouteAnalysisCounterRef.current;
+    rerouteActiveRequestIdRef.current = analysisRunId;
+    setRerouteCurrentAnalysisId(analysisRunId);
+    setRerouteAnalysisResult(null);
+    setRerouteDetectedFactsOpen(false);
+    const requestInput = {
+      originalRotationText: rerouteOriginalRotationText.trim() || undefined,
+      changedRotationText: rerouteChangedRotationText.trim() || undefined,
+      description,
+      pilotStatus: reroutePilotStatus,
+      rerouteTiming,
+      finalCreditDecreased: rerouteFinalCreditDecreased,
+      touchedXDay: rerouteTouchedXDay,
+      deadheadInvolved: rerouteDeadheadInvolved,
+      bidPeriodCrossover: rerouteBidPeriodCrossover,
+      uploadedEvidenceSummary: {
+        screenshotNames: [...rerouteOriginalScreenshotNames, ...rerouteChangedScreenshotNames],
+        originalScreenshotName: rerouteOriginalScreenshotNames[0] || undefined,
+        changedScreenshotName: rerouteChangedScreenshotNames[0] || undefined,
+        originalScreenshotNames: rerouteOriginalScreenshotNames,
+        changedScreenshotNames: rerouteChangedScreenshotNames,
+        screenshotParsingActive: false,
+        notes:
+          rerouteOriginalScreenshotNames.length > 0 || rerouteChangedScreenshotNames.length > 0
+            ? [
+                "Screenshot parsing is not active yet in Reroute Pay Calculator V1, so this calculation uses filenames and text only.",
+              ]
+            : [],
+      },
+    };
 
     try {
       const response = await fetch("/api/tools/reroute-pay/analyze", {
@@ -553,30 +586,7 @@ export default function App() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          input: {
-            originalRotationText: rerouteOriginalRotationText.trim() || undefined,
-            changedRotationText: rerouteChangedRotationText.trim() || undefined,
-            description,
-            pilotStatus: reroutePilotStatus,
-            rerouteTiming,
-            finalCreditDecreased: rerouteFinalCreditDecreased,
-            touchedXDay: rerouteTouchedXDay,
-            deadheadInvolved: rerouteDeadheadInvolved,
-            bidPeriodCrossover: rerouteBidPeriodCrossover,
-            parsedFactOverrides: Object.keys(rerouteParsedFactOverrides).length > 0 ? rerouteParsedFactOverrides : undefined,
-            uploadedEvidenceSummary: {
-              screenshotNames: rerouteScreenshotNames,
-              originalScreenshotName: rerouteScreenshotNames[0] || undefined,
-              changedScreenshotName: rerouteScreenshotNames[1] || undefined,
-              screenshotParsingActive: false,
-              notes:
-                rerouteScreenshotNames.length > 0
-                  ? [
-                      "Screenshot parsing is not active yet in Reroute Pay Calculator V1, so this calculation uses filenames and text only.",
-                    ]
-                  : [],
-            },
-          },
+          input: requestInput,
         }),
       });
       const responseText = await response.text();
@@ -589,38 +599,32 @@ export default function App() {
       if (!response.ok || !payload.ok) {
         throw new Error(payload.ok ? "Unable to analyze reroute." : payload.error);
       }
-      setRerouteAnalysisResult(payload.result);
-      setRerouteParsedFactOverrides((current) => ({
-        originalAffectedFlying: current.originalAffectedFlying ?? payload.result.rerouteEvent.originalAffectedFlying,
-        reroutedFlying: current.reroutedFlying ?? payload.result.rerouteEvent.reroutedFlying,
-        rejoinPoint: current.rejoinPoint ?? payload.result.rerouteEvent.rejoinPoint,
-        originalAffectedMinutes: current.originalAffectedMinutes ?? payload.result.rerouteEvent.originalAffectedMinutes,
-        reroutedMinutes: current.reroutedMinutes ?? payload.result.rerouteEvent.reroutedMinutes,
-        timing: current.timing ?? payload.result.rerouteEvent.timing,
-        touchedXDay: current.touchedXDay ?? payload.result.rerouteEvent.touchedXDay,
-        breakInDuty: current.breakInDuty ?? payload.result.rerouteEvent.breakInDuty,
-        releaseMoreThanFourHoursLate:
-          current.releaseMoreThanFourHoursLate ?? payload.result.rerouteEvent.releaseMoreThanFourHoursLate,
-        oceanCrossing: current.oceanCrossing ?? payload.result.rerouteEvent.oceanCrossing,
-      }));
+      if (rerouteActiveRequestIdRef.current !== analysisRunId) {
+        return;
+      }
+      void requestInput;
+      setRerouteAnalysisResult({ analysisId: analysisRunId, result: payload.result });
       setRerouteSupportOpen(false);
     } catch (error) {
+      if (rerouteActiveRequestIdRef.current !== analysisRunId) {
+        return;
+      }
       setRerouteAnalyzeError(error instanceof Error ? error.message : "Unable to analyze reroute.");
       setRerouteAnalysisResult(null);
     } finally {
-      setRerouteAnalyzeBusy(false);
+      if (rerouteActiveRequestIdRef.current === analysisRunId) {
+        setRerouteAnalyzeBusy(false);
+      }
     }
   };
 
-  const rerouteDetectedFacts = rerouteAnalysisResult?.rerouteEvent;
-  const rerouteDetectedTiming = rerouteParsedFactOverrides.timing ?? rerouteDetectedFacts?.timing ?? "unknown";
   const rerouteRenderModel = (() => {
     if (!rerouteAnalysisResult) {
       return null;
     }
 
     try {
-      const result = rerouteAnalysisResult as Record<string, unknown>;
+      const result = rerouteAnalysisResult.result as Record<string, unknown>;
       const changedRotation = (result.changedRotation as Record<string, unknown> | undefined) ?? undefined;
       const originalRotation = (result.originalRotation as Record<string, unknown> | undefined) ?? undefined;
       const supportCards = asObjectArray<Record<string, unknown>>(result.supportCards);
@@ -645,6 +649,47 @@ export default function App() {
           ? [whatControlsValue]
           : asStringArray(whatControlsValue);
       const rerouteEvent = (result.rerouteEvent as Record<string, unknown> | undefined) ?? {};
+      const currentDetectedFacts = {
+        pilotStatus:
+          typeof rerouteEvent.pilotStatus === "string"
+            ? rerouteEvent.pilotStatus
+            : typeof result.ruleEvent === "object" &&
+                result.ruleEvent &&
+                typeof (result.ruleEvent as Record<string, unknown>).pilotStatus === "string"
+              ? ((result.ruleEvent as Record<string, unknown>).pilotStatus as string)
+              : "",
+        affectedOriginalPortion:
+          typeof rerouteEvent.affectedOriginalPortion === "string"
+            ? rerouteEvent.affectedOriginalPortion
+            : typeof rerouteEvent.originalAffectedFlying === "string"
+              ? rerouteEvent.originalAffectedFlying
+              : "",
+        reroutedPortion:
+          typeof rerouteEvent.reroutedPortion === "string"
+            ? rerouteEvent.reroutedPortion
+            : typeof rerouteEvent.reroutedFlying === "string"
+              ? rerouteEvent.reroutedFlying
+              : "",
+        rejoinPoint: typeof rerouteEvent.rejoinPoint === "string" ? rerouteEvent.rejoinPoint : "",
+        originalAffectedMinutes:
+          typeof rerouteEvent.originalAffectedMinutes === "number" ? rerouteEvent.originalAffectedMinutes : undefined,
+        reroutedMinutes: typeof rerouteEvent.reroutedMinutes === "number" ? rerouteEvent.reroutedMinutes : undefined,
+        timing:
+          typeof rerouteEvent.timing === "string" &&
+          (rerouteEvent.timing === "unknown" ||
+            rerouteEvent.timing === "before_report" ||
+            rerouteEvent.timing === "after_report" ||
+            rerouteEvent.timing === "after_first_airborne")
+            ? (rerouteEvent.timing as RerouteTiming)
+            : "unknown",
+        touchedXDay: typeof rerouteEvent.touchedXDay === "boolean" ? rerouteEvent.touchedXDay : undefined,
+        breakInDuty: typeof rerouteEvent.breakInDuty === "boolean" ? rerouteEvent.breakInDuty : undefined,
+        releaseMoreThanFourHoursLate:
+          typeof rerouteEvent.releaseMoreThanFourHoursLate === "boolean"
+            ? rerouteEvent.releaseMoreThanFourHoursLate
+            : undefined,
+        oceanCrossing: typeof rerouteEvent.oceanCrossing === "boolean" ? rerouteEvent.oceanCrossing : undefined,
+      };
       const detectedLayovers = asStringArray(changedRotation?.layovers).length > 0
         ? asStringArray(changedRotation?.layovers)
         : asStringArray(originalRotation?.layovers);
@@ -654,19 +699,8 @@ export default function App() {
       const hasStructuredRotationEvidence =
         rerouteChangedRotationText.trim().length > 0 ||
         rerouteOriginalRotationText.trim().length > 0 ||
-        rerouteScreenshotNames.length > 0;
-      const affectedPortion =
-        typeof rerouteEvent.affectedOriginalPortion === "string"
-          ? rerouteEvent.affectedOriginalPortion
-          : typeof rerouteEvent.originalAffectedFlying === "string"
-            ? rerouteEvent.originalAffectedFlying
-            : "";
-      const reroutedPortion =
-        typeof rerouteEvent.reroutedPortion === "string"
-          ? rerouteEvent.reroutedPortion
-          : typeof rerouteEvent.reroutedFlying === "string"
-            ? rerouteEvent.reroutedFlying
-            : "";
+        rerouteOriginalScreenshotNames.length > 0 ||
+        rerouteChangedScreenshotNames.length > 0;
       const additionalPremiumMissingFacts = focusedQuestions.filter((item) =>
         /release times?|scheduled release|late-release|late release|additional duty|x-day|line day-off/i.test(item),
       );
@@ -706,8 +740,15 @@ export default function App() {
         detectedLayovers,
         detectedLegs,
         hasStructuredRotationEvidence,
-        affectedPortion,
-        reroutedPortion,
+        currentDetectedFacts,
+        currentAnalysisId: rerouteCurrentAnalysisId,
+        resultAnalysisId: rerouteAnalysisResult.analysisId,
+        detectedFactsSource:
+          currentDetectedFacts.affectedOriginalPortion ||
+          currentDetectedFacts.reroutedPortion ||
+          typeof currentDetectedFacts.reroutedMinutes === "number"
+            ? ("current_result" as const)
+            : ("none" as const),
         renderError: null as string | null,
       };
     } catch (error) {
@@ -734,29 +775,32 @@ export default function App() {
         detectedLayovers: [],
         detectedLegs: [],
         hasStructuredRotationEvidence: false,
-        affectedPortion: "",
-        reroutedPortion: "",
+        currentDetectedFacts: {
+          affectedOriginalPortion: "",
+          reroutedPortion: "",
+          rejoinPoint: "",
+          originalAffectedMinutes: undefined,
+          reroutedMinutes: undefined,
+          timing: "unknown" as RerouteTiming,
+          touchedXDay: undefined,
+          breakInDuty: undefined,
+          releaseMoreThanFourHoursLate: undefined,
+          oceanCrossing: undefined,
+        },
+        currentAnalysisId: rerouteCurrentAnalysisId,
+        resultAnalysisId: rerouteAnalysisResult.analysisId,
+        detectedFactsSource: "none" as const,
         renderError: error instanceof Error ? error.message : "Unknown render error",
       };
     }
   })();
+  const rerouteDetectedTiming = rerouteRenderModel?.currentDetectedFacts.timing ?? "unknown";
 
   const rerouteBooleanChoice = (value: boolean | undefined): RerouteAnalyzerChoice =>
     value == null ? "unknown" : value ? "yes" : "no";
 
-  const rerouteChoiceToBoolean = (value: RerouteAnalyzerChoice) =>
-    value === "unknown" ? undefined : value === "yes";
-
   const rerouteFormatMinutes = (value?: number) =>
     value == null ? "" : `${Math.floor(value / 60)}:${String(value % 60).padStart(2, "0")}`;
-
-  const rerouteParseMinutesInput = (value: string) => {
-    const match = value.trim().match(/^(\d{1,2}):(\d{2})$/);
-    if (!match) {
-      return undefined;
-    }
-    return Number(match[1]) * 60 + Number(match[2]);
-  };
 
   const currentPilot = useMemo(
     () => findPilotByEmployeeNumber(deltaSnapshot.pilotDirectory, employeeNumberInput),
@@ -2248,21 +2292,47 @@ export default function App() {
                   </View>
 
                   <View style={styles.resultPanel}>
-                    <Text style={styles.inputLabel}>Add trip info</Text>
+                    <Text style={styles.inputLabel}>Add MiCrew screenshots</Text>
                     <Text style={styles.resultBodyText}>
-                      For longer trips, upload enough screenshots to show the header, changed legs, and where you rejoined the trip if visible.
+                      Upload the original trip if you have it, plus the changed/rerouted trip. For long rotations, upload multiple screenshots so we can see the header, all changed legs, and where you rejoined.
                     </Text>
-                    <TouchableOpacity style={styles.auditButton} onPress={() => pickRerouteEvidence()}>
+                    <TouchableOpacity style={styles.auditButton} onPress={() => pickRerouteEvidence("original")}>
                       <Text style={styles.auditButtonText}>
-                        {rerouteScreenshotNames.length > 0 ? "Replace MiCrew screenshot(s)" : "Upload MiCrew screenshot(s)"}
+                        {rerouteOriginalScreenshotNames.length > 0
+                          ? "Replace original MiCrew screenshot(s)"
+                          : "Upload original MiCrew screenshot(s)"}
                       </Text>
                     </TouchableOpacity>
                     <Text style={styles.resultSupportMetaText}>
-                      {rerouteScreenshotNames.length > 0
-                        ? `Attached: ${rerouteScreenshotNames.join(", ")}`
-                        : "Add one or more screenshots if you have them. Screenshot parsing is ready for later, but not active in this V1 build."}
+                      {rerouteOriginalScreenshotNames.length > 0
+                        ? `Original attached: ${rerouteOriginalScreenshotNames.join(", ")}`
+                        : "No original screenshots attached."}
+                    </Text>
+                    <TouchableOpacity style={styles.auditButton} onPress={() => pickRerouteEvidence("rerouted")}>
+                      <Text style={styles.auditButtonText}>
+                        {rerouteChangedScreenshotNames.length > 0
+                          ? "Replace changed/rerouted screenshot(s)"
+                          : "Upload changed/rerouted screenshot(s)"}
+                      </Text>
+                    </TouchableOpacity>
+                    <Text style={styles.resultSupportMetaText}>
+                      {rerouteChangedScreenshotNames.length > 0
+                        ? `Changed/rerouted attached: ${rerouteChangedScreenshotNames.join(", ")}`
+                        : "No changed/rerouted screenshots attached."}
                     </Text>
                   </View>
+
+                  <TextAreaInput
+                    label="Describe what changed"
+                    value={rerouteDescription}
+                    onChangeText={setRerouteDescription}
+                    placeholder="Example: After DH SLC-BUR, Scheduling sent us back to SLC. Next day we DH SLC-IAH then fly IAH-SLC."
+                    autoCapitalize="sentences"
+                  />
+
+                  <Text style={styles.resultSupportMetaText}>
+                    Best results: include or upload the segment-level block times for the parts Scheduling changed or added. Avoid using only total day block unless the whole duty period was rerouted.
+                  </Text>
 
                   <TextAreaInput
                     label="Paste MiCrew text"
@@ -2270,14 +2340,6 @@ export default function App() {
                     onChangeText={setRerouteChangedRotationText}
                     placeholder="Paste the MiCrew trip text, leg list, report/release, credit, or any copied rotation details."
                     autoCapitalize="characters"
-                  />
-
-                  <TextAreaInput
-                    label="Description"
-                    value={rerouteDescription}
-                    onChangeText={setRerouteDescription}
-                    placeholder="Example: Day 2 was supposed to be BOS-SAT-BOS, but Scheduling changed it to BOS-DFW-BOS and I rejoined the original trip in BOS."
-                    autoCapitalize="sentences"
                   />
 
                   <TouchableOpacity
@@ -2380,215 +2442,109 @@ export default function App() {
                         )}
                       </View>
 
-                      <View style={styles.resultPanel}>
-                        <Text style={styles.inputLabel}>Detected facts</Text>
-                        <View style={styles.formRow}>
-                          <ResultLine
-                            label="Rotation number"
-                            value={
-                              (typeof rerouteRenderModel.changedRotation?.rotationNumber === "string"
-                                ? rerouteRenderModel.changedRotation.rotationNumber
-                                : undefined) ??
-                              (typeof rerouteRenderModel.originalRotation?.rotationNumber === "string"
-                                ? rerouteRenderModel.originalRotation.rotationNumber
-                                : undefined) ??
-                              "Unknown"
-                            }
-                          />
-                          <ResultLine
-                            label="Trip credit"
-                            value={
-                              rerouteFormatMinutes(
-                                typeof rerouteRenderModel.changedRotation?.creditMinutes === "number"
-                                  ? rerouteRenderModel.changedRotation.creditMinutes
-                                  : typeof rerouteRenderModel.originalRotation?.creditMinutes === "number"
-                                    ? rerouteRenderModel.originalRotation.creditMinutes
-                                    : undefined,
-                              ) || "Unknown"
-                            }
-                          />
-                        </View>
-                        <View style={styles.formRow}>
-                          <ResultLine
-                            label="Report / release"
-                            value={`${typeof rerouteRenderModel.changedRotation?.reportTime === "string" ? rerouteRenderModel.changedRotation.reportTime : typeof rerouteRenderModel.originalRotation?.reportTime === "string" ? rerouteRenderModel.originalRotation.reportTime : "Unknown"} / ${typeof rerouteRenderModel.changedRotation?.releaseTime === "string" ? rerouteRenderModel.changedRotation.releaseTime : typeof rerouteRenderModel.originalRotation?.releaseTime === "string" ? rerouteRenderModel.originalRotation.releaseTime : "Unknown"}`}
-                          />
-                        </View>
-                        {rerouteRenderModel.detectedLayovers.length > 0 ? (
-                          <Text style={styles.resultBodyText}>
-                            Layovers: {rerouteRenderModel.detectedLayovers.join(", ")}
-                          </Text>
-                        ) : null}
-                        {rerouteRenderModel.hasStructuredRotationEvidence &&
-                        rerouteRenderModel.detectedLegs.length > 0 &&
-                        !rerouteRenderModel.affectedPortion &&
-                        !rerouteRenderModel.reroutedPortion ? (
-                          <Text style={styles.resultBodyText}>
-                            Detected legs: {rerouteRenderModel.detectedLegs
-                              .map((leg) =>
-                                typeof leg.origin === "string" && typeof leg.destination === "string"
-                                  ? `${leg.origin}-${leg.destination}`
-                                  : typeof leg.flightNumber === "string"
-                                    ? leg.flightNumber
-                                    : "Leg",
-                              )
-                              .join(", ")}
-                          </Text>
-                        ) : null}
-                        <View style={styles.formRow}>
-                          <View style={styles.inputGroup}>
-                            <InstrumentField
-                              label="Possible affected portion"
-                              value={rerouteParsedFactOverrides.originalAffectedFlying ?? rerouteRenderModel.affectedPortion ?? ""}
-                              onChangeText={(value) =>
-                                setRerouteParsedFactOverrides((current) => ({ ...current, originalAffectedFlying: value }))
-                              }
-                              placeholder="BOS-SAT-BOS"
-                              autoCapitalize="characters"
+                      <TouchableOpacity
+                        style={styles.evidenceAccordion}
+                        onPress={() => setRerouteDetectedFactsOpen((current) => !current)}
+                      >
+                        <Text style={styles.evidenceAccordionTitle}>Review detected facts</Text>
+                        <Text style={styles.evidenceAccordionChevron}>{rerouteDetectedFactsOpen ? "−" : "+"}</Text>
+                      </TouchableOpacity>
+
+                      {rerouteDetectedFactsOpen ? (
+                        <View key={`detected-facts-${rerouteRenderModel.resultAnalysisId}`} style={styles.resultPanel}>
+                          {__DEV__ ? (
+                            <Text style={styles.resultSupportMetaText}>
+                              analysis {String(rerouteRenderModel.currentAnalysisId)} / result {String(rerouteRenderModel.resultAnalysisId)} / facts {rerouteRenderModel.detectedFactsSource}
+                            </Text>
+                          ) : null}
+                          <View style={styles.formRow}>
+                            <ResultLine
+                              label="Pilot status"
+                              value={rerouteRenderModel.currentDetectedFacts.pilotStatus || "Unknown"}
+                            />
+                            <ResultLine
+                              label="Reroute timing"
+                              value={rerouteDetectedTiming.replaceAll("_", " ") || "Unknown"}
                             />
                           </View>
-                          <View style={styles.inputGroup}>
-                            <InstrumentField
-                              label="Possible rerouted portion"
-                              value={rerouteParsedFactOverrides.reroutedFlying ?? rerouteRenderModel.reroutedPortion ?? ""}
-                              onChangeText={(value) =>
-                                setRerouteParsedFactOverrides((current) => ({ ...current, reroutedFlying: value }))
-                              }
-                              placeholder="BOS-DFW-BOS"
-                              autoCapitalize="characters"
+                          <View style={styles.formRow}>
+                            <ResultLine
+                              label="Affected original portion"
+                              value={rerouteRenderModel.currentDetectedFacts.affectedOriginalPortion || "Unknown"}
+                            />
+                            <ResultLine
+                              label="Rerouted portion"
+                              value={rerouteRenderModel.currentDetectedFacts.reroutedPortion || "Unknown"}
                             />
                           </View>
-                        </View>
-                        <View style={styles.formRow}>
-                          <View style={styles.inputGroup}>
-                            <InstrumentField
-                              label="Rejoin point"
-                              value={rerouteParsedFactOverrides.rejoinPoint ?? rerouteDetectedFacts?.rejoinPoint ?? ""}
-                              onChangeText={(value) =>
-                                setRerouteParsedFactOverrides((current) => ({ ...current, rejoinPoint: value }))
-                              }
-                              placeholder="BOS"
-                              autoCapitalize="characters"
-                            />
-                          </View>
-                        </View>
-                        <View style={styles.formRow}>
-                          <View style={styles.inputGroup}>
-                            <InstrumentField
+                          <View style={styles.formRow}>
+                            <ResultLine
                               label="Original affected block/credit"
-                              value={rerouteFormatMinutes(
-                                rerouteParsedFactOverrides.originalAffectedMinutes ?? rerouteDetectedFacts?.originalAffectedMinutes,
-                              )}
-                              onChangeText={(value) =>
-                                setRerouteParsedFactOverrides((current) => ({
-                                  ...current,
-                                  originalAffectedMinutes: rerouteParseMinutesInput(value),
-                                }))
-                              }
-                              placeholder="5:20"
-                              autoCapitalize="none"
+                              value={rerouteFormatMinutes(rerouteRenderModel.currentDetectedFacts.originalAffectedMinutes) || "Unknown"}
+                            />
+                            <ResultLine
+                              label="Rerouted block/credit"
+                              value={rerouteFormatMinutes(rerouteRenderModel.currentDetectedFacts.reroutedMinutes) || "Unknown"}
                             />
                           </View>
-                          <View style={styles.inputGroup}>
-                            <InstrumentField
-                              label="Rerouted block/credit"
-                              value={rerouteFormatMinutes(
-                                rerouteParsedFactOverrides.reroutedMinutes ?? rerouteDetectedFacts?.reroutedMinutes,
-                              )}
-                              onChangeText={(value) =>
-                                setRerouteParsedFactOverrides((current) => ({
-                                  ...current,
-                                  reroutedMinutes: rerouteParseMinutesInput(value),
-                                }))
+                          <View style={styles.formRow}>
+                            <ResultLine
+                              label="Rejoin point"
+                              value={rerouteRenderModel.currentDetectedFacts.rejoinPoint || "Unknown"}
+                            />
+                            <ResultLine
+                              label="Break in duty"
+                              value={
+                                rerouteRenderModel.currentDetectedFacts.breakInDuty == null
+                                  ? "Unknown"
+                                  : rerouteRenderModel.currentDetectedFacts.breakInDuty
+                                    ? "Yes"
+                                    : "No"
                               }
-                              placeholder="4:40"
-                              autoCapitalize="none"
+                            />
+                          </View>
+                          <View style={styles.formRow}>
+                            <ResultLine
+                              label="X-day / non-fly affected"
+                              value={
+                                rerouteRenderModel.currentDetectedFacts.touchedXDay == null
+                                  ? "Unknown"
+                                  : rerouteRenderModel.currentDetectedFacts.touchedXDay
+                                    ? "Yes"
+                                    : "No"
+                              }
+                            />
+                            <ResultLine
+                              label="Release more than 4h late"
+                              value={
+                                rerouteRenderModel.currentDetectedFacts.releaseMoreThanFourHoursLate == null
+                                  ? "Unknown"
+                                  : rerouteRenderModel.currentDetectedFacts.releaseMoreThanFourHoursLate
+                                    ? "Yes"
+                                    : "No"
+                              }
+                            />
+                          </View>
+                          <View style={styles.formRow}>
+                            <ResultLine
+                              label="Ocean / 25h threshold"
+                              value={
+                                rerouteRenderModel.currentDetectedFacts.oceanCrossing == null
+                                  ? "Unknown"
+                                  : rerouteRenderModel.currentDetectedFacts.oceanCrossing
+                                    ? "Yes"
+                                    : "No"
+                              }
                             />
                           </View>
                         </View>
-                        <ChoiceChipRow
-                          label="Timing"
-                          value={rerouteDetectedTiming}
-                          options={rerouteTimingOptions}
-                          onChange={(next) => {
-                            setRerouteTiming(next);
-                            setRerouteParsedFactOverrides((current) => ({ ...current, timing: next }));
-                          }}
-                          compact
-                        />
-                        <ChoiceChipRow
-                          label="X-day / non-fly affected"
-                          value={rerouteBooleanChoice(
-                            rerouteParsedFactOverrides.touchedXDay ?? rerouteDetectedFacts?.touchedXDay,
-                          )}
-                          options={rerouteBinaryOptions}
-                          onChange={(next) => {
-                            setRerouteTouchedXDay(next);
-                            setRerouteParsedFactOverrides((current) => ({
-                              ...current,
-                              touchedXDay: rerouteChoiceToBoolean(next),
-                            }));
-                          }}
-                          compact
-                        />
-                        <ChoiceChipRow
-                          label="Break in duty"
-                          value={rerouteBooleanChoice(
-                            rerouteParsedFactOverrides.breakInDuty ?? rerouteDetectedFacts?.breakInDuty,
-                          )}
-                          options={rerouteBinaryOptions}
-                          onChange={(next) =>
-                            setRerouteParsedFactOverrides((current) => ({
-                              ...current,
-                              breakInDuty: rerouteChoiceToBoolean(next),
-                            }))
-                          }
-                          compact
-                        />
-                        <ChoiceChipRow
-                          label="Release more than 4h late"
-                          value={rerouteBooleanChoice(
-                            rerouteParsedFactOverrides.releaseMoreThanFourHoursLate ??
-                              rerouteDetectedFacts?.releaseMoreThanFourHoursLate,
-                          )}
-                          options={rerouteBinaryOptions}
-                          onChange={(next) =>
-                            setRerouteParsedFactOverrides((current) => ({
-                              ...current,
-                              releaseMoreThanFourHoursLate: rerouteChoiceToBoolean(next),
-                            }))
-                          }
-                          compact
-                        />
-                        <ChoiceChipRow
-                          label="Ocean crossing / 25h threshold"
-                          value={rerouteBooleanChoice(
-                            rerouteParsedFactOverrides.oceanCrossing ?? rerouteDetectedFacts?.oceanCrossing,
-                          )}
-                          options={rerouteBinaryOptions}
-                          onChange={(next) =>
-                            setRerouteParsedFactOverrides((current) => ({
-                              ...current,
-                              oceanCrossing: rerouteChoiceToBoolean(next),
-                            }))
-                          }
-                          compact
-                        />
-                      </View>
+                      ) : null}
 
                       {rerouteRenderModel.whatControlsLines.length > 0 || rerouteRenderModel.supportCards.length > 0 ? (
                         <View style={styles.resultPanel}>
                           <Text style={styles.inputLabel}>What controls</Text>
                           {rerouteRenderModel.whatControlsLines.map((item) => (
                             <Text key={item} style={styles.controlsPrimaryText}>{item}</Text>
-                          ))}
-                          {rerouteRenderModel.supportCards.slice(0, 2).map((card) => (
-                            <Text
-                              key={`control-${String(card.sourceName)}-${String(card.section)}`}
-                              style={styles.controlsSecondaryText}
-                            >
-                              {String(card.sourceName ?? "Source")} — {String(card.section ?? "Section")}
-                            </Text>
                           ))}
                         </View>
                       ) : null}

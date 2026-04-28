@@ -115,4 +115,23 @@ export const reroutePaySmokeFixtures: Array<{
     },
     expected: ["missing original release time", "need more facts"],
   },
+  {
+    id: "reroute-pay-smoke-006",
+    input: {
+      description:
+        "Lineholder. After report. Day 1 original deadhead was DH SLC-BUR block 2:01 and fly BUR-ATL. After deadhead to BUR, Scheduling rerouted me back to SLC. Rerouted segment BUR-SLC block 1:48 before the first break in duty.",
+      pilotStatus: "lineholder",
+      rerouteTiming: "after_report",
+      finalCreditDecreased: "unknown",
+      touchedXDay: "no",
+      deadheadInvolved: "yes",
+      bidPeriodCrossover: "no",
+      uploadedEvidenceSummary: {
+        screenshotParsingActive: false,
+        screenshotNames: [],
+        notes: [],
+      },
+    },
+    expected: ["23 L.4", "0:54", "BUR-SLC", "50% pay / no credit"],
+  },
 ];

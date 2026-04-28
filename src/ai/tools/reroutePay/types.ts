@@ -8,9 +8,43 @@ export type LateReleaseReason = "weather_or_airport_closure" | "company_controll
 export type UploadedEvidenceSummary = {
   originalScreenshotName?: string;
   changedScreenshotName?: string;
+  originalScreenshotNames?: string[];
+  changedScreenshotNames?: string[];
   screenshotNames?: string[];
   screenshotParsingActive: boolean;
   notes: string[];
+};
+
+export type ParsedScreenshotRotation = {
+  sourceType: "original" | "rerouted";
+  rotationNumber?: string;
+  date?: string;
+  base?: string;
+  creditMinutes?: number;
+  tafbMinutes?: number;
+  reportTime?: string;
+  releaseTime?: string;
+  layovers: string[];
+  legs: Array<{
+    flightNumber?: string;
+    origin?: string;
+    destination?: string;
+    depTime?: string;
+    arrTime?: string;
+    blockMinutes?: number;
+    turnMinutes?: number;
+    isDeadhead?: boolean;
+    sourceImageIndex?: number;
+  }>;
+};
+
+export type ParseMiCrewScreenshotsOutput = {
+  screenshotParsingActive: boolean;
+  uploadedEvidenceSummary: UploadedEvidenceSummary;
+  missingFacts: string[];
+  rotations?: ParsedScreenshotRotation[];
+  parseConfidence?: "high" | "medium" | "low";
+  missingParseItems?: string[];
 };
 
 export type RerouteAnalysisInput = {
@@ -66,6 +100,23 @@ export type RerouteSegment = {
   timingBasis: TimingBasis;
 };
 
+export type RerouteDutyPeriodEvent = {
+  label: string;
+  rerouteTiming?: "before_first_airborne" | "after_first_airborne" | "after_report" | "unknown";
+  firstBreakInDutyAfterReroute?: boolean;
+  originalScheduledRelease?: string;
+  reroutedScheduledRelease?: string;
+  reachedBase?: boolean;
+  releasedAtBase?: boolean;
+  rejoinedOriginalRotation?: boolean;
+  transOceanic?: boolean;
+  lateReleaseReason?: LateReleaseReason;
+  touchedXDayOrLineDayOff?: boolean;
+  originalRotationValueMinutes?: number;
+  reroutedRotationValueMinutes?: number;
+  reroutedSegments: RerouteSegment[];
+};
+
 export type ParsedMiCrewRotation = {
   rotationNumber?: string;
   date?: string;
@@ -83,6 +134,7 @@ export type ParsedMiCrewRotation = {
 export type BuiltRerouteEvent = ParsedRerouteFacts & {
   affectedOriginalPortion?: string;
   reroutedPortion?: string;
+  dutyPeriods?: RerouteDutyPeriodEvent[];
 };
 
 export type RerouteEvent = {
@@ -100,9 +152,11 @@ export type RerouteEvent = {
   originalRotationValueMinutes?: number;
   reroutedRotationValueMinutes?: number;
   reroutedSegments: RerouteSegment[];
+  dutyPeriods?: RerouteDutyPeriodEvent[];
 };
 
 export type ReroutePayItem = {
+  eventLabel?: string;
   label: string;
   rule: string;
   minutes?: number;

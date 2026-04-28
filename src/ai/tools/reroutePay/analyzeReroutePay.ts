@@ -17,6 +17,7 @@ import {
 } from "./reroutePayHeuristics.ts";
 import { formatMinutes, parseTime } from "./parseTime.ts";
 import { parseMiCrewRotation } from "./parseMiCrewRotation.ts";
+import { parseMiCrewScreenshots } from "./parseMiCrewScreenshots.ts";
 import { buildRerouteAnalyzerSummary } from "./prompt.ts";
 import { reroutePayRules } from "./reroutePayRules.ts";
 import type {
@@ -54,7 +55,12 @@ type BaseAnalysisState = {
   deadheadInvolved: boolean;
   crossedBidPeriods: boolean;
   desiredAnchors: string[];
+  screenshotParseResult: ReturnType<typeof parseMiCrewScreenshots>;
 };
+
+function detectWholeDutyPeriodHint(text: string) {
+  return /\b(entire|whole|all of)\s+(day|duty period|rotation|trip)\s+(was )?rerouted/i.test(text);
+}
 
 function inferLateReleaseReason(text: string) {
   if (/weather|airport closure/i.test(text)) {
@@ -170,6 +176,27 @@ function buildRuleEvent(args: {
     originalRotationValueMinutes: rerouteEvent.originalAffectedMinutes,
     reroutedRotationValueMinutes: rerouteEvent.reroutedMinutes,
     reroutedSegments: parsedSegmentsHaveKnownBlock ? parsedChangedSegments : fallbackSegment,
+    dutyPeriods: rerouteEvent.dutyPeriods?.map((period, index) => ({
+      label: period.label || `Event ${index + 1}`,
+      rerouteTiming: period.rerouteTiming,
+      firstBreakInDutyAfterReroute: period.firstBreakInDutyAfterReroute,
+      originalScheduledRelease: period.originalScheduledRelease,
+      reroutedScheduledRelease: period.reroutedScheduledRelease,
+      reachedBase: period.reachedBase,
+      releasedAtBase: period.releasedAtBase,
+      rejoinedOriginalRotation: period.rejoinedOriginalRotation,
+      transOceanic: period.transOceanic,
+      lateReleaseReason: period.lateReleaseReason,
+      touchedXDayOrLineDayOff: period.touchedXDayOrLineDayOff,
+      originalRotationValueMinutes: period.originalRotationValueMinutes,
+      reroutedRotationValueMinutes: period.reroutedRotationValueMinutes,
+      reroutedSegments:
+        period.reroutedSegments.length > 0
+          ? period.reroutedSegments
+          : parsedSegmentsHaveKnownBlock
+            ? parsedChangedSegments
+            : fallbackSegment,
+    })),
   };
 }
 
@@ -235,6 +262,7 @@ function buildBaseAnalysisState(args: AnalyzeReroutePayArgs): BaseAnalysisState 
     input.uploadedEvidenceSummary.originalScreenshotName,
     input.uploadedEvidenceSummary.changedScreenshotName,
   ].filter((value): value is string => Boolean(value));
+  const screenshotParseResult = parseMiCrewScreenshots(input.uploadedEvidenceSummary);
 
   const originalRotation: ParsedMiCrewRotation | undefined =
     input.originalRotationText?.trim() || screenshotNames.length > 0
@@ -300,6 +328,7 @@ function buildBaseAnalysisState(args: AnalyzeReroutePayArgs): BaseAnalysisState 
     deadheadInvolved,
     crossedBidPeriods,
     desiredAnchors,
+    screenshotParseResult,
   };
 }
 
@@ -318,6 +347,7 @@ function buildPreliminaryOutput(state: BaseAnalysisState): Omit<RerouteAnalysisO
     touchedXDay,
     deadheadInvolved,
     crossedBidPeriods,
+    screenshotParseResult,
   } = state;
 
   let status: RerouteAnalysisOutput["status"] =
@@ -331,7 +361,9 @@ function buildPreliminaryOutput(state: BaseAnalysisState): Omit<RerouteAnalysisO
   if (primaryPayItem?.rule === "23 L.4") {
     likelyIssue = /before first break/i.test(primaryPayItem.label)
       ? "Rerouted-segment premium before first break in duty"
-      : "Section 23 L.4 reroute pay calculation";
+      : /after first break/i.test(primaryPayItem.label)
+        ? "Rerouted-segment premium after first break in duty"
+        : "Section 23 L.4 reroute pay calculation";
   }
 
   if (likelyContinuation === true) {
@@ -390,8 +422,20 @@ function buildPreliminaryOutput(state: BaseAnalysisState): Omit<RerouteAnalysisO
   if (input.uploadedEvidenceSummary.notes.length > 0) {
     sourceLimitations.push(...input.uploadedEvidenceSummary.notes);
   }
+  if (screenshotParseResult.missingFacts.length > 0) {
+    sourceLimitations.push(...screenshotParseResult.missingFacts);
+  }
 
   const warnings = [...deterministic.warnings];
+  if (
+    deterministic.payItems.length === 0 &&
+    state.rerouteEvent.reroutedMinutes == null &&
+    !detectWholeDutyPeriodHint(input.description)
+  ) {
+    warnings.push(
+      "I need the changed or added segment block time before I can calculate 23 L.4. Do not rely on total day block unless the whole duty period was rerouted.",
+    );
+  }
   if (ruleEvent.rerouteTiming === "before_first_airborne") {
     warnings.push("Regular pilots generally may not be rerouted before first airborne unless a Section 23 L.2 exception applies.");
   }
