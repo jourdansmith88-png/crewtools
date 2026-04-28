@@ -46,6 +46,7 @@ const { handleContractCopilotExtractTripScreenshotRoute } = await import(
 const { handleContractCopilotFeedbackRoute } = await import(
   "./routes/ai/contractCopilotFeedbackRoute.ts"
 );
+const { handleReroutePayAnalyzeRoute } = await import("./routes/ai/reroutePayAnalyzeRoute.ts");
 
 function contentTypeFor(filePath: string) {
   if (filePath.endsWith(".html")) return "text/html; charset=utf-8";
@@ -73,25 +74,40 @@ const server = createServer((req, res) => {
   if (
     url.pathname === "/api/ai/contract-copilot" ||
     url.pathname === "/api/ai/contract-copilot/extract-trip-screenshot" ||
-    url.pathname === "/api/ai/contract-copilot/feedback"
+    url.pathname === "/api/ai/contract-copilot/feedback" ||
+    url.pathname === "/api/tools/reroute-pay/analyze"
   ) {
     const chunks: Buffer[] = [];
     req.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
     req.on("end", async () => {
-      const request = new Request(`http://localhost:${port}${url.pathname}`, {
-        method: req.method,
-        headers: req.headers as HeadersInit,
-        body: chunks.length > 0 ? Buffer.concat(chunks).toString("utf8") : undefined,
-      });
-      const response =
-        url.pathname === "/api/ai/contract-copilot/extract-trip-screenshot"
-          ? await handleContractCopilotExtractTripScreenshotRoute(request)
-          : url.pathname === "/api/ai/contract-copilot/feedback"
-            ? await handleContractCopilotFeedbackRoute(request)
-          : await handleContractCopilotRoute(request);
-      res.statusCode = response.status;
-      response.headers.forEach((value, key) => res.setHeader(key, value));
-      res.end(await response.text());
+      try {
+        const request = new Request(`http://localhost:${port}${url.pathname}`, {
+          method: req.method,
+          headers: req.headers as HeadersInit,
+          body: chunks.length > 0 ? Buffer.concat(chunks).toString("utf8") : undefined,
+        });
+        const response =
+          url.pathname === "/api/ai/contract-copilot/extract-trip-screenshot"
+            ? await handleContractCopilotExtractTripScreenshotRoute(request)
+            : url.pathname === "/api/tools/reroute-pay/analyze"
+              ? await handleReroutePayAnalyzeRoute(request)
+            : url.pathname === "/api/ai/contract-copilot/feedback"
+              ? await handleContractCopilotFeedbackRoute(request)
+            : await handleContractCopilotRoute(request);
+        res.statusCode = response.status;
+        response.headers.forEach((value, key) => res.setHeader(key, value));
+        res.end(await response.text());
+      } catch (error) {
+        res.statusCode = 500;
+        res.setHeader("Content-Type", "application/json; charset=utf-8");
+        res.end(
+          JSON.stringify({
+            ok: false,
+            status: "warning",
+            error: error instanceof Error ? error.message : "Unhandled API error",
+          }),
+        );
+      }
     });
     return;
   }

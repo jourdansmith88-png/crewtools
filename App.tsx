@@ -51,6 +51,14 @@ import {
 } from "./src/utils/holdForecast";
 import { ContractCopilotPanel } from "./src/components/contractCopilot/ContractCopilotPanel";
 import { fliegerTypography, getFliegerPalette } from "./src/theme/flieger";
+import type {
+  ParsedRerouteFacts,
+  RerouteAnalysisOutput,
+  RerouteAnalyzerChoice,
+  ReroutePayAnalyzeApiResponse,
+  ReroutePilotStatus,
+  RerouteTiming,
+} from "./src/ai/tools/reroutePay/types";
 
 const embeddedChartData = embeddedDeltaCharts as unknown as DeltaChartsData;
 const appStylePalette = getFliegerPalette();
@@ -58,6 +66,21 @@ const appStyleIsDark = appStylePalette.textPrimary === "#F2E9DC";
 const appDecisionRowSurface = appStyleIsDark ? "#303840" : "#D2D8DE";
 const appDecisionRowHighlight = appStyleIsDark ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.6)";
 const appDecisionRowShadowEdge = appStyleIsDark ? "rgba(0,0,0,0.5)" : "rgba(0,0,0,0.08)";
+const rerouteBinaryOptions: Array<{ key: RerouteAnalyzerChoice; label: string }> = [
+  { key: "unknown", label: "Unknown" },
+  { key: "yes", label: "Yes" },
+  { key: "no", label: "No" },
+];
+const rerouteTimingOptions: Array<{ key: RerouteTiming; label: string }> = [
+  { key: "unknown", label: "Unknown" },
+  { key: "before_report", label: "Before report" },
+  { key: "after_report", label: "After report" },
+  { key: "after_first_airborne", label: "After first airborne" },
+];
+const reroutePilotStatusOptions: Array<{ key: Exclude<ReroutePilotStatus, "unknown">; label: string }> = [
+  { key: "lineholder", label: "Lineholder" },
+  { key: "reserve", label: "Reserve" },
+];
 
 const premiumTypeOptions = [
   { key: "none", label: "None" },
@@ -96,8 +119,8 @@ const payToolCards = [
     key: "reroute-calculator",
     title: "Reroute Calculator",
     subtitle: "Check reroute and reassignment outcomes against the PWA instead of trusting payroll math.",
-    cta: "Coming Next",
-    badge: "Priority",
+    cta: "Open Calculator",
+    badge: "Live",
     glyph: "RR",
   },
   {
@@ -435,6 +458,25 @@ export default function App() {
     "green-slip"
   );
   const [selectedPayTool, setSelectedPayTool] = useState<PayToolKey>("timecard-auditor");
+  const [rerouteOriginalRotationText, setRerouteOriginalRotationText] = useState("");
+  const [rerouteChangedRotationText, setRerouteChangedRotationText] = useState("");
+  const [rerouteDescription, setRerouteDescription] = useState("");
+  const [reroutePilotStatus, setReroutePilotStatus] = useState<Exclude<ReroutePilotStatus, "unknown"> | "">("");
+  const [rerouteTiming, setRerouteTiming] = useState<RerouteTiming>("unknown");
+  const [rerouteFinalCreditDecreased, setRerouteFinalCreditDecreased] =
+    useState<RerouteAnalyzerChoice>("unknown");
+  const [rerouteTouchedXDay, setRerouteTouchedXDay] = useState<RerouteAnalyzerChoice>("unknown");
+  const [rerouteDeadheadInvolved, setRerouteDeadheadInvolved] =
+    useState<RerouteAnalyzerChoice>("unknown");
+  const [rerouteBidPeriodCrossover, setRerouteBidPeriodCrossover] =
+    useState<RerouteAnalyzerChoice>("unknown");
+  const [rerouteParsedFactOverrides, setRerouteParsedFactOverrides] = useState<Partial<ParsedRerouteFacts>>({});
+  const [rerouteScreenshotNames, setRerouteScreenshotNames] = useState<string[]>([]);
+  const [rerouteAnalyzeBusy, setRerouteAnalyzeBusy] = useState(false);
+  const [rerouteAnalyzeError, setRerouteAnalyzeError] = useState("");
+  const [rerouteAnalysisResult, setRerouteAnalysisResult] = useState<RerouteAnalysisOutput | null>(null);
+  const [rerouteEvidenceOpen, setRerouteEvidenceOpen] = useState(false);
+  const [rerouteSupportOpen, setRerouteSupportOpen] = useState(false);
   const [perDiemHours, setPerDiemHours] = useState("0");
   const [missedBreakPay, setMissedBreakPay] = useState("0");
   const [timecardRawInput, setTimecardRawInput] = useState("");
@@ -451,6 +493,271 @@ export default function App() {
   );
   const scrollRef = useRef<ScrollView | null>(null);
   const [whatIfSectionY, setWhatIfSectionY] = useState(0);
+
+  const clearRerouteAnalyzer = () => {
+    setRerouteOriginalRotationText("");
+    setRerouteChangedRotationText("");
+    setRerouteDescription("");
+    setReroutePilotStatus("");
+    setRerouteTiming("unknown");
+    setRerouteFinalCreditDecreased("unknown");
+    setRerouteTouchedXDay("unknown");
+    setRerouteDeadheadInvolved("unknown");
+    setRerouteBidPeriodCrossover("unknown");
+    setRerouteParsedFactOverrides({});
+    setRerouteScreenshotNames([]);
+    setRerouteAnalyzeError("");
+    setRerouteAnalysisResult(null);
+    setRerouteEvidenceOpen(false);
+    setRerouteSupportOpen(false);
+  };
+
+  const pickRerouteEvidence = () => {
+    if (Platform.OS !== "web" || typeof document === "undefined") {
+      setRerouteAnalyzeError("Screenshot upload is currently available on web only in this V1 build.");
+      return;
+    }
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.multiple = true;
+    input.onchange = () => {
+      const files = input.files ? Array.from(input.files) : [];
+      if (files.length === 0) {
+        return;
+      }
+      setRerouteScreenshotNames(files.map((file) => file.name));
+      setRerouteAnalyzeError("");
+    };
+    input.click();
+  };
+
+  const analyzeReroute = async () => {
+    const description = rerouteDescription.trim();
+    if (!reroutePilotStatus) {
+      setRerouteAnalyzeError("Choose Lineholder or Reserve first.");
+      return;
+    }
+    if (!description) {
+      setRerouteAnalyzeError("Description is required.");
+      return;
+    }
+
+    setRerouteAnalyzeBusy(true);
+    setRerouteAnalyzeError("");
+
+    try {
+      const response = await fetch("/api/tools/reroute-pay/analyze", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          input: {
+            originalRotationText: rerouteOriginalRotationText.trim() || undefined,
+            changedRotationText: rerouteChangedRotationText.trim() || undefined,
+            description,
+            pilotStatus: reroutePilotStatus,
+            rerouteTiming,
+            finalCreditDecreased: rerouteFinalCreditDecreased,
+            touchedXDay: rerouteTouchedXDay,
+            deadheadInvolved: rerouteDeadheadInvolved,
+            bidPeriodCrossover: rerouteBidPeriodCrossover,
+            parsedFactOverrides: Object.keys(rerouteParsedFactOverrides).length > 0 ? rerouteParsedFactOverrides : undefined,
+            uploadedEvidenceSummary: {
+              screenshotNames: rerouteScreenshotNames,
+              originalScreenshotName: rerouteScreenshotNames[0] || undefined,
+              changedScreenshotName: rerouteScreenshotNames[1] || undefined,
+              screenshotParsingActive: false,
+              notes:
+                rerouteScreenshotNames.length > 0
+                  ? [
+                      "Screenshot parsing is not active yet in Reroute Pay Calculator V1, so this calculation uses filenames and text only.",
+                    ]
+                  : [],
+            },
+          },
+        }),
+      });
+      const responseText = await response.text();
+      let payload: ReroutePayAnalyzeApiResponse | null = null;
+      try {
+        payload = JSON.parse(responseText) as ReroutePayAnalyzeApiResponse;
+      } catch {
+        throw new Error("Reroute Pay Calculator returned a non-JSON response. Check the local API server.");
+      }
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.ok ? "Unable to analyze reroute." : payload.error);
+      }
+      setRerouteAnalysisResult(payload.result);
+      setRerouteParsedFactOverrides((current) => ({
+        originalAffectedFlying: current.originalAffectedFlying ?? payload.result.rerouteEvent.originalAffectedFlying,
+        reroutedFlying: current.reroutedFlying ?? payload.result.rerouteEvent.reroutedFlying,
+        rejoinPoint: current.rejoinPoint ?? payload.result.rerouteEvent.rejoinPoint,
+        originalAffectedMinutes: current.originalAffectedMinutes ?? payload.result.rerouteEvent.originalAffectedMinutes,
+        reroutedMinutes: current.reroutedMinutes ?? payload.result.rerouteEvent.reroutedMinutes,
+        timing: current.timing ?? payload.result.rerouteEvent.timing,
+        touchedXDay: current.touchedXDay ?? payload.result.rerouteEvent.touchedXDay,
+        breakInDuty: current.breakInDuty ?? payload.result.rerouteEvent.breakInDuty,
+        releaseMoreThanFourHoursLate:
+          current.releaseMoreThanFourHoursLate ?? payload.result.rerouteEvent.releaseMoreThanFourHoursLate,
+        oceanCrossing: current.oceanCrossing ?? payload.result.rerouteEvent.oceanCrossing,
+      }));
+      setRerouteSupportOpen(false);
+    } catch (error) {
+      setRerouteAnalyzeError(error instanceof Error ? error.message : "Unable to analyze reroute.");
+      setRerouteAnalysisResult(null);
+    } finally {
+      setRerouteAnalyzeBusy(false);
+    }
+  };
+
+  const rerouteDetectedFacts = rerouteAnalysisResult?.rerouteEvent;
+  const rerouteDetectedTiming = rerouteParsedFactOverrides.timing ?? rerouteDetectedFacts?.timing ?? "unknown";
+  const rerouteRenderModel = (() => {
+    if (!rerouteAnalysisResult) {
+      return null;
+    }
+
+    try {
+      const result = rerouteAnalysisResult as Record<string, unknown>;
+      const changedRotation = (result.changedRotation as Record<string, unknown> | undefined) ?? undefined;
+      const originalRotation = (result.originalRotation as Record<string, unknown> | undefined) ?? undefined;
+      const supportCards = asObjectArray<Record<string, unknown>>(result.supportCards);
+      const payItems = asObjectArray<Record<string, unknown>>(result.payItems);
+      const calculation = (result.calculation as Record<string, unknown> | undefined) ?? {};
+      const calculationSteps = asStringArray(calculation.calculationSteps);
+      const warnings = asStringArray(result.warnings);
+      const whatThisDependsOn = asStringArray(result.whatThisDependsOn);
+      const likelyPaths = asStringArray(result.likelyPaths);
+      const whatToCheck = asStringArray(result.whatToCheck);
+      const sourceLimitations = asStringArray(result.sourceLimitations);
+      const factsUsed = asStringArray(result.factsUsed);
+      const focusedQuestions =
+        asStringArray(result.focusedQuestions).length > 0
+          ? asStringArray(result.focusedQuestions)
+          : asStringArray(result.missingFacts).length > 0
+            ? asStringArray(result.missingFacts)
+            : asStringArray((result.classification as Record<string, unknown> | undefined)?.missingFacts);
+      const whatControlsValue = result.whatControls;
+      const whatControlsLines =
+        typeof whatControlsValue === "string"
+          ? [whatControlsValue]
+          : asStringArray(whatControlsValue);
+      const rerouteEvent = (result.rerouteEvent as Record<string, unknown> | undefined) ?? {};
+      const detectedLayovers = asStringArray(changedRotation?.layovers).length > 0
+        ? asStringArray(changedRotation?.layovers)
+        : asStringArray(originalRotation?.layovers);
+      const detectedLegs = asObjectArray<Record<string, unknown>>(changedRotation?.legs).length > 0
+        ? asObjectArray<Record<string, unknown>>(changedRotation?.legs)
+        : asObjectArray<Record<string, unknown>>(originalRotation?.legs);
+      const hasStructuredRotationEvidence =
+        rerouteChangedRotationText.trim().length > 0 ||
+        rerouteOriginalRotationText.trim().length > 0 ||
+        rerouteScreenshotNames.length > 0;
+      const affectedPortion =
+        typeof rerouteEvent.affectedOriginalPortion === "string"
+          ? rerouteEvent.affectedOriginalPortion
+          : typeof rerouteEvent.originalAffectedFlying === "string"
+            ? rerouteEvent.originalAffectedFlying
+            : "";
+      const reroutedPortion =
+        typeof rerouteEvent.reroutedPortion === "string"
+          ? rerouteEvent.reroutedPortion
+          : typeof rerouteEvent.reroutedFlying === "string"
+            ? rerouteEvent.reroutedFlying
+            : "";
+      const additionalPremiumMissingFacts = focusedQuestions.filter((item) =>
+        /release times?|scheduled release|late-release|late release|additional duty|x-day|line day-off/i.test(item),
+      );
+      const coreMissingFacts = focusedQuestions.filter((item) => !additionalPremiumMissingFacts.includes(item));
+
+      return {
+        status:
+          result.status === "resolved" || result.status === "warning" || result.status === "caution"
+            ? result.status
+            : "caution",
+        likelyIssue: typeof result.likelyIssue === "string" ? result.likelyIssue : "Reroute calculation result",
+        shortAnswer:
+          typeof result.shortAnswer === "string"
+            ? result.shortAnswer
+            : "The calculator returned a result, but some summary fields are missing.",
+        estimatedPayLabel:
+          typeof result.estimatedPayLabel === "string"
+            ? result.estimatedPayLabel
+            : rerouteFormatMinutes(
+                typeof result.estimatedAdditionalPayMinutes === "number" ? result.estimatedAdditionalPayMinutes : undefined,
+              ) || "Need more facts",
+        changedRotation,
+        originalRotation,
+        supportCards,
+        payItems,
+        calculationSteps,
+        warnings,
+        whatThisDependsOn,
+        likelyPaths,
+        whatToCheck,
+        sourceLimitations,
+        factsUsed,
+        focusedQuestions,
+        coreMissingFacts,
+        additionalPremiumMissingFacts,
+        whatControlsLines,
+        detectedLayovers,
+        detectedLegs,
+        hasStructuredRotationEvidence,
+        affectedPortion,
+        reroutedPortion,
+        renderError: null as string | null,
+      };
+    } catch (error) {
+      return {
+        status: "warning" as const,
+        likelyIssue: "Reroute calculation result",
+        shortAnswer: "Analyzer returned a result, but the UI could not render one section.",
+        estimatedPayLabel: "Unavailable",
+        changedRotation: undefined,
+        originalRotation: undefined,
+        supportCards: [],
+        payItems: [],
+        calculationSteps: [],
+        warnings: [],
+        whatThisDependsOn: [],
+        likelyPaths: [],
+        whatToCheck: [],
+        sourceLimitations: [],
+        factsUsed: [],
+        focusedQuestions: [],
+        coreMissingFacts: [],
+        additionalPremiumMissingFacts: [],
+        whatControlsLines: [],
+        detectedLayovers: [],
+        detectedLegs: [],
+        hasStructuredRotationEvidence: false,
+        affectedPortion: "",
+        reroutedPortion: "",
+        renderError: error instanceof Error ? error.message : "Unknown render error",
+      };
+    }
+  })();
+
+  const rerouteBooleanChoice = (value: boolean | undefined): RerouteAnalyzerChoice =>
+    value == null ? "unknown" : value ? "yes" : "no";
+
+  const rerouteChoiceToBoolean = (value: RerouteAnalyzerChoice) =>
+    value === "unknown" ? undefined : value === "yes";
+
+  const rerouteFormatMinutes = (value?: number) =>
+    value == null ? "" : `${Math.floor(value / 60)}:${String(value % 60).padStart(2, "0")}`;
+
+  const rerouteParseMinutesInput = (value: string) => {
+    const match = value.trim().match(/^(\d{1,2}):(\d{2})$/);
+    if (!match) {
+      return undefined;
+    }
+    return Number(match[1]) * 60 + Number(match[2]);
+  };
+
   const currentPilot = useMemo(
     () => findPilotByEmployeeNumber(deltaSnapshot.pilotDirectory, employeeNumberInput),
     [employeeNumberInput]
@@ -1897,7 +2204,500 @@ export default function App() {
               ))}
             </View>
 
-            {selectedPayTool === "timecard-auditor" ? (
+            {selectedPayTool === "reroute-calculator" ? (
+              <>
+                <View style={styles.sectionStack}>
+                  <View style={styles.payToolPlaceholder}>
+                    <Text style={styles.payToolPlaceholderTitle}>Reroute Pay Calculator</Text>
+                    <Text style={styles.payToolPlaceholderText}>
+                      Upload MiCrew screenshots or paste trip text. Tell us what changed if you know.
+                    </Text>
+                  </View>
+
+                  <View style={styles.resultPanel}>
+                    <Text style={styles.inputLabel}>Pilot status</Text>
+                    <View style={styles.baseSelector}>
+                      {reroutePilotStatusOptions.map((option) => (
+                        <TouchableOpacity
+                          key={option.key}
+                          style={[
+                            styles.baseChip,
+                            styles.compactBaseChip,
+                            reroutePilotStatus === option.key && styles.baseChipActive,
+                          ]}
+                          onPress={() => {
+                            setReroutePilotStatus(option.key);
+                            setRerouteAnalyzeError("");
+                          }}
+                        >
+                          <Text
+                            style={[
+                              styles.baseChipLabel,
+                              styles.compactBaseChipLabel,
+                              reroutePilotStatus === option.key && styles.baseChipLabelActive,
+                            ]}
+                          >
+                            {option.label}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                    {!reroutePilotStatus && rerouteAnalyzeError === "Choose Lineholder or Reserve first." ? (
+                      <Text style={styles.inlineValidationText}>Choose Lineholder or Reserve first.</Text>
+                    ) : null}
+                  </View>
+
+                  <View style={styles.resultPanel}>
+                    <Text style={styles.inputLabel}>Add trip info</Text>
+                    <Text style={styles.resultBodyText}>
+                      For longer trips, upload enough screenshots to show the header, changed legs, and where you rejoined the trip if visible.
+                    </Text>
+                    <TouchableOpacity style={styles.auditButton} onPress={() => pickRerouteEvidence()}>
+                      <Text style={styles.auditButtonText}>
+                        {rerouteScreenshotNames.length > 0 ? "Replace MiCrew screenshot(s)" : "Upload MiCrew screenshot(s)"}
+                      </Text>
+                    </TouchableOpacity>
+                    <Text style={styles.resultSupportMetaText}>
+                      {rerouteScreenshotNames.length > 0
+                        ? `Attached: ${rerouteScreenshotNames.join(", ")}`
+                        : "Add one or more screenshots if you have them. Screenshot parsing is ready for later, but not active in this V1 build."}
+                    </Text>
+                  </View>
+
+                  <TextAreaInput
+                    label="Paste MiCrew text"
+                    value={rerouteChangedRotationText}
+                    onChangeText={setRerouteChangedRotationText}
+                    placeholder="Paste the MiCrew trip text, leg list, report/release, credit, or any copied rotation details."
+                    autoCapitalize="characters"
+                  />
+
+                  <TextAreaInput
+                    label="Description"
+                    value={rerouteDescription}
+                    onChangeText={setRerouteDescription}
+                    placeholder="Example: Day 2 was supposed to be BOS-SAT-BOS, but Scheduling changed it to BOS-DFW-BOS and I rejoined the original trip in BOS."
+                    autoCapitalize="sentences"
+                  />
+
+                  <TouchableOpacity
+                    style={styles.evidenceAccordion}
+                    onPress={() => setRerouteEvidenceOpen((current) => !current)}
+                  >
+                    <Text style={styles.evidenceAccordionTitle}>Add evidence</Text>
+                    <Text style={styles.evidenceAccordionChevron}>{rerouteEvidenceOpen ? "−" : "+"}</Text>
+                  </TouchableOpacity>
+
+                  {rerouteEvidenceOpen ? (
+                    <View style={styles.resultPanel}>
+                      <TextAreaInput
+                        label="Original rotation details"
+                        value={rerouteOriginalRotationText}
+                        onChangeText={setRerouteOriginalRotationText}
+                        placeholder="Optional. Paste original MiCrew text, original credit, report/release, or the original leg string."
+                        autoCapitalize="sentences"
+                      />
+                      <TextAreaInput
+                        label="Changed rotation details"
+                        value={rerouteChangedRotationText}
+                        onChangeText={setRerouteChangedRotationText}
+                        placeholder="Optional. Paste changed MiCrew text if it differs from the main intake block."
+                        autoCapitalize="sentences"
+                      />
+                    </View>
+                  ) : null}
+
+                  <View style={styles.rerouteButtonRow}>
+                    <TouchableOpacity
+                      style={[styles.auditButton, rerouteAnalyzeBusy && styles.auditButtonDisabled]}
+                      disabled={rerouteAnalyzeBusy}
+                      onPress={() => {
+                        void analyzeReroute();
+                      }}
+                    >
+                      <Text style={styles.auditButtonText}>
+                        {rerouteAnalyzeBusy ? "Analyzing..." : "Analyze reroute"}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.secondaryActionButton} onPress={clearRerouteAnalyzer}>
+                      <Text style={styles.secondaryActionButtonText}>Clear</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {rerouteAnalyzeError ? (
+                    <View style={styles.resultPanel}>
+                      <Text style={styles.warningBadge}>Warning</Text>
+                      <Text style={styles.insightText}>{rerouteAnalyzeError}</Text>
+                    </View>
+                  ) : null}
+
+                  {rerouteRenderModel ? (
+                    <View style={styles.sectionStack}>
+                      <View style={styles.resultPanel}>
+                        <Text
+                          style={[
+                            styles.statusBadge,
+                            rerouteRenderModel.status === "resolved"
+                              ? styles.statusBadgeResolved
+                              : rerouteRenderModel.status === "warning"
+                                ? styles.statusBadgeWarning
+                                : styles.statusBadgeCaution,
+                          ]}
+                        >
+                          {rerouteRenderModel.status === "resolved"
+                            ? "Resolved"
+                            : rerouteRenderModel.status === "warning"
+                              ? "Warning"
+                              : "Caution"}
+                        </Text>
+                        <ResultLine label="Likely issue" value={rerouteRenderModel.likelyIssue} emphasis />
+                        <ResultLine label="Estimated additional pay" value={rerouteRenderModel.estimatedPayLabel} />
+                        <Text style={styles.resultSummaryText}>{rerouteRenderModel.shortAnswer}</Text>
+                        {rerouteRenderModel.renderError ? (
+                          <Text style={styles.resultSupportMetaText}>
+                            Analyzer returned a result, but the UI could not render one section. {rerouteRenderModel.renderError}
+                          </Text>
+                        ) : null}
+                      </View>
+
+                      <View style={styles.resultPanel}>
+                        <Text style={styles.inputLabel}>Pay items by rule</Text>
+                        {rerouteRenderModel.payItems.length > 0 ? (
+                          rerouteRenderModel.payItems.map((item) => (
+                            <View key={`${String(item.rule)}-${String(item.label)}-${String(item.math)}`} style={styles.rerouteSupportCard}>
+                              <ResultLine
+                                label={`${String(item.rule ?? "Rule")} • ${String(item.label ?? "Pay item")}`}
+                                value={typeof item.minutes === "number" ? rerouteFormatMinutes(item.minutes) : "Need more facts"}
+                              />
+                              <Text style={styles.resultBodyText}>{String(item.math ?? "Missing pay-item math.")}</Text>
+                              <Text style={styles.resultSupportMetaText}>{String(item.sourceAnchor ?? "")}</Text>
+                            </View>
+                          ))
+                        ) : (
+                          <Text style={styles.resultBodyText}>
+                            No deterministic pay item is fully calculable yet from the current facts.
+                          </Text>
+                        )}
+                      </View>
+
+                      <View style={styles.resultPanel}>
+                        <Text style={styles.inputLabel}>Detected facts</Text>
+                        <View style={styles.formRow}>
+                          <ResultLine
+                            label="Rotation number"
+                            value={
+                              (typeof rerouteRenderModel.changedRotation?.rotationNumber === "string"
+                                ? rerouteRenderModel.changedRotation.rotationNumber
+                                : undefined) ??
+                              (typeof rerouteRenderModel.originalRotation?.rotationNumber === "string"
+                                ? rerouteRenderModel.originalRotation.rotationNumber
+                                : undefined) ??
+                              "Unknown"
+                            }
+                          />
+                          <ResultLine
+                            label="Trip credit"
+                            value={
+                              rerouteFormatMinutes(
+                                typeof rerouteRenderModel.changedRotation?.creditMinutes === "number"
+                                  ? rerouteRenderModel.changedRotation.creditMinutes
+                                  : typeof rerouteRenderModel.originalRotation?.creditMinutes === "number"
+                                    ? rerouteRenderModel.originalRotation.creditMinutes
+                                    : undefined,
+                              ) || "Unknown"
+                            }
+                          />
+                        </View>
+                        <View style={styles.formRow}>
+                          <ResultLine
+                            label="Report / release"
+                            value={`${typeof rerouteRenderModel.changedRotation?.reportTime === "string" ? rerouteRenderModel.changedRotation.reportTime : typeof rerouteRenderModel.originalRotation?.reportTime === "string" ? rerouteRenderModel.originalRotation.reportTime : "Unknown"} / ${typeof rerouteRenderModel.changedRotation?.releaseTime === "string" ? rerouteRenderModel.changedRotation.releaseTime : typeof rerouteRenderModel.originalRotation?.releaseTime === "string" ? rerouteRenderModel.originalRotation.releaseTime : "Unknown"}`}
+                          />
+                        </View>
+                        {rerouteRenderModel.detectedLayovers.length > 0 ? (
+                          <Text style={styles.resultBodyText}>
+                            Layovers: {rerouteRenderModel.detectedLayovers.join(", ")}
+                          </Text>
+                        ) : null}
+                        {rerouteRenderModel.hasStructuredRotationEvidence &&
+                        rerouteRenderModel.detectedLegs.length > 0 &&
+                        !rerouteRenderModel.affectedPortion &&
+                        !rerouteRenderModel.reroutedPortion ? (
+                          <Text style={styles.resultBodyText}>
+                            Detected legs: {rerouteRenderModel.detectedLegs
+                              .map((leg) =>
+                                typeof leg.origin === "string" && typeof leg.destination === "string"
+                                  ? `${leg.origin}-${leg.destination}`
+                                  : typeof leg.flightNumber === "string"
+                                    ? leg.flightNumber
+                                    : "Leg",
+                              )
+                              .join(", ")}
+                          </Text>
+                        ) : null}
+                        <View style={styles.formRow}>
+                          <View style={styles.inputGroup}>
+                            <InstrumentField
+                              label="Possible affected portion"
+                              value={rerouteParsedFactOverrides.originalAffectedFlying ?? rerouteRenderModel.affectedPortion ?? ""}
+                              onChangeText={(value) =>
+                                setRerouteParsedFactOverrides((current) => ({ ...current, originalAffectedFlying: value }))
+                              }
+                              placeholder="BOS-SAT-BOS"
+                              autoCapitalize="characters"
+                            />
+                          </View>
+                          <View style={styles.inputGroup}>
+                            <InstrumentField
+                              label="Possible rerouted portion"
+                              value={rerouteParsedFactOverrides.reroutedFlying ?? rerouteRenderModel.reroutedPortion ?? ""}
+                              onChangeText={(value) =>
+                                setRerouteParsedFactOverrides((current) => ({ ...current, reroutedFlying: value }))
+                              }
+                              placeholder="BOS-DFW-BOS"
+                              autoCapitalize="characters"
+                            />
+                          </View>
+                        </View>
+                        <View style={styles.formRow}>
+                          <View style={styles.inputGroup}>
+                            <InstrumentField
+                              label="Rejoin point"
+                              value={rerouteParsedFactOverrides.rejoinPoint ?? rerouteDetectedFacts?.rejoinPoint ?? ""}
+                              onChangeText={(value) =>
+                                setRerouteParsedFactOverrides((current) => ({ ...current, rejoinPoint: value }))
+                              }
+                              placeholder="BOS"
+                              autoCapitalize="characters"
+                            />
+                          </View>
+                        </View>
+                        <View style={styles.formRow}>
+                          <View style={styles.inputGroup}>
+                            <InstrumentField
+                              label="Original affected block/credit"
+                              value={rerouteFormatMinutes(
+                                rerouteParsedFactOverrides.originalAffectedMinutes ?? rerouteDetectedFacts?.originalAffectedMinutes,
+                              )}
+                              onChangeText={(value) =>
+                                setRerouteParsedFactOverrides((current) => ({
+                                  ...current,
+                                  originalAffectedMinutes: rerouteParseMinutesInput(value),
+                                }))
+                              }
+                              placeholder="5:20"
+                              autoCapitalize="none"
+                            />
+                          </View>
+                          <View style={styles.inputGroup}>
+                            <InstrumentField
+                              label="Rerouted block/credit"
+                              value={rerouteFormatMinutes(
+                                rerouteParsedFactOverrides.reroutedMinutes ?? rerouteDetectedFacts?.reroutedMinutes,
+                              )}
+                              onChangeText={(value) =>
+                                setRerouteParsedFactOverrides((current) => ({
+                                  ...current,
+                                  reroutedMinutes: rerouteParseMinutesInput(value),
+                                }))
+                              }
+                              placeholder="4:40"
+                              autoCapitalize="none"
+                            />
+                          </View>
+                        </View>
+                        <ChoiceChipRow
+                          label="Timing"
+                          value={rerouteDetectedTiming}
+                          options={rerouteTimingOptions}
+                          onChange={(next) => {
+                            setRerouteTiming(next);
+                            setRerouteParsedFactOverrides((current) => ({ ...current, timing: next }));
+                          }}
+                          compact
+                        />
+                        <ChoiceChipRow
+                          label="X-day / non-fly affected"
+                          value={rerouteBooleanChoice(
+                            rerouteParsedFactOverrides.touchedXDay ?? rerouteDetectedFacts?.touchedXDay,
+                          )}
+                          options={rerouteBinaryOptions}
+                          onChange={(next) => {
+                            setRerouteTouchedXDay(next);
+                            setRerouteParsedFactOverrides((current) => ({
+                              ...current,
+                              touchedXDay: rerouteChoiceToBoolean(next),
+                            }));
+                          }}
+                          compact
+                        />
+                        <ChoiceChipRow
+                          label="Break in duty"
+                          value={rerouteBooleanChoice(
+                            rerouteParsedFactOverrides.breakInDuty ?? rerouteDetectedFacts?.breakInDuty,
+                          )}
+                          options={rerouteBinaryOptions}
+                          onChange={(next) =>
+                            setRerouteParsedFactOverrides((current) => ({
+                              ...current,
+                              breakInDuty: rerouteChoiceToBoolean(next),
+                            }))
+                          }
+                          compact
+                        />
+                        <ChoiceChipRow
+                          label="Release more than 4h late"
+                          value={rerouteBooleanChoice(
+                            rerouteParsedFactOverrides.releaseMoreThanFourHoursLate ??
+                              rerouteDetectedFacts?.releaseMoreThanFourHoursLate,
+                          )}
+                          options={rerouteBinaryOptions}
+                          onChange={(next) =>
+                            setRerouteParsedFactOverrides((current) => ({
+                              ...current,
+                              releaseMoreThanFourHoursLate: rerouteChoiceToBoolean(next),
+                            }))
+                          }
+                          compact
+                        />
+                        <ChoiceChipRow
+                          label="Ocean crossing / 25h threshold"
+                          value={rerouteBooleanChoice(
+                            rerouteParsedFactOverrides.oceanCrossing ?? rerouteDetectedFacts?.oceanCrossing,
+                          )}
+                          options={rerouteBinaryOptions}
+                          onChange={(next) =>
+                            setRerouteParsedFactOverrides((current) => ({
+                              ...current,
+                              oceanCrossing: rerouteChoiceToBoolean(next),
+                            }))
+                          }
+                          compact
+                        />
+                      </View>
+
+                      {rerouteRenderModel.whatControlsLines.length > 0 || rerouteRenderModel.supportCards.length > 0 ? (
+                        <View style={styles.resultPanel}>
+                          <Text style={styles.inputLabel}>What controls</Text>
+                          {rerouteRenderModel.whatControlsLines.map((item) => (
+                            <Text key={item} style={styles.controlsPrimaryText}>{item}</Text>
+                          ))}
+                          {rerouteRenderModel.supportCards.slice(0, 2).map((card) => (
+                            <Text
+                              key={`control-${String(card.sourceName)}-${String(card.section)}`}
+                              style={styles.controlsSecondaryText}
+                            >
+                              {String(card.sourceName ?? "Source")} — {String(card.section ?? "Section")}
+                            </Text>
+                          ))}
+                        </View>
+                      ) : null}
+
+                      <View style={styles.resultPanel}>
+                        <Text style={styles.inputLabel}>
+                          {rerouteRenderModel.payItems.length > 0 && rerouteRenderModel.coreMissingFacts.length === 0 && rerouteRenderModel.additionalPremiumMissingFacts.length > 0
+                            ? "Needed only to check additional late-release premium"
+                            : "Missing facts"}
+                        </Text>
+                        {(rerouteRenderModel.payItems.length > 0 && rerouteRenderModel.coreMissingFacts.length === 0
+                          ? rerouteRenderModel.additionalPremiumMissingFacts
+                          : rerouteRenderModel.focusedQuestions
+                        ).length > 0 ? (
+                          (rerouteRenderModel.payItems.length > 0 && rerouteRenderModel.coreMissingFacts.length === 0
+                            ? rerouteRenderModel.additionalPremiumMissingFacts
+                            : rerouteRenderModel.focusedQuestions
+                          ).map((item) => (
+                            <Text key={item} style={styles.resultBodyText}>• {item}</Text>
+                          ))
+                        ) : (
+                          <Text style={styles.resultBodyText}>• No critical missing facts identified from the current input.</Text>
+                        )}
+                      </View>
+
+                      <View style={styles.resultPanel}>
+                        <Text style={styles.inputLabel}>Calculation steps</Text>
+                        {rerouteRenderModel.calculationSteps.map((item) => (
+                          <Text key={item} style={styles.resultBodyText}>• {item}</Text>
+                        ))}
+                      </View>
+
+                      {rerouteRenderModel.warnings.length > 0 ? (
+                        <View style={styles.resultPanel}>
+                          <Text style={styles.inputLabel}>Warnings</Text>
+                          {rerouteRenderModel.warnings.map((item) => (
+                            <Text key={item} style={styles.resultBodyText}>• {item}</Text>
+                          ))}
+                        </View>
+                      ) : null}
+
+                      <View style={styles.resultPanel}>
+                        <Text style={styles.inputLabel}>What this depends on</Text>
+                        {rerouteRenderModel.whatThisDependsOn.map((item) => (
+                          <Text key={item} style={styles.resultBodyText}>• {item}</Text>
+                        ))}
+                      </View>
+
+                      <View style={styles.resultPanel}>
+                        <Text style={styles.inputLabel}>Likely paths</Text>
+                        {rerouteRenderModel.likelyPaths.map((item) => (
+                          <Text key={item} style={styles.resultBodyText}>• {item}</Text>
+                        ))}
+                      </View>
+
+                      <View style={styles.resultPanel}>
+                        <Text style={styles.inputLabel}>What to check</Text>
+                        {rerouteRenderModel.whatToCheck.map((item) => (
+                          <Text key={item} style={styles.resultBodyText}>• {item}</Text>
+                        ))}
+                      </View>
+
+                      {rerouteRenderModel.sourceLimitations.length > 0 ? (
+                        <View style={styles.resultPanel}>
+                          <Text style={styles.inputLabel}>Source limitations</Text>
+                          {rerouteRenderModel.sourceLimitations.map((item) => (
+                            <Text key={item} style={styles.resultBodyText}>• {item}</Text>
+                          ))}
+                        </View>
+                      ) : null}
+
+                      <TouchableOpacity
+                        style={styles.evidenceAccordion}
+                        onPress={() => setRerouteSupportOpen((current) => !current)}
+                      >
+                        <Text style={styles.evidenceAccordionTitle}>Show contract support</Text>
+                        <Text style={styles.evidenceAccordionChevron}>{rerouteSupportOpen ? "−" : "+"}</Text>
+                      </TouchableOpacity>
+
+                      {rerouteSupportOpen ? (
+                        <View style={styles.resultPanel}>
+                          <Text style={styles.inputLabel}>Contract support</Text>
+                          {rerouteRenderModel.factsUsed.length > 0 ? (
+                            <View style={styles.rerouteFactsUsedBlock}>
+                              {rerouteRenderModel.factsUsed.map((item) => (
+                                <Text key={item} style={styles.resultSupportMetaText}>• {item}</Text>
+                              ))}
+                            </View>
+                          ) : null}
+                          {rerouteRenderModel.supportCards.length > 0 ? (
+                            rerouteRenderModel.supportCards.map((card) => (
+                              <View key={`${String(card.sourceName)}-${String(card.section)}`} style={styles.rerouteSupportCard}>
+                                <ResultLine label={`${String(card.sourceName ?? "Source")} • ${String(card.section ?? "Section")}`} value={typeof card.title === "string" ? card.title : "Support"} />
+                                {typeof card.quoteSnippet === "string" && card.quoteSnippet ? (
+                                  <Text style={styles.resultBodyText}>{card.quoteSnippet}</Text>
+                                ) : null}
+                                {typeof card.note === "string" && card.note ? <Text style={styles.resultSupportMetaText}>{card.note}</Text> : null}
+                              </View>
+                            ))
+                          ) : (
+                            <Text style={styles.resultBodyText}>No support cards were attached from the current indexed sources.</Text>
+                          )}
+                        </View>
+                      ) : null}
+                    </View>
+                  ) : null}
+                </View>
+              </>
+            ) : selectedPayTool === "timecard-auditor" ? (
               <>
             <View style={styles.sectionStack}>
               <Text style={styles.inputLabel}>1. Paste Delta Monthly Timecard</Text>
@@ -4092,6 +4892,14 @@ function formatOneDecimal(value: number) {
   return Number.isFinite(value) ? value.toFixed(1) : "-";
 }
 
+function asStringArray(value: unknown) {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function asObjectArray<T extends Record<string, unknown>>(value: unknown) {
+  return Array.isArray(value) ? value.filter((item): item is T => Boolean(item) && typeof item === "object") : [];
+}
+
 function toneForDelta(value: number | null) {
   if (value == null || value === 0) {
     return "neutral" as const;
@@ -4409,11 +5217,13 @@ function TextAreaInput({
   value,
   onChangeText,
   placeholder,
+  autoCapitalize,
 }: {
   label: string;
   value: string;
   onChangeText: (value: string) => void;
   placeholder?: string;
+  autoCapitalize?: "none" | "sentences" | "words" | "characters";
 }) {
   return (
     <View style={styles.inputGroup}>
@@ -4424,8 +5234,47 @@ function TextAreaInput({
         placeholder={placeholder}
         multiline
         minHeight={220}
-        autoCapitalize="characters"
+        autoCapitalize={autoCapitalize ?? "characters"}
       />
+    </View>
+  );
+}
+
+function ChoiceChipRow<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+  compact,
+}: {
+  label: string;
+  value: T;
+  options: Array<{ key: T; label: string }>;
+  onChange: (next: T) => void;
+  compact?: boolean;
+}) {
+  return (
+    <View style={compact ? styles.compactChoiceGroup : styles.inputGroup}>
+      <Text style={styles.inputLabel}>{label}</Text>
+      <View style={[styles.baseSelector, compact && styles.compactChipRow]}>
+        {options.map((option) => (
+          <TouchableOpacity
+            key={option.key}
+            style={[styles.baseChip, compact && styles.compactBaseChip, value === option.key && styles.baseChipActive]}
+            onPress={() => onChange(option.key)}
+          >
+            <Text
+              style={[
+                styles.baseChipLabel,
+                compact && styles.compactBaseChipLabel,
+                value === option.key && styles.baseChipLabelActive,
+              ]}
+            >
+              {option.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
     </View>
   );
 }
@@ -6753,6 +7602,139 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     color: appStylePalette.textMuted,
   },
+  compactChoiceGroup: {
+    gap: 8,
+  },
+  compactChipRow: {
+    gap: 6,
+  },
+  compactBaseChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    minHeight: 0,
+  },
+  compactBaseChipLabel: {
+    fontSize: 12,
+  },
+  inlineValidationText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: appStylePalette.redBorder,
+  },
+  evidenceAccordion: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: appStylePalette.surface,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderWidth: 1.5,
+    borderColor: appStylePalette.borderStrong,
+  },
+  evidenceAccordionTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: appStylePalette.textPrimary,
+  },
+  evidenceAccordionChevron: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: appStylePalette.accent,
+    lineHeight: 22,
+  },
+  rerouteButtonRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    alignItems: "center",
+  },
+  secondaryActionButton: {
+    alignSelf: "flex-start",
+    backgroundColor: appStylePalette.surfaceRaised,
+    borderRadius: 14,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderWidth: 1.5,
+    borderColor: appStylePalette.borderStrong,
+  },
+  secondaryActionButtonText: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: appStylePalette.textPrimary,
+  },
+  warningBadge: {
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(166,25,46,0.12)",
+    color: appStylePalette.redBorder,
+    fontSize: 12,
+    fontWeight: "800",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    overflow: "hidden",
+  },
+  statusBadge: {
+    alignSelf: "flex-start",
+    fontSize: 12,
+    fontWeight: "800",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    overflow: "hidden",
+    textTransform: "uppercase",
+  },
+  statusBadgeResolved: {
+    backgroundColor: "rgba(52,168,83,0.14)",
+    color: appStylePalette.greenBorder,
+  },
+  statusBadgeCaution: {
+    backgroundColor: "rgba(0,127,163,0.14)",
+    color: appStylePalette.accent,
+  },
+  statusBadgeWarning: {
+    backgroundColor: "rgba(166,25,46,0.12)",
+    color: appStylePalette.redBorder,
+  },
+  resultSummaryText: {
+    fontSize: 15,
+    lineHeight: 23,
+    color: appStylePalette.textPrimary,
+    fontWeight: "600",
+  },
+  resultBodyText: {
+    fontSize: 14,
+    lineHeight: 22,
+    color: appStylePalette.textPrimary,
+  },
+  resultSupportMetaText: {
+    fontSize: 13,
+    lineHeight: 20,
+    color: appStylePalette.textMuted,
+  },
+  controlsPrimaryText: {
+    fontSize: 16,
+    lineHeight: 23,
+    color: appStylePalette.textPrimary,
+    fontWeight: "800",
+  },
+  controlsSecondaryText: {
+    fontSize: 14,
+    lineHeight: 21,
+    color: appStylePalette.textPrimary,
+  },
+  rerouteFactsUsedBlock: {
+    gap: 6,
+    paddingBottom: 6,
+  },
+  rerouteSupportCard: {
+    backgroundColor: appStylePalette.surfaceRaised,
+    borderRadius: 12,
+    padding: 14,
+    gap: 8,
+    borderWidth: 1.5,
+    borderColor: appStylePalette.borderStrong,
+  },
   auditButton: {
     alignSelf: "flex-start",
     backgroundColor: appStylePalette.surfaceRaised,
@@ -6814,15 +7796,15 @@ const styles = StyleSheet.create({
   },
   resultLabel: {
     fontSize: 14,
-    color: "#41505C",
+    color: appStylePalette.textMuted,
   },
   resultValue: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#111820",
+    color: appStylePalette.textPrimary,
   },
   resultValueEmphasis: {
-    color: "#007FA3",
+    color: appStylePalette.accent,
   },
   baseSelector: {
     flexDirection: "row",
@@ -7837,7 +8819,7 @@ const styles = StyleSheet.create({
   insightText: {
     fontSize: 14,
     lineHeight: 21,
-    color: "#41505C",
+    color: appStylePalette.textPrimary,
   },
   projectionCard: {
     backgroundColor: "#C6CDD4",
