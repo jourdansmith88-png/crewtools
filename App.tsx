@@ -180,6 +180,7 @@ type RotationScreenshotParseResponse =
           releaseTime?: string;
           releaseDate?: string;
           totalCredit?: string;
+          totalScheduledBlock?: string;
           tafb?: string;
           layoverCities: string[];
         };
@@ -288,6 +289,7 @@ type RotationScreenshotParseResponse =
           releaseTime?: string;
           releaseDate?: string;
           totalCredit?: string;
+          totalScheduledBlock?: string;
           tafb?: string;
           layoverCities: string[];
         };
@@ -751,6 +753,16 @@ function buildLiveChainDebugExport(args: {
       unmatchedCandidateCount: unmatchedCandidates.length,
     },
   };
+}
+
+function extractHeaderBlockTimeCreditPairs(values: string[]) {
+  const matches = values.flatMap((value) => {
+    const found = value.match(
+      /\b(?:Credit|TAFB|Block|Blk|Rpt|Rls|Report|Release|Rotation\s*#|Trip dates?)\s*[-:#]?\s*([A-Z0-9:, ]{2,40})/gi,
+    );
+    return found ?? [];
+  });
+  return Array.from(new Set(matches));
 }
 
 function buildRotationParseTraceWarnings(args: {
@@ -1540,6 +1552,7 @@ export default function App() {
   const [rotationParseTraceOpen, setRotationParseTraceOpen] = useState<Record<string, boolean>>({});
   const [rotationCopiedConfirmation, setRotationCopiedConfirmation] = useState<string | null>(null);
   const [rotationCopiedDebugJson, setRotationCopiedDebugJson] = useState(false);
+  const [rotationCopiedHeaderBlockDebugJson, setRotationCopiedHeaderBlockDebugJson] = useState(false);
   const [rotationToolBanner, setRotationToolBanner] = useState<RotationToolBanner | null>(null);
   const [contractCopilotStarterQuestion, setContractCopilotStarterQuestion] = useState("");
   const [quickContacts, setQuickContacts] = useState<QuickContacts>({
@@ -1838,6 +1851,116 @@ export default function App() {
       setTimeout(() => setRotationCopiedDebugJson(false), 2000);
     } catch (error) {
       setRotationAnalyzeError(error instanceof Error ? error.message : "Unable to copy live chain debug JSON.");
+    }
+  };
+
+  const copyHeaderBlockDebugJson = async () => {
+    if (Platform.OS !== "web" || typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
+      setRotationAnalyzeError("Copy header/block debug JSON is currently available in the web build only.");
+      return;
+    }
+    try {
+      const payload =
+        rotationDashboard && rotationScreenshotParseResult?.debug
+          ? (() => {
+              const liveChainInputSources = getLiveChainInputSources(
+                rotationScreenshotParseResult as RotationScreenshotParseResponse & {
+                  debug: NonNullable<RotationScreenshotParseResponse["debug"]>;
+                },
+              );
+              const rawHeaderTextCandidates = [
+                ...rotationScreenshotParseResult.debug.perScreenshotTrace.map((trace) => trace.rawExtractedText ?? ""),
+                ...(rotationScreenshotParseResult.debug.rawTextPreview ?? []),
+              ].filter(Boolean);
+              const extractedSummaryText = [
+                rotationScreenshotParseResult.debug.parsedHeader?.rotationNumber
+                  ? `Rotation # ${rotationScreenshotParseResult.debug.parsedHeader.rotationNumber}`
+                  : null,
+                rotationScreenshotParseResult.debug.parsedHeader?.startDate || rotationScreenshotParseResult.debug.parsedHeader?.endDate
+                  ? `Trip dates ${rotationScreenshotParseResult.debug.parsedHeader?.startDate ?? "?"} - ${rotationScreenshotParseResult.debug.parsedHeader?.endDate ?? "?"}`
+                  : null,
+                rotationScreenshotParseResult.debug.parsedHeader?.totalCredit
+                  ? `Credit ${rotationScreenshotParseResult.debug.parsedHeader.totalCredit}`
+                  : null,
+                rotationScreenshotParseResult.debug.parsedHeader?.totalScheduledBlock
+                  ? `Block ${rotationScreenshotParseResult.debug.parsedHeader.totalScheduledBlock}`
+                  : null,
+                rotationScreenshotParseResult.debug.parsedHeader?.tafb
+                  ? `TAFB ${rotationScreenshotParseResult.debug.parsedHeader.tafb}`
+                  : null,
+                rotationScreenshotParseResult.debug.parsedHeader?.reportTime
+                  ? `Report ${rotationScreenshotParseResult.debug.parsedHeader.reportTime}`
+                  : null,
+                rotationScreenshotParseResult.debug.parsedHeader?.releaseTime
+                  ? `Release ${rotationScreenshotParseResult.debug.parsedHeader.releaseTime}`
+                  : null,
+              ].filter(Boolean);
+              const combinedNormalizedText = rotationScreenshotParseResult.ok
+                ? rotationScreenshotParseResult.normalizedText
+                : "No normalized text available.";
+              const allDetectedTimeCreditPairs = extractHeaderBlockTimeCreditPairs([
+                ...rawHeaderTextCandidates,
+                ...extractedSummaryText,
+                combinedNormalizedText,
+              ]);
+              return {
+                rotationNumber: rotationDashboard.snapshot.rotationNumber,
+                tripDates: rotationDashboard.snapshot.tripDates,
+                headerTotals: {
+                  parsedHeader: rotationScreenshotParseResult.debug.parsedHeader,
+                  extractedTotals: rotationScreenshotParseResult.ok ? rotationScreenshotParseResult.extracted?.totals : null,
+                },
+                scheduledBlockDisplayed: rotationDashboard.snapshot.scheduledBlockMinutes,
+                scheduledBlockSource:
+                  typeof (rotationScreenshotParseResult.ok
+                    ? rotationScreenshotParseResult.extracted?.totals?.totalScheduledBlockMinutes
+                    : undefined) === "number" &&
+                  (rotationScreenshotParseResult.ok
+                    ? rotationScreenshotParseResult.extracted?.totals?.totalScheduledBlockMinutes
+                    : undefined)! > 0
+                    ? "header"
+                    : rotationDashboard.snapshot.scheduledBlockMinutes > 0
+                      ? "computedFromUserFacingLegs"
+                      : "fallback",
+                computedUserFacingScheduledBlock: rotationDashboard.parsedRotation.legs.reduce(
+                  (sum, leg) => sum + (leg.scheduledBlock ?? 0),
+                  0,
+                ),
+                rawHeaderTextCandidates,
+                extractedSummaryText,
+                combinedNormalizedText,
+                screenshotExtractionNotes: rotationScreenshotParseResult.debug.extractionNotes,
+                allDetectedTimeCreditPairs,
+                rotationSnapshotSourceFields: {
+                  note: rotationDashboard.note,
+                  snapshot: rotationDashboard.snapshot,
+                  parsedRotationVisibleLegCount: rotationDashboard.parsedRotation.visibleLegCount,
+                  selectedBuilderInputSource: liveChainInputSources.selectedSourceName,
+                },
+                builderOutputUserFacingLegs: rotationDashboard.legs.map((leg) => ({
+                  dayLabel: leg.dayLabel,
+                  origin: leg.origin,
+                  destination: leg.destination,
+                  flightNumber: leg.flightNumber,
+                  departureTime: leg.departureTime,
+                  arrivalTime: leg.arrivalTime,
+                  scheduledBlockMinutes: leg.scheduledBlockMinutes ?? null,
+                })),
+              };
+            })()
+          : {
+              error: "payload missing",
+              availableTopLevelKeys: {
+                hasRotationDashboard: Boolean(rotationDashboard),
+                hasRotationScreenshotParseResult: Boolean(rotationScreenshotParseResult),
+              },
+            };
+      await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+      setRotationCopiedHeaderBlockDebugJson(true);
+      setRotationAnalyzeError("");
+      setTimeout(() => setRotationCopiedHeaderBlockDebugJson(false), 2000);
+    } catch (error) {
+      setRotationAnalyzeError(error instanceof Error ? error.message : "Unable to copy header/block debug JSON.");
     }
   };
 
@@ -3844,17 +3967,19 @@ export default function App() {
           >
               DATA. DECISION. ACTION.
           </Text>
-          <Text
-            style={[
-                styles.resultSupportMetaText,
-                {
-                  color: flieger.label,
-                  textAlign: "center",
-                },
-              ]}
-          >
-              BUILD 2026-04-30-DEBUG
-          </Text>
+          {__DEV__ ? (
+            <Text
+              style={[
+                  styles.resultSupportMetaText,
+                  {
+                    color: flieger.label,
+                    textAlign: "center",
+                  },
+                ]}
+            >
+                BUILD 2026-04-30-DEBUG
+            </Text>
+          ) : null}
           </View>
         </View>
 
@@ -4029,14 +4154,32 @@ export default function App() {
                   {rotationDashboard.note ? (
                     <Text style={styles.insightText}>{rotationDashboard.note}</Text>
                   ) : null}
-                  <Text style={styles.resultSupportMetaText}>
-                    VISIBLE SNAPSHOT PATH CONFIRMED - BUILD 2026-04-30-DEBUG
-                  </Text>
-                  <TouchableOpacity style={styles.quickLinkButton} onPress={copyLiveChainDebugJson}>
-                    <Text style={styles.quickLinkButtonText}>
-                      {rotationCopiedDebugJson ? "Copied live chain JSON" : "COPY LIVE CHAIN DEBUG JSON"}
-                    </Text>
-                  </TouchableOpacity>
+                  {(rotationScreenshots.length > 0 ||
+                    rotationDashboard.parsedRotation.sourceTypes === "screenshots" ||
+                    rotationDashboard.parsedRotation.sourceTypes === "mixed" ||
+                    Boolean(rotationScreenshotParseResult)) ? (
+                    <>
+                      <Text style={styles.resultSupportMetaText}>DEBUG HEADER BLOCK ACTIVE</Text>
+                      <Text style={styles.resultSupportMetaText}>
+                        scheduledBlockSource: {rotationScreenshotParseResult?.ok &&
+                        typeof rotationScreenshotParseResult.extracted?.totals?.totalScheduledBlockMinutes === "number" &&
+                        rotationScreenshotParseResult.extracted.totals.totalScheduledBlockMinutes > 0
+                          ? "header"
+                          : rotationDashboard.snapshot.scheduledBlockMinutes > 0
+                            ? "computedFromUserFacingLegs"
+                            : "fallback"} • headerScheduledBlockMinutes:{" "}
+                        {rotationScreenshotParseResult?.ok
+                          ? rotationScreenshotParseResult.extracted?.totals?.totalScheduledBlockMinutes ?? "null"
+                          : "null"} • computedUserFacingScheduledBlock:{" "}
+                        {rotationDashboard.parsedRotation.legs.reduce((sum, leg) => sum + (leg.scheduledBlock ?? 0), 0)}
+                      </Text>
+                      <TouchableOpacity style={styles.quickLinkButton} onPress={copyHeaderBlockDebugJson}>
+                        <Text style={styles.quickLinkButtonText}>
+                          {rotationCopiedHeaderBlockDebugJson ? "Copied header/block debug JSON" : "COPY HEADER/BLOCK DEBUG JSON"}
+                        </Text>
+                      </TouchableOpacity>
+                    </>
+                  ) : null}
                 </View>
 
                 <View style={styles.resultPanel}>

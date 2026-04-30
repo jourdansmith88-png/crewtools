@@ -453,6 +453,7 @@ type MicrewHeaderSummary = {
   releaseTime?: string;
   releaseDate?: string;
   totalCredit?: string;
+  totalScheduledBlock?: string;
   tafb?: string;
   layoverCities: string[];
 };
@@ -507,11 +508,13 @@ function parseDurationMinutes(value?: string) {
 
 function parseMicrewHeaderSummary(rawText: string): MicrewHeaderSummary {
   const headerLineMatch = rawText.match(/\b(\d{1,2}[A-Z]{3})\s+([A-Z]{3})\s+(\d{3,5})\b/i);
-  const reportMatch = rawText.match(/Rpt-\s*(\d{3,4})(?:\s+(\d{1,2}[A-Z]{3}))?/i);
-  const releaseMatch = rawText.match(/Rls-\s*(\d{3,4})(?:\s+(\d{1,2}[A-Z]{3}))?/i);
-  const creditMatch = rawText.match(/Credit-\s*(\d{1,2}:\d{2})/i);
-  const tafbMatch = rawText.match(/TAFB-\s*(\d{1,2}:\d{2})/i);
-  const layoverMatch = rawText.match(/Layover-\s*([A-Z]{3}(?:\s*,\s*[A-Z]{3})*)/i);
+  const headerSection = rawText.split(/\b(?:D\s+)?DL?\d{2,4}\s*[: ]\s*[A-Z]{3}-[A-Z]{3}\b/i)[0] ?? rawText;
+  const reportMatch = headerSection.match(/Rpt-\s*(\d{3,4})(?:\s+(\d{1,2}[A-Z]{3}))?/i);
+  const releaseMatch = headerSection.match(/Rls-\s*(\d{3,4})(?:\s+(\d{1,2}[A-Z]{3}))?/i);
+  const creditMatch = headerSection.match(/Credit-\s*(\d{1,2}:\d{2})/i);
+  const scheduledBlockMatch = headerSection.match(/(?:Block|Blk)-\s*(\d{1,2}:\d{2})/i);
+  const tafbMatch = headerSection.match(/TAFB-\s*(\d{1,2}:\d{2})/i);
+  const layoverMatch = headerSection.match(/Layover-\s*([A-Z]{3}(?:\s*,\s*[A-Z]{3})*)/i);
   const daysMatch = rawText.match(/(\d+)\s+Days\b/i);
   return {
     rotationNumber: headerLineMatch?.[3],
@@ -524,6 +527,7 @@ function parseMicrewHeaderSummary(rawText: string): MicrewHeaderSummary {
     releaseTime: releaseMatch?.[1],
     releaseDate: normalizeDateToken(releaseMatch?.[2]),
     totalCredit: creditMatch?.[1],
+    totalScheduledBlock: scheduledBlockMatch?.[1],
     tafb: tafbMatch?.[1],
     layoverCities: layoverMatch?.[1]
       ? layoverMatch[1].split(",").map((item) => item.trim().toUpperCase()).filter(Boolean)
@@ -563,6 +567,7 @@ function mergeMicrewHeaderSummaries(summaries: MicrewHeaderSummary[]) {
       summaries.find((summary) => summary.endDate)?.endDate ??
       sortedDates.at(-1),
     totalCredit: summaries.find((summary) => summary.totalCredit)?.totalCredit,
+    totalScheduledBlock: summaries.find((summary) => summary.totalScheduledBlock)?.totalScheduledBlock,
     tafb: summaries.find((summary) => summary.tafb)?.tafb,
     layoverCities,
   } satisfies MicrewHeaderSummary;
@@ -1530,6 +1535,10 @@ export async function extractRotationTextFromScreenshots(args: {
       mergedHeader.totalCredit != null
         ? parseDurationMinutes(mergedHeader.totalCredit) ?? mergedRotationMetadata.creditMinutes
         : mergedRotationMetadata.creditMinutes,
+    blockMinutes:
+      mergedHeader.totalScheduledBlock != null
+        ? parseDurationMinutes(mergedHeader.totalScheduledBlock) ?? mergedRotationMetadata.blockMinutes
+        : mergedRotationMetadata.blockMinutes,
     tafbMinutes:
       mergedHeader.tafb != null
         ? parseDurationMinutes(mergedHeader.tafb) ?? mergedRotationMetadata.tafbMinutes
