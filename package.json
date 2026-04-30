@@ -16,6 +16,7 @@
     "build:contract-index": "node ./scripts/build-contract-source-index.mjs && node ./scripts/build-compensation-manual-index.mjs && node ./scripts/build-scheduler-manual-index.mjs",
     "refresh:delta": "node ./scripts/refresh-delta.mjs",
     "build:web": "node ./scripts/export-web.mjs",
+    "test:rotation-chain": "node --experimental-strip-types --experimental-specifier-resolution=node ./src/features/rotationCompanion/rotationChainRegression.test.ts",
     "qa:contract-copilot": "node ./scripts/run-contract-copilot-qa.mjs",
     "qa:contract-support": "node ./scripts/run-contract-copilot-qa.mjs --support-only"
   },

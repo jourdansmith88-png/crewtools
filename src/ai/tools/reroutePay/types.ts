@@ -10,30 +10,48 @@ export type UploadedEvidenceSummary = {
   changedScreenshotName?: string;
   originalScreenshotNames?: string[];
   changedScreenshotNames?: string[];
+  originalScreenshotCount?: number;
+  changedScreenshotCount?: number;
+  originalFilenames?: string[];
+  changedFilenames?: string[];
   screenshotNames?: string[];
   screenshotParsingActive: boolean;
   notes: string[];
 };
 
+export type UploadedImage = {
+  name: string;
+  dataUrl: string;
+};
+
 export type ParsedScreenshotRotation = {
   sourceType: "original" | "rerouted";
-  rotationNumber?: string;
-  date?: string;
-  base?: string;
-  creditMinutes?: number;
-  tafbMinutes?: number;
-  reportTime?: string;
-  releaseTime?: string;
+  rotationNumber?: string | null;
+  dateRange?: string | null;
+  base?: string | null;
+  creditMinutes?: number | null;
+  blockMinutes?: number | null;
+  tafbMinutes?: number | null;
+  reportTime?: string | null;
+  releaseTime?: string | null;
   layovers: string[];
+  parseConfidence?: "high" | "medium" | "low";
+  missingParseItems?: string[];
   legs: Array<{
-    flightNumber?: string;
-    origin?: string;
-    destination?: string;
-    depTime?: string;
-    arrTime?: string;
-    blockMinutes?: number;
-    turnMinutes?: number;
+    day?: string | null;
+    type?: "flight" | "deadhead" | "unknown";
+    flightNumber?: string | null;
+    carrier?: string | null;
+    origin?: string | null;
+    destination?: string | null;
+    depTime?: string | null;
+    arrTime?: string | null;
+    blockMinutes?: number | null;
+    turnMinutes?: number | null;
     isDeadhead?: boolean;
+    legKind?: "operating" | "deadhead";
+    confirmationCode?: string | null;
+    sourceText?: string | null;
     sourceImageIndex?: number;
   }>;
 };
@@ -45,6 +63,14 @@ export type ParseMiCrewScreenshotsOutput = {
   rotations?: ParsedScreenshotRotation[];
   parseConfidence?: "high" | "medium" | "low";
   missingParseItems?: string[];
+  extractionNotes?: string[];
+  rawExtractedText?: string[];
+  rawVisionResponsePreview?: string[];
+  rawTextPreview?: string[];
+  structuredJsonParseError?: string;
+  visionModelCalled?: boolean;
+  modelSelected?: string;
+  fallbackRegexLegsParsed?: number;
 };
 
 export type RerouteAnalysisInput = {
@@ -58,6 +84,8 @@ export type RerouteAnalysisInput = {
   deadheadInvolved: RerouteAnalyzerChoice;
   bidPeriodCrossover: RerouteAnalyzerChoice;
   uploadedEvidenceSummary: UploadedEvidenceSummary;
+  originalImages?: UploadedImage[];
+  changedImages?: UploadedImage[];
   parsedFactOverrides?: Partial<ParsedRerouteFacts>;
 };
 
@@ -135,6 +163,15 @@ export type BuiltRerouteEvent = ParsedRerouteFacts & {
   affectedOriginalPortion?: string;
   reroutedPortion?: string;
   dutyPeriods?: RerouteDutyPeriodEvent[];
+  legSelectionDiagnostics?: Array<{
+    sourceType: "original" | "rerouted";
+    route?: string;
+    flightNumber?: string;
+    blockMinutes?: number;
+    classification: "unchanged/original" | "changed/rerouted" | "likely rejoin" | "ignored";
+    reason: string;
+    sourceImageIndex?: number;
+  }>;
 };
 
 export type RerouteEvent = {
@@ -217,6 +254,42 @@ export type RerouteAnalysisOutput = {
   whatToCheck: string[];
   sourceLimitations: string[];
   focusedQuestions: string[];
+  screenshotParserSummary?: {
+    screenshotParsingActive: boolean;
+    originalScreenshotsRead: number;
+    changedScreenshotsRead: number;
+    originalImagesReceived: number;
+    changedImagesReceived: number;
+    firstOriginalImageName?: string;
+    firstChangedImageName?: string;
+    firstOriginalStartsWithDataImage: boolean;
+    firstChangedStartsWithDataImage: boolean;
+    visionModelCalled: boolean;
+    modelSelected?: string;
+    parseConfidence: "high" | "medium" | "low";
+    rotationCount: number;
+    legsDetected: number;
+    missingParseItems: string[];
+    extractionNotes: string[];
+    rawVisionResponsePreview: string[];
+    rawTextPreview: string[];
+    structuredJsonParseError?: string;
+    fallbackRegexLegsParsed?: number;
+    parsedLegs: Array<{
+      sourceType: "original" | "rerouted";
+      type: "flight" | "deadhead" | "unknown";
+      flightNumber?: string;
+      origin?: string;
+      destination?: string;
+      depTime?: string;
+      arrTime?: string;
+      blockMinutes?: number;
+      turnMinutes?: number;
+      sourceImageIndex?: number;
+      classification?: "unchanged/original" | "changed/rerouted" | "likely rejoin" | "ignored";
+      classificationReason?: string;
+    }>;
+  };
   debug?: Record<string, unknown>;
 };
 

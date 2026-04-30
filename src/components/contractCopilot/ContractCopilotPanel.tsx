@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Text, TouchableOpacity, View } from "react-native";
 import { ContractQuestionInput } from "./ContractQuestionInput";
 import { ContractCopilotThreadView } from "./ContractCopilotThreadView";
@@ -126,7 +126,10 @@ function formatAttachmentStatus(status: ContractCopilotAttachedEvidence["status"
   }
 }
 
-export function ContractCopilotPanel() {
+export function ContractCopilotPanel(props: {
+  starterQuestion?: string;
+  contextHint?: string;
+}) {
   const palette = getFliegerPalette();
   const [question, setQuestion] = useState("");
   const [activeThread, setActiveThread] = useState<ContractCopilotThread>(initialThread);
@@ -180,6 +183,13 @@ export function ContractCopilotPanel() {
   const canContinueThreadWithTypedReply =
     activeThread.status === "awaiting_reply" &&
     question.trim().length > 0;
+
+  useEffect(() => {
+    if (!props.starterQuestion?.trim()) {
+      return;
+    }
+    setQuestion((current) => (current.trim() === props.starterQuestion?.trim() ? current : props.starterQuestion ?? current));
+  }, [props.starterQuestion]);
 
   const resetCollapsedPanels = () => {
     setViewState((currentState) => ({
@@ -629,6 +639,26 @@ export function ContractCopilotPanel() {
           Ask a contract question and work through one scenario at a time.
         </Text>
       </View>
+
+      {props.contextHint ? (
+        <View
+          style={{
+            gap: 8,
+            backgroundColor: palette.surface,
+            borderWidth: 2,
+            borderColor: palette.borderStrong,
+            borderRadius: 14,
+            padding: 12,
+          }}
+        >
+          <Text style={{ fontSize: 12, fontWeight: "800", color: palette.accent, textTransform: "uppercase", letterSpacing: 1.1, fontFamily: fliegerTypography.familyBody }}>
+            Rotation context
+          </Text>
+          <Text style={{ fontSize: 13, lineHeight: 20, color: palette.textSecondary, fontFamily: fliegerTypography.familyBody }}>
+            {props.contextHint}
+          </Text>
+        </View>
+      ) : null}
 
       <View
         style={{

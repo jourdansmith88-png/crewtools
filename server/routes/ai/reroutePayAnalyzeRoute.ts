@@ -3,6 +3,7 @@ import { analyzeReroutePay } from "../../../src/ai/tools/reroutePay/analyzeRerou
 import type {
   RerouteAnalysisInput,
   ReroutePayAnalyzeApiResponse,
+  UploadedImage,
 } from "../../../src/ai/tools/reroutePay/types.ts";
 import { loadContractDocumentIndex } from "../../lib/contractSearch/loadContractIndex.ts";
 
@@ -42,8 +43,35 @@ function parseOptionalMinutes(value: unknown) {
   return value;
 }
 
+function parseUploadedImages(value: unknown, label: string): UploadedImage[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .map((item, index) => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) {
+        return null;
+      }
+      const image = item as Record<string, unknown>;
+      const name = typeof image.name === "string" ? image.name : null;
+      const dataUrl = typeof image.dataUrl === "string" ? image.dataUrl : null;
+      if (!name || !dataUrl) {
+        throw new Error(`${label}[${index}] must include name and dataUrl`);
+      }
+      return { name, dataUrl };
+    })
+    .filter((item): item is UploadedImage => Boolean(item));
+}
+
 function normalizeRequestShape(value: Record<string, unknown>) {
   if (value.input && typeof value.input === "object" && !Array.isArray(value.input)) {
+    const input = value.input as Record<string, unknown>;
+    if (!input.originalImages && Array.isArray(input.originalScreenshots)) {
+      input.originalImages = input.originalScreenshots;
+    }
+    if (!input.changedImages && Array.isArray(input.changedScreenshots)) {
+      input.changedImages = input.changedScreenshots;
+    }
     return value;
   }
 
@@ -68,6 +96,8 @@ function normalizeRequestShape(value: Record<string, unknown>) {
         screenshotParsingActive: false,
         notes: [],
       },
+      originalImages: value.originalImages ?? value.originalScreenshots,
+      changedImages: value.changedImages ?? value.changedScreenshots,
     },
   };
 }
@@ -93,6 +123,8 @@ const rerouteAnalyzeRequestSchema = createSchema("reroutePayAnalyzeRequest", (va
       touchedXDay: parseChoice(inputValue.touchedXDay, "input.touchedXDay"),
       deadheadInvolved: parseChoice(inputValue.deadheadInvolved, "input.deadheadInvolved"),
       bidPeriodCrossover: parseChoice(inputValue.bidPeriodCrossover, "input.bidPeriodCrossover"),
+      originalImages: parseUploadedImages(inputValue.originalImages, "input.originalImages"),
+      changedImages: parseUploadedImages(inputValue.changedImages, "input.changedImages"),
       parsedFactOverrides: parsedFactOverrides
         ? {
             pilotStatus:
@@ -123,6 +155,22 @@ const rerouteAnalyzeRequestSchema = createSchema("reroutePayAnalyzeRequest", (va
       uploadedEvidenceSummary: {
         originalScreenshotName: optionalString(uploadedValue.originalScreenshotName),
         changedScreenshotName: optionalString(uploadedValue.changedScreenshotName),
+        originalScreenshotNames: Array.isArray(uploadedValue.originalScreenshotNames)
+          ? uploadedValue.originalScreenshotNames.filter((item): item is string => typeof item === "string")
+          : [],
+        changedScreenshotNames: Array.isArray(uploadedValue.changedScreenshotNames)
+          ? uploadedValue.changedScreenshotNames.filter((item): item is string => typeof item === "string")
+          : [],
+        originalScreenshotCount:
+          typeof uploadedValue.originalScreenshotCount === "number" ? uploadedValue.originalScreenshotCount : undefined,
+        changedScreenshotCount:
+          typeof uploadedValue.changedScreenshotCount === "number" ? uploadedValue.changedScreenshotCount : undefined,
+        originalFilenames: Array.isArray(uploadedValue.originalFilenames)
+          ? uploadedValue.originalFilenames.filter((item): item is string => typeof item === "string")
+          : [],
+        changedFilenames: Array.isArray(uploadedValue.changedFilenames)
+          ? uploadedValue.changedFilenames.filter((item): item is string => typeof item === "string")
+          : [],
         screenshotNames: Array.isArray(uploadedValue.screenshotNames)
           ? uploadedValue.screenshotNames.filter((item): item is string => typeof item === "string")
           : [],
@@ -179,12 +227,28 @@ export async function handleReroutePayAnalyzeRoute(request: Request) {
   let parsed: { input: RerouteAnalysisInput };
   try {
     parsed = rerouteAnalyzeRequestSchema.parse(body);
+    console.log("[rp-images] route received originalImages count:", parsed.input.originalImages?.length ?? 0);
+    console.log("[rp-images] route received changedImages count:", parsed.input.changedImages?.length ?? 0);
+    console.log(
+      "[rp-images] first original starts data:image:",
+      parsed.input.originalImages?.[0]?.dataUrl.startsWith("data:image/") ?? false,
+    );
+    console.log(
+      "[rp-images] first changed starts data:image:",
+      parsed.input.changedImages?.[0]?.dataUrl.startsWith("data:image/") ?? false,
+    );
     console.log("[reroutePay] normalized input", {
       pilotStatus: parsed.input.pilotStatus,
       rerouteTiming: parsed.input.rerouteTiming,
       hasOriginalRotationText: Boolean(parsed.input.originalRotationText?.trim()),
       hasChangedRotationText: Boolean(parsed.input.changedRotationText?.trim()),
       descriptionLength: parsed.input.description.length,
+      originalImages: parsed.input.originalImages?.length ?? 0,
+      changedImages: parsed.input.changedImages?.length ?? 0,
+      firstOriginalImageName: parsed.input.originalImages?.[0]?.name,
+      firstChangedImageName: parsed.input.changedImages?.[0]?.name,
+      firstOriginalImageIsDataUrl: parsed.input.originalImages?.[0]?.dataUrl.startsWith("data:image/") ?? false,
+      firstChangedImageIsDataUrl: parsed.input.changedImages?.[0]?.dataUrl.startsWith("data:image/") ?? false,
     });
   } catch (error) {
     return jsonResponse(400, {
@@ -195,13 +259,16 @@ export async function handleReroutePayAnalyzeRoute(request: Request) {
 
   try {
     const contractIndex = loadContractDocumentIndex();
+    const screenshotBacked =
+      (parsed.input.originalImages?.length ?? 0) > 0 || (parsed.input.changedImages?.length ?? 0) > 0;
+    const routeTimeoutMs = screenshotBacked ? 45_000 : 8_000;
     console.log("[reroutePay] analyzeReroutePay start");
     const result = await withTimeout(
       analyzeReroutePay({
         input: parsed.input,
         contractIndex,
       }),
-      8_000,
+      routeTimeoutMs,
       "Reroute analysis timed out",
     );
     console.log("[reroutePay] analyzeReroutePay done", {
@@ -213,6 +280,29 @@ export async function handleReroutePayAnalyzeRoute(request: Request) {
       reroutedPortion: result.rerouteEvent.reroutedPortion ?? result.rerouteEvent.reroutedFlying,
       whatControls: result.whatControls,
     });
+    result.screenshotParserSummary = {
+      screenshotParsingActive: result.screenshotParserSummary?.screenshotParsingActive ?? false,
+      originalScreenshotsRead: result.screenshotParserSummary?.originalScreenshotsRead ?? 0,
+      changedScreenshotsRead: result.screenshotParserSummary?.changedScreenshotsRead ?? 0,
+      originalImagesReceived: parsed.input.originalImages?.length ?? 0,
+      changedImagesReceived: parsed.input.changedImages?.length ?? 0,
+      firstOriginalImageName: parsed.input.originalImages?.[0]?.name,
+      firstChangedImageName: parsed.input.changedImages?.[0]?.name,
+      firstOriginalStartsWithDataImage: parsed.input.originalImages?.[0]?.dataUrl.startsWith("data:image/") ?? false,
+      firstChangedStartsWithDataImage: parsed.input.changedImages?.[0]?.dataUrl.startsWith("data:image/") ?? false,
+      visionModelCalled: result.screenshotParserSummary?.visionModelCalled ?? false,
+      modelSelected: result.screenshotParserSummary?.modelSelected,
+      parseConfidence: result.screenshotParserSummary?.parseConfidence ?? "low",
+      rotationCount: result.screenshotParserSummary?.rotationCount ?? 0,
+      legsDetected: result.screenshotParserSummary?.legsDetected ?? 0,
+      missingParseItems: result.screenshotParserSummary?.missingParseItems ?? [],
+      extractionNotes: result.screenshotParserSummary?.extractionNotes ?? [],
+      rawVisionResponsePreview: result.screenshotParserSummary?.rawVisionResponsePreview ?? [],
+      rawTextPreview: result.screenshotParserSummary?.rawTextPreview ?? [],
+      structuredJsonParseError: result.screenshotParserSummary?.structuredJsonParseError,
+      fallbackRegexLegsParsed: result.screenshotParserSummary?.fallbackRegexLegsParsed ?? 0,
+      parsedLegs: result.screenshotParserSummary?.parsedLegs ?? [],
+    };
     console.log("[reroutePay] response sent");
     return jsonResponse(200, {
       ok: true,
@@ -225,6 +315,76 @@ export async function handleReroutePayAnalyzeRoute(request: Request) {
       ok: false,
       status: "warning",
       error: message === "Reroute analysis timed out" ? message : `Reroute analysis failed: ${message}`,
+      result: {
+        status: "warning",
+        estimatedAdditionalPayMinutes: undefined,
+        payItems: [],
+        calculationSteps: ["Reroute analysis did not complete."],
+        plainEnglishExplanation: "The analyzer hit a runtime error before it could finish.",
+        missingFacts: [],
+        warnings: [message],
+        whatControls: [],
+        supportCards: [],
+        likelyIssue: "Reroute analysis error",
+        shortAnswer: "The reroute analyzer hit an internal error before it could finish.",
+        rerouteEvent: {
+          confidence: "low",
+          missingFacts: [],
+        },
+        ruleEvent: {
+          pilotStatus: parsed?.input?.pilotStatus === "reserve" ? "reserve" : "lineholder",
+          rerouteTiming: "unknown",
+          lateReleaseReason: "unknown",
+          reroutedSegments: [],
+        },
+        calculation: {
+          calculationType: "insufficient_inputs",
+          calculationSteps: ["Reroute analysis did not complete."],
+          labels: [],
+          missingFacts: [],
+          confidence: "low",
+        },
+        estimatedPayLabel: "Unavailable",
+        classification: {
+          likelyReroute: "unknown",
+          likelyContinuation: "unknown",
+          possiblePayProtection: "unknown",
+          missingFacts: [],
+        },
+        factsUsed: [],
+        whatThisDependsOn: [],
+        likelyPaths: [],
+        whatToCheck: [],
+        sourceLimitations: [],
+        focusedQuestions: [],
+        screenshotParserSummary: {
+          screenshotParsingActive: (parsed?.input?.originalImages?.length ?? 0) + (parsed?.input?.changedImages?.length ?? 0) > 0,
+          originalScreenshotsRead: 0,
+          changedScreenshotsRead: 0,
+          originalImagesReceived: parsed?.input?.originalImages?.length ?? 0,
+          changedImagesReceived: parsed?.input?.changedImages?.length ?? 0,
+          firstOriginalImageName: parsed?.input?.originalImages?.[0]?.name,
+          firstChangedImageName: parsed?.input?.changedImages?.[0]?.name,
+          firstOriginalStartsWithDataImage: parsed?.input?.originalImages?.[0]?.dataUrl.startsWith("data:image/") ?? false,
+          firstChangedStartsWithDataImage: parsed?.input?.changedImages?.[0]?.dataUrl.startsWith("data:image/") ?? false,
+          visionModelCalled: false,
+          modelSelected: process.env.OPENAI_VISION_MODEL ?? "gpt-4.1",
+          parseConfidence: "low",
+          rotationCount: 0,
+          legsDetected: 0,
+          missingParseItems: [message],
+          extractionNotes: [
+            message === "Reroute analysis timed out"
+              ? "Screenshots were received, but image parsing took too long."
+              : "Route-level catch returned fallback diagnostics.",
+          ],
+          rawVisionResponsePreview: [],
+          rawTextPreview: [],
+          structuredJsonParseError: message,
+          fallbackRegexLegsParsed: 0,
+          parsedLegs: [],
+        },
+      },
     });
   }
 }

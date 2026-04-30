@@ -47,6 +47,9 @@ const { handleContractCopilotFeedbackRoute } = await import(
   "./routes/ai/contractCopilotFeedbackRoute.ts"
 );
 const { handleReroutePayAnalyzeRoute } = await import("./routes/ai/reroutePayAnalyzeRoute.ts");
+const { handleRotationCompanionParseScreenshotsRoute } = await import(
+  "./routes/ai/rotationCompanionParseScreenshotsRoute.ts"
+);
 
 function contentTypeFor(filePath: string) {
   if (filePath.endsWith(".html")) return "text/html; charset=utf-8";
@@ -75,7 +78,8 @@ const server = createServer((req, res) => {
     url.pathname === "/api/ai/contract-copilot" ||
     url.pathname === "/api/ai/contract-copilot/extract-trip-screenshot" ||
     url.pathname === "/api/ai/contract-copilot/feedback" ||
-    url.pathname === "/api/tools/reroute-pay/analyze"
+    url.pathname === "/api/tools/reroute-pay/analyze" ||
+    url.pathname === "/api/ai/rotation-companion/parse-screenshots"
   ) {
     const chunks: Buffer[] = [];
     req.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
@@ -91,6 +95,8 @@ const server = createServer((req, res) => {
             ? await handleContractCopilotExtractTripScreenshotRoute(request)
             : url.pathname === "/api/tools/reroute-pay/analyze"
               ? await handleReroutePayAnalyzeRoute(request)
+            : url.pathname === "/api/ai/rotation-companion/parse-screenshots"
+              ? await handleRotationCompanionParseScreenshotsRoute(request)
             : url.pathname === "/api/ai/contract-copilot/feedback"
               ? await handleContractCopilotFeedbackRoute(request)
             : await handleContractCopilotRoute(request);

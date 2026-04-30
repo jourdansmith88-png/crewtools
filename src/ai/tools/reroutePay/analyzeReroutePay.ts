@@ -40,6 +40,8 @@ type AnalyzeReroutePayArgs = {
   };
 };
 
+type ScreenshotParseResult = Awaited<ReturnType<typeof parseMiCrewScreenshots>>;
+
 type BaseAnalysisState = {
   input: RerouteAnalysisInput;
   likelyReroute: boolean | "unknown";
@@ -55,8 +57,38 @@ type BaseAnalysisState = {
   deadheadInvolved: boolean;
   crossedBidPeriods: boolean;
   desiredAnchors: string[];
-  screenshotParseResult: ReturnType<typeof parseMiCrewScreenshots>;
+  screenshotParseResult: ScreenshotParseResult;
 };
+
+function mapScreenshotRotationToParsedRotation(
+  rotation: NonNullable<ScreenshotParseResult["rotations"]>[number] | undefined,
+): ParsedMiCrewRotation | undefined {
+  if (!rotation) {
+    return undefined;
+  }
+  return {
+    rotationNumber: rotation.rotationNumber,
+    date: rotation.dateRange,
+    base: rotation.base,
+    creditMinutes: rotation.creditMinutes,
+    tafbMinutes: rotation.tafbMinutes,
+    reportTime: rotation.reportTime,
+    releaseTime: rotation.releaseTime,
+    layovers: rotation.layovers ?? [],
+    legs: (rotation.legs ?? []).map((leg) => ({
+      flightNumber: leg.flightNumber,
+      origin: leg.origin,
+      destination: leg.destination,
+      departureTime: leg.depTime,
+      arrivalTime: leg.arrTime,
+      blockMinutes: leg.blockMinutes,
+      turnMinutes: leg.turnMinutes,
+      isDeadhead: leg.type === "deadhead" ? true : undefined,
+    })),
+    parseConfidence: rotation.parseConfidence ?? "low",
+    missingParseItems: rotation.missingParseItems ?? [],
+  };
+}
 
 function detectWholeDutyPeriodHint(text: string) {
   return /\b(entire|whole|all of)\s+(day|duty period|rotation|trip)\s+(was )?rerouted/i.test(text);
@@ -119,22 +151,35 @@ function buildRuleEvent(args: {
   const { input, originalRotation, changedRotation, rerouteEvent } = args;
   const firstBreakPosition =
     rerouteEvent.breakInDuty == null ? "unknown" : rerouteEvent.breakInDuty ? "after" : "before";
+  const reroutedPortionRoute =
+    typeof rerouteEvent.reroutedPortion === "string" ? rerouteEvent.reroutedPortion.trim() : "";
 
-  const parsedChangedSegments = (changedRotation?.legs ?? []).map((leg) => ({
-    date: changedRotation?.date,
-    flightNumber: leg.flightNumber,
-    origin: leg.origin,
-    destination: leg.destination,
-    blockMinutes: leg.blockMinutes,
-    isDeadhead: leg.isDeadhead,
-    isRerouted: true,
-    relativeToFirstBreak: firstBreakPosition,
-    timingBasis: leg.blockMinutes != null ? ("actual" as const) : ("unknown" as const),
-  }));
+  const parsedChangedSegments = (changedRotation?.legs ?? [])
+    .filter((leg) => {
+      if (!reroutedPortionRoute) {
+        return true;
+      }
+      const route = leg.origin && leg.destination ? `${leg.origin}-${leg.destination}` : "";
+      return route === reroutedPortionRoute;
+    })
+    .map((leg) => ({
+      date: changedRotation?.date,
+      flightNumber: leg.flightNumber,
+      origin: leg.origin,
+      destination: leg.destination,
+      blockMinutes: leg.blockMinutes,
+      isDeadhead: leg.isDeadhead,
+      isRerouted: true,
+      relativeToFirstBreak: firstBreakPosition,
+      timingBasis: leg.blockMinutes != null ? ("actual" as const) : ("unknown" as const),
+    }));
   const parsedSegmentsHaveKnownBlock = parsedChangedSegments.some((segment) => segment.blockMinutes != null);
+  const dutyPeriodSegments = rerouteEvent.dutyPeriods?.flatMap((period) => period.reroutedSegments ?? []) ?? [];
 
   const fallbackSegment =
-    (!parsedSegmentsHaveKnownBlock || parsedChangedSegments.length === 0) && rerouteEvent.reroutedMinutes != null
+    (!parsedSegmentsHaveKnownBlock || parsedChangedSegments.length === 0) &&
+    dutyPeriodSegments.length === 0 &&
+    rerouteEvent.reroutedMinutes != null
       ? [
           {
             date: changedRotation?.date ?? originalRotation?.date,
@@ -175,7 +220,8 @@ function buildRuleEvent(args: {
     touchedXDayOrLineDayOff: rerouteEvent.touchedXDay,
     originalRotationValueMinutes: rerouteEvent.originalAffectedMinutes,
     reroutedRotationValueMinutes: rerouteEvent.reroutedMinutes,
-    reroutedSegments: parsedSegmentsHaveKnownBlock ? parsedChangedSegments : fallbackSegment,
+    reroutedSegments:
+      dutyPeriodSegments.length > 0 ? dutyPeriodSegments : parsedSegmentsHaveKnownBlock ? parsedChangedSegments : fallbackSegment,
     dutyPeriods: rerouteEvent.dutyPeriods?.map((period, index) => ({
       label: period.label || `Event ${index + 1}`,
       rerouteTiming: period.rerouteTiming,
@@ -252,33 +298,73 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: 
   ]);
 }
 
-function buildBaseAnalysisState(args: AnalyzeReroutePayArgs): BaseAnalysisState {
+async function buildBaseAnalysisState(args: AnalyzeReroutePayArgs): Promise<BaseAnalysisState> {
   const { input, contractIndex } = args;
   const likelyReroute = detectLikelyReroute(input);
   const likelyContinuation = detectLikelyContinuation(input);
   const possiblePayProtection = detectPossiblePayProtection(input);
 
-  const screenshotNames = input.uploadedEvidenceSummary.screenshotNames ?? [
-    input.uploadedEvidenceSummary.originalScreenshotName,
-    input.uploadedEvidenceSummary.changedScreenshotName,
-  ].filter((value): value is string => Boolean(value));
-  const screenshotParseResult = parseMiCrewScreenshots(input.uploadedEvidenceSummary);
+  const textOriginalRotation: ParsedMiCrewRotation | undefined = input.originalRotationText?.trim()
+    ? parseMiCrewRotation({
+        pastedText: input.originalRotationText,
+        screenshotMetadata: [],
+      })
+    : undefined;
 
-  const originalRotation: ParsedMiCrewRotation | undefined =
-    input.originalRotationText?.trim() || screenshotNames.length > 0
-      ? parseMiCrewRotation({
-          pastedText: input.originalRotationText,
-          screenshotMetadata: screenshotNames.slice(0, Math.min(2, screenshotNames.length)),
-        })
-      : undefined;
-
-  const changedRotation: ParsedMiCrewRotation | undefined =
-    input.changedRotationText?.trim() || input.description.trim() || screenshotNames.length > 0
+  const textChangedRotation: ParsedMiCrewRotation | undefined =
+    input.changedRotationText?.trim() || input.description.trim()
       ? parseMiCrewRotation({
           pastedText: input.changedRotationText || input.description,
-          screenshotMetadata: screenshotNames.slice(Math.min(1, screenshotNames.length)),
+          screenshotMetadata: [],
         })
       : undefined;
+
+  const screenshotBacked =
+    (input.originalImages?.length ?? 0) > 0 || (input.changedImages?.length ?? 0) > 0;
+  const screenshotParseResult = screenshotBacked
+    ? await withTimeout(
+        parseMiCrewScreenshots({
+          originalImages: input.originalImages ?? [],
+          changedImages: input.changedImages ?? [],
+          uploadedEvidenceSummary: input.uploadedEvidenceSummary,
+        }),
+        35_000,
+        "Screenshot parsing timed out",
+      ).catch((error) => ({
+        screenshotParsingActive: true,
+        uploadedEvidenceSummary: input.uploadedEvidenceSummary,
+        missingFacts: ["Screenshots were received, but image parsing took too long. Paste the changed segment block times or try fewer/clearer screenshots."],
+        rotations: [],
+        parseConfidence: "low" as const,
+        missingParseItems: ["Screenshot parsing timed out"],
+        extractionNotes: [error instanceof Error ? error.message : "Screenshot parsing timed out"],
+        rawVisionResponsePreview: [],
+        rawTextPreview: [],
+        structuredJsonParseError: error instanceof Error ? error.message : "Screenshot parsing timed out",
+        visionModelCalled: true,
+        modelSelected: process.env.OPENAI_VISION_MODEL ?? "gpt-4.1",
+      }))
+    : await parseMiCrewScreenshots({
+        originalImages: input.originalImages ?? [],
+        changedImages: input.changedImages ?? [],
+        uploadedEvidenceSummary: input.uploadedEvidenceSummary,
+      });
+  const screenshotOriginalRotation = mapScreenshotRotationToParsedRotation(
+    screenshotParseResult.rotations?.find((rotation) => rotation.sourceType === "original"),
+  );
+  const screenshotChangedRotation = mapScreenshotRotationToParsedRotation(
+    screenshotParseResult.rotations?.find((rotation) => rotation.sourceType === "rerouted"),
+  );
+
+  const originalRotation = screenshotOriginalRotation ?? textOriginalRotation;
+  const changedRotation = screenshotChangedRotation ?? textChangedRotation;
+  const parsedOriginalLegsCount = originalRotation?.legs.length ?? 0;
+  const parsedChangedLegsCount = changedRotation?.legs.length ?? 0;
+  console.log("[reroutePay] screenshot parse handoff", {
+    parsedOriginalLegsCount,
+    parsedChangedLegsCount,
+    screenshotLegsPassedIntoBuilder: screenshotParseResult.screenshotParsingActive,
+  });
 
   const rerouteEvent = buildRerouteEvent({
     originalRotation,
@@ -289,6 +375,14 @@ function buildBaseAnalysisState(args: AnalyzeReroutePayArgs): BaseAnalysisState 
   });
 
   const ruleEvent = buildRuleEvent({ input, originalRotation, changedRotation, rerouteEvent });
+  console.log("[reroutePay] reroute event built", {
+    reroutedSegments: ruleEvent.reroutedSegments.length,
+    dutyPeriods: ruleEvent.dutyPeriods?.length ?? 0,
+    reroutedPortion: rerouteEvent.reroutedPortion,
+    reroutedMinutes: rerouteEvent.reroutedMinutes,
+    screenshotOriginalUsed: Boolean(screenshotOriginalRotation?.legs.length),
+    screenshotChangedUsed: Boolean(screenshotChangedRotation?.legs.length),
+  });
   const deterministic = calculateReroutePay(ruleEvent);
   const factsUsed = collectFactsUsed(input);
   const touchedXDay = Boolean(rerouteEvent.touchedXDay);
@@ -356,8 +450,33 @@ function buildPreliminaryOutput(state: BaseAnalysisState): Omit<RerouteAnalysisO
   let shortAnswer =
     "I can calculate reroute pay if you provide the original affected flying and rerouted flying/block values.";
   let plainEnglishExplanation = shortAnswer;
+  const originalScreenshotCount = input.uploadedEvidenceSummary.originalScreenshotCount ?? 0;
+  const changedScreenshotCount = input.uploadedEvidenceSummary.changedScreenshotCount ?? 0;
+  const hasOriginalText = Boolean(input.originalRotationText?.trim());
+  const hasChangedText = Boolean(input.changedRotationText?.trim());
+  const parsedScreenshotRotations = screenshotParseResult.rotations ?? [];
+  const screenshotRotationCount = parsedScreenshotRotations.length;
+  const screenshotLegCount =
+    parsedScreenshotRotations.reduce((sum, rotation) => sum + (rotation.legs?.length ?? 0), 0) ?? 0;
+  const originalScreenshotLegCount =
+    parsedScreenshotRotations
+      .filter((rotation) => rotation.sourceType === "original")
+      .reduce((sum, rotation) => sum + (rotation.legs?.length ?? 0), 0) ?? 0;
+  const changedScreenshotLegCount =
+    parsedScreenshotRotations
+      .filter((rotation) => rotation.sourceType === "rerouted")
+      .reduce((sum, rotation) => sum + (rotation.legs?.length ?? 0), 0) ?? 0;
+  const hasOnlyScreenshotEvidence =
+    (originalScreenshotCount > 0 || changedScreenshotCount > 0) &&
+    !hasOriginalText &&
+    !hasChangedText &&
+    !input.description.trim();
 
   const primaryPayItem = deterministic.payItems[0];
+  const screenshotsWereUnreadable =
+    screenshotParseResult.screenshotParsingActive &&
+    screenshotLegCount === 0 &&
+    (originalScreenshotCount > 0 || changedScreenshotCount > 0);
   if (primaryPayItem?.rule === "23 L.4") {
     likelyIssue = /before first break/i.test(primaryPayItem.label)
       ? "Rerouted-segment premium before first break in duty"
@@ -382,6 +501,28 @@ function buildPreliminaryOutput(state: BaseAnalysisState): Omit<RerouteAnalysisO
       "I identified likely Section 23 L pay items, but I still need one or more missing timing or value facts before I can total them.";
     plainEnglishExplanation =
       "The rule engine found reroute pay items, but at least one required value is still missing, so I am showing the likely rules without inventing the math.";
+  } else if (screenshotsWereUnreadable) {
+    shortAnswer =
+      "I received the screenshots, but could not reliably read the leg/block data. Try a clearer screenshot or paste the changed segment block times.";
+    plainEnglishExplanation = shortAnswer;
+    status = "caution";
+  }
+
+  if (hasOnlyScreenshotEvidence && screenshotLegCount === 0) {
+    status = "caution";
+    if (originalScreenshotCount > 0 && changedScreenshotCount > 0) {
+      shortAnswer =
+        "Screenshots attached, but I could not reliably read enough of the MiCrew screenshots to calculate reroute pay. Paste or describe the changed segments and block times.";
+      plainEnglishExplanation = shortAnswer;
+    } else if (originalScreenshotCount > 0) {
+      shortAnswer =
+        "I have the original screenshot but still need the changed/rerouted trip or a description of what changed.";
+      plainEnglishExplanation = shortAnswer;
+    } else if (changedScreenshotCount > 0) {
+      shortAnswer =
+        "I have the changed/rerouted screenshot but still need the original trip or a description of what changed.";
+      plainEnglishExplanation = shortAnswer;
+    }
   }
 
   if (touchedXDay) {
@@ -477,6 +618,56 @@ function buildPreliminaryOutput(state: BaseAnalysisState): Omit<RerouteAnalysisO
     whatToCheck,
     sourceLimitations,
     focusedQuestions: deterministic.missingFacts.slice(0, 3),
+    screenshotParserSummary: {
+      screenshotParsingActive: screenshotParseResult.screenshotParsingActive,
+      originalScreenshotsRead: input.originalImages?.length ?? 0,
+      changedScreenshotsRead: input.changedImages?.length ?? 0,
+      originalImagesReceived: input.originalImages?.length ?? 0,
+      changedImagesReceived: input.changedImages?.length ?? 0,
+      visionModelCalled: screenshotParseResult.visionModelCalled ?? (input.originalImages?.length ?? 0) + (input.changedImages?.length ?? 0) > 0,
+      modelSelected: screenshotParseResult.modelSelected ?? (process.env.OPENAI_VISION_MODEL ?? "gpt-4.1"),
+      parseConfidence: screenshotParseResult.parseConfidence ?? "low",
+      rotationCount: screenshotRotationCount,
+      legsDetected: screenshotLegCount,
+      missingParseItems: screenshotParseResult.missingParseItems ?? [],
+      extractionNotes: [
+        ...(screenshotParseResult.extractionNotes ?? []),
+        `Original legs parsed: ${originalScreenshotLegCount}`,
+        `Changed legs parsed: ${changedScreenshotLegCount}`,
+      ],
+      rawVisionResponsePreview: screenshotParseResult.rawVisionResponsePreview ?? [],
+      rawTextPreview: screenshotParseResult.rawTextPreview ?? [],
+      structuredJsonParseError: screenshotParseResult.structuredJsonParseError,
+      fallbackRegexLegsParsed: screenshotParseResult.fallbackRegexLegsParsed ?? 0,
+      parsedLegs:
+        screenshotParseResult.rotations?.flatMap((rotation) =>
+          rotation.legs.map((leg) => {
+            const route =
+              leg.origin && leg.destination ? `${leg.origin}-${leg.destination}` : undefined;
+            const diagnostic = rerouteEvent.legSelectionDiagnostics?.find(
+              (item) =>
+                item.sourceType === rotation.sourceType &&
+                item.route === route &&
+                item.flightNumber === leg.flightNumber &&
+                (item.sourceImageIndex ?? -1) === (leg.sourceImageIndex ?? -1),
+            );
+            return {
+              sourceType: rotation.sourceType,
+              type: leg.type ?? (leg.isDeadhead ? "deadhead" : "unknown"),
+              flightNumber: leg.flightNumber,
+              origin: leg.origin,
+              destination: leg.destination,
+              depTime: leg.depTime,
+              arrTime: leg.arrTime,
+              blockMinutes: leg.blockMinutes,
+              turnMinutes: leg.turnMinutes,
+              sourceImageIndex: leg.sourceImageIndex,
+              classification: diagnostic?.classification,
+              classificationReason: diagnostic?.reason,
+            };
+          }),
+        ) ?? [],
+    },
   };
 }
 
@@ -603,6 +794,7 @@ async function enrichWithSupport(
       calculation: deterministic.calculation,
       parsedOriginalReleaseMinutes: parseTime(originalRotation?.releaseTime),
       parsedReroutedReleaseMinutes: parseTime(changedRotation?.releaseTime),
+      screenshotParserSummary: supportOutput.screenshotParserSummary,
     },
   };
 }
@@ -632,13 +824,14 @@ function buildSupportFailureResult(
       calculation: state.deterministic.calculation,
       parsedOriginalReleaseMinutes: parseTime(state.originalRotation?.releaseTime),
       parsedReroutedReleaseMinutes: parseTime(state.changedRotation?.releaseTime),
+      screenshotParserSummary: preliminaryOutput.screenshotParserSummary,
     },
   };
 }
 
 export async function analyzeReroutePay(args: AnalyzeReroutePayArgs): Promise<RerouteAnalysisOutput> {
   console.log("[reroutePay] analyzeReroutePay started");
-  const state = buildBaseAnalysisState(args);
+  const state = await buildBaseAnalysisState(args);
   console.log("[reroutePay] buildRerouteEvent complete");
   console.log("[reroutePay] calculateReroutePay complete");
   const preliminaryOutput = buildPreliminaryOutput(state);

@@ -2,6 +2,7 @@ import { StatusBar } from "expo-status-bar";
 import { Component, useEffect, useMemo, useRef, useState } from "react";
 import Slider from "@react-native-community/slider";
 import {
+  Image,
   useColorScheme,
   Modal,
   Platform,
@@ -49,7 +50,26 @@ import {
   type CurrentAeAnalysisResult,
   type HoldForecastResult,
 } from "./src/utils/holdForecast";
+import {
+  buildRotationDashboardData,
+  parseRotationIntoDashboard,
+  SAMPLE_ROTATION_TEXT,
+  type RotationDashboardData,
+} from "./src/utils/rotationCompanion";
 import { ContractCopilotPanel } from "./src/components/contractCopilot/ContractCopilotPanel";
+import {
+  buildContractCopilotAdapter,
+  buildPayImpactAdapter,
+  buildRerouteCalculatorAdapter,
+  buildRotationCompanionContext,
+  rotationCompanionToolRegistry,
+  type RotationCompanionContext,
+} from "./src/features/rotationCompanion/toolAdapters";
+import {
+  buildScreenshotUserFacingChain as buildScreenshotUserFacingChainPure,
+  computeSnapshotFromUserFacingChain as computeSnapshotFromUserFacingChainPure,
+} from "./src/features/rotationCompanion/rotationChainBuilder";
+import type { RotationChainCandidate } from "./src/features/rotationCompanion/rotationChainBuilder";
 import { fliegerTypography, getFliegerPalette } from "./src/theme/flieger";
 import type {
   RerouteAnalysisOutput,
@@ -58,6 +78,1075 @@ import type {
   ReroutePilotStatus,
   RerouteTiming,
 } from "./src/ai/tools/reroutePay/types";
+
+type RerouteScreenshotAttachment = {
+  name: string;
+  dataUrl: string;
+  previewUri?: string;
+};
+
+type RotationScreenshotAttachment = {
+  name: string;
+  dataUrl: string;
+  previewUri: string;
+  mimeType?: string;
+};
+
+type RotationScreenshotParseResponse =
+  | {
+      ok: true;
+      normalizedText: string;
+      extracted: {
+        legs: Array<{
+          sourceType: "original" | "rerouted";
+          day?: string | null;
+          type?: "flight" | "deadhead" | "unknown";
+          flightNumber?: string | null;
+          carrier?: string | null;
+          origin?: string | null;
+          destination?: string | null;
+          depTime?: string | null;
+          arrTime?: string | null;
+          blockMinutes?: number | null;
+          turnMinutes?: number | null;
+          isDeadhead?: boolean;
+          legKind?: "operating" | "deadhead";
+          confirmationCode?: string | null;
+          sourceText?: string | null;
+          sourceImageIndex?: number;
+        }>;
+        layovers: string[];
+        dutyMarkers: string[];
+        totals: {
+          rotationNumbers: string[];
+          totalCreditMinutes?: number;
+          totalScheduledBlockMinutes?: number;
+          reportTimes: string[];
+          releaseTimes: string[];
+        };
+      };
+      confidence: "high" | "medium" | "low";
+      warnings: string[];
+      missingSections: string[];
+      debug: {
+        screenshotParsingActive: boolean;
+        screenshotsCount: number;
+        originalImageCountReceived: number;
+        changedImageCountReceived: number;
+        visionModelCalled: boolean;
+        modelName?: string;
+        rawTextPreview: string[];
+        rawVisionResponsePreview: string[];
+        structuredJsonParseError?: string;
+        extractionNotes: string[];
+        fallbackRegexLegsParsed: number;
+        rotationsParsed: number;
+        legsParsed: number;
+        combinedTextLength: number;
+        deduplicatedLegCount: number;
+        duplicateLegsRemoved: number;
+        duplicateReasons: string[];
+        stitchingWarnings: string[];
+        inferredSequence: string[];
+        orderingMethod: "inferred" | "upload_order_fallback" | "ambiguous";
+        chainLength: number;
+        fragmentsDetected: number;
+        orderingStrategy: "continuity" | "time_fallback" | "ambiguous";
+        unmatchedLegs: number;
+        finalOrderedChainCount: number;
+        userFacingLegs: number;
+        discardedFragments: number;
+        discardedFragmentReasons: string[];
+        visibleActivityCards: number;
+        rawFlightCandidates: number;
+        finalFlightSegments: number;
+        operatingSegments: number;
+        deadheadSegments: number;
+        deadheadLegsDetected: number;
+        deadheadConfirmationCodes: string[];
+        deadheadDetectionNotes: string[];
+        returnToGateSegments: number;
+        layoverCards: number;
+        duplicateSegmentsRemoved: number;
+        micrewHeaderFound: boolean;
+        parsedHeader: {
+          rotationNumber?: string;
+          base?: string;
+          startDate?: string;
+          endDate?: string;
+          daysCount?: number;
+          reportTime?: string;
+          reportDate?: string;
+          releaseTime?: string;
+          releaseDate?: string;
+          totalCredit?: string;
+          tafb?: string;
+          layoverCities: string[];
+        };
+        tripDatesSource: "header" | "fallback_legs" | "unknown";
+        rotationNumberSource: "header" | "unknown";
+        perScreenshotTrace: Array<{
+          screenshotIndex: number;
+          screenshotName: string;
+          sourceFormat: "micrew_mobile" | "icrew_printout" | "unknown";
+          rawExtractedText: string;
+          normalizedText: string;
+          detectedFirstLeg?: string;
+          detectedLastLeg?: string;
+          detectedDates: string[];
+          detectedLayovers: string[];
+        }>;
+        legCandidates: Array<{
+          sourceScreenshotIndex: number;
+          flightNumber?: string | null;
+          departureAirport?: string | null;
+          arrivalAirport?: string | null;
+          scheduledOut?: string | null;
+          scheduledIn?: string | null;
+          scheduledBlock?: string | null;
+          turn?: string | null;
+          date?: string | null;
+          isDeadhead: boolean;
+          carrier?: string | null;
+          confirmationCode?: string | null;
+          sourceText?: string | null;
+          segmentType?: "operating" | "deadhead" | "return_to_gate";
+          rawSourceLine: string;
+        }>;
+        orderedChain: Array<{
+          index: number;
+          flightNumber?: string | null;
+          departureAirport?: string | null;
+          arrivalAirport?: string | null;
+          scheduledOut?: string | null;
+          scheduledIn?: string | null;
+          scheduledBlock?: string | null;
+          turn?: string | null;
+          date?: string | null;
+          isDeadhead: boolean;
+          carrier?: string | null;
+          confirmationCode?: string | null;
+          sourceText?: string | null;
+          segmentType?: "operating" | "deadhead" | "return_to_gate";
+        }>;
+      };
+    }
+  | {
+      ok: false;
+      error: string;
+      warnings: string[];
+      missingSections: string[];
+      debug?: {
+        screenshotParsingActive: boolean;
+        screenshotsCount: number;
+        originalImageCountReceived: number;
+        changedImageCountReceived: number;
+        visionModelCalled: boolean;
+        modelName?: string;
+        rawTextPreview: string[];
+        rawVisionResponsePreview: string[];
+        structuredJsonParseError?: string;
+        extractionNotes: string[];
+        fallbackRegexLegsParsed: number;
+        rotationsParsed: number;
+        legsParsed: number;
+        combinedTextLength: number;
+        deduplicatedLegCount: number;
+        duplicateLegsRemoved: number;
+        duplicateReasons: string[];
+        stitchingWarnings: string[];
+        inferredSequence: string[];
+        orderingMethod: "inferred" | "upload_order_fallback" | "ambiguous";
+        chainLength: number;
+        fragmentsDetected: number;
+        orderingStrategy: "continuity" | "time_fallback" | "ambiguous";
+        unmatchedLegs: number;
+        finalOrderedChainCount: number;
+        userFacingLegs: number;
+        discardedFragments: number;
+        discardedFragmentReasons: string[];
+        visibleActivityCards: number;
+        rawFlightCandidates: number;
+        finalFlightSegments: number;
+        operatingSegments: number;
+        deadheadSegments: number;
+        deadheadLegsDetected: number;
+        deadheadConfirmationCodes: string[];
+        deadheadDetectionNotes: string[];
+        returnToGateSegments: number;
+        layoverCards: number;
+        duplicateSegmentsRemoved: number;
+        micrewHeaderFound: boolean;
+        parsedHeader: {
+          rotationNumber?: string;
+          base?: string;
+          startDate?: string;
+          endDate?: string;
+          daysCount?: number;
+          reportTime?: string;
+          reportDate?: string;
+          releaseTime?: string;
+          releaseDate?: string;
+          totalCredit?: string;
+          tafb?: string;
+          layoverCities: string[];
+        };
+        tripDatesSource: "header" | "fallback_legs" | "unknown";
+        rotationNumberSource: "header" | "unknown";
+        perScreenshotTrace: Array<{
+          screenshotIndex: number;
+          screenshotName: string;
+          sourceFormat: "micrew_mobile" | "icrew_printout" | "unknown";
+          rawExtractedText: string;
+          normalizedText: string;
+          detectedFirstLeg?: string;
+          detectedLastLeg?: string;
+          detectedDates: string[];
+          detectedLayovers: string[];
+        }>;
+        legCandidates: Array<{
+          sourceScreenshotIndex: number;
+          flightNumber?: string | null;
+          departureAirport?: string | null;
+          arrivalAirport?: string | null;
+          scheduledOut?: string | null;
+          scheduledIn?: string | null;
+          scheduledBlock?: string | null;
+          turn?: string | null;
+          date?: string | null;
+          isDeadhead: boolean;
+          carrier?: string | null;
+          confirmationCode?: string | null;
+          sourceText?: string | null;
+          segmentType?: "operating" | "deadhead" | "return_to_gate";
+          rawSourceLine: string;
+        }>;
+        orderedChain: Array<{
+          index: number;
+          flightNumber?: string | null;
+          departureAirport?: string | null;
+          arrivalAirport?: string | null;
+          scheduledOut?: string | null;
+          scheduledIn?: string | null;
+          scheduledBlock?: string | null;
+          turn?: string | null;
+          date?: string | null;
+          isDeadhead: boolean;
+          carrier?: string | null;
+          confirmationCode?: string | null;
+          sourceText?: string | null;
+          segmentType?: "operating" | "deadhead" | "return_to_gate";
+        }>;
+      };
+    };
+
+type RerouteRequestImageDiagnostics = {
+  originalScreenshotsAttached: number;
+  changedScreenshotsAttached: number;
+  firstOriginalStartsWithDataImage: boolean;
+  firstChangedStartsWithDataImage: boolean;
+  originalCompressedBytes?: number[];
+  changedCompressedBytes?: number[];
+};
+
+function buildUnreadableScreenshotParserResponse(
+  status: number,
+  contentType: string,
+  rawText: string,
+): RotationScreenshotParseResponse {
+  const bodySnippet = rawText.slice(0, 400);
+  const looksLikeHtml = /<!doctype html|<html/i.test(bodySnippet);
+  return {
+    ok: false,
+    error: looksLikeHtml
+      ? "Screenshot parser route returned HTML instead of JSON. The local server may need a restart."
+      : "Screenshot parser returned an unreadable response.",
+    warnings: [
+      `HTTP ${status}`,
+      `Content-Type: ${contentType || "unknown"}`,
+      ...(bodySnippet ? [`Body preview: ${bodySnippet}`] : []),
+    ],
+    missingSections: ["normalized screenshot text"],
+    debug: {
+      screenshotParsingActive: true,
+      screenshotsCount: 0,
+      originalImageCountReceived: 0,
+      changedImageCountReceived: 0,
+      visionModelCalled: false,
+      modelName: undefined,
+      rawTextPreview: [],
+      rawVisionResponsePreview: bodySnippet ? [bodySnippet] : [],
+      structuredJsonParseError: looksLikeHtml ? "HTML fallback received" : "Non-JSON response received",
+      extractionNotes: ["The screenshot parser route did not return JSON."],
+      fallbackRegexLegsParsed: 0,
+      rotationsParsed: 0,
+      legsParsed: 0,
+      combinedTextLength: 0,
+      deduplicatedLegCount: 0,
+      duplicateLegsRemoved: 0,
+      duplicateReasons: [],
+      stitchingWarnings: [],
+      inferredSequence: [],
+      orderingMethod: "upload_order_fallback",
+      chainLength: 0,
+      fragmentsDetected: 0,
+      orderingStrategy: "time_fallback",
+      unmatchedLegs: 0,
+      finalOrderedChainCount: 0,
+      userFacingLegs: 0,
+      discardedFragments: 0,
+      discardedFragmentReasons: [],
+      visibleActivityCards: 0,
+      rawFlightCandidates: 0,
+      finalFlightSegments: 0,
+      operatingSegments: 0,
+      deadheadSegments: 0,
+      deadheadLegsDetected: 0,
+      deadheadConfirmationCodes: [],
+      deadheadDetectionNotes: [],
+      returnToGateSegments: 0,
+      layoverCards: 0,
+      duplicateSegmentsRemoved: 0,
+      micrewHeaderFound: false,
+      parsedHeader: { layoverCities: [] },
+      tripDatesSource: "unknown",
+      rotationNumberSource: "unknown",
+      perScreenshotTrace: [],
+      legCandidates: [],
+      orderedChain: [],
+    },
+  };
+}
+
+function parseClockishMinutes(value?: string | null) {
+  if (!value) {
+    return undefined;
+  }
+  const match = value.match(/(\d{1,2}):(\d{2})/);
+  if (!match?.[1] || !match?.[2]) {
+    return undefined;
+  }
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+function extractCompactClock(value?: string | null) {
+  if (!value) {
+    return undefined;
+  }
+  const match = value.match(/\b(\d{3,4})\b/);
+  if (!match?.[1]) {
+    return undefined;
+  }
+  const digits = match[1].padStart(4, "0");
+  return `${digits.slice(0, 2)}:${digits.slice(2)}`;
+}
+
+function extractCompactClockDigits(value?: string | null) {
+  return extractCompactClock(value)?.replace(":", "");
+}
+
+function formatTraceList(values?: Array<string | null | undefined>) {
+  const filtered = (values ?? []).filter((value): value is string => Boolean(value));
+  return filtered.length > 0 ? filtered.join(", ") : "None";
+}
+
+function formatBuilderCandidateMinutes(value?: number | null) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    return null;
+  }
+  const hours = Math.floor(value / 60);
+  const minutes = value % 60;
+  return `${hours}:${String(minutes).padStart(2, "0")}`;
+}
+
+function buildBuilderCandidateStableKey(candidate: RotationChainCandidate) {
+  return [
+    (candidate.date ?? "").trim().toUpperCase(),
+    (candidate.departureAirport ?? "").trim().toUpperCase(),
+    (candidate.arrivalAirport ?? "").trim().toUpperCase(),
+    (candidate.carrier ?? "").trim().toUpperCase(),
+    (candidate.flightNumber ?? "").trim().toUpperCase(),
+    (candidate.scheduledOut ?? "").trim(),
+    (candidate.scheduledIn ?? "").trim(),
+    (candidate.scheduledBlock ?? "").trim(),
+  ].join("|");
+}
+
+type LiveChainInputSourceSummary = {
+  name: string;
+  count: number;
+  cityPairs: string[];
+  containsSlcDtw: boolean;
+  containsDtwMsp: boolean;
+  containsMspRdu: boolean;
+  containsSatSlc: boolean;
+};
+
+function summarizeLiveChainInputSource(name: string, candidates: RotationChainCandidate[]): LiveChainInputSourceSummary {
+  const cityPairs = candidates.map(
+    (candidate) =>
+      `${candidate.departureAirport ?? "?"}-${candidate.arrivalAirport ?? "?"} | ${candidate.scheduledOut ?? "?"} | ${candidate.scheduledIn ?? "?"} | ${candidate.scheduledBlock ?? "?"} | ${candidate.carrier ?? "?"} | ${candidate.flightNumber ?? "?"}`,
+  );
+  const hasPair = (origin: string, destination: string) =>
+    candidates.some(
+      (candidate) =>
+        (candidate.departureAirport ?? "").toUpperCase() === origin &&
+        (candidate.arrivalAirport ?? "").toUpperCase() === destination,
+    );
+  return {
+    name,
+    count: candidates.length,
+    cityPairs,
+    containsSlcDtw: hasPair("SLC", "DTW"),
+    containsDtwMsp: hasPair("DTW", "MSP"),
+    containsMspRdu: hasPair("MSP", "RDU"),
+    containsSatSlc: hasPair("SAT", "SLC"),
+  };
+}
+
+function getLiveChainInputSources(
+  screenshotParseResult: RotationScreenshotParseResponse & {
+    debug: NonNullable<RotationScreenshotParseResponse["debug"]>;
+  },
+) {
+  const debugLegCandidates: RotationChainCandidate[] = (screenshotParseResult.debug?.legCandidates ?? []).map((candidate) => ({
+    sourceScreenshotIndex: candidate.sourceScreenshotIndex,
+    flightNumber: candidate.flightNumber ?? null,
+    departureAirport: candidate.departureAirport ?? null,
+    arrivalAirport: candidate.arrivalAirport ?? null,
+    scheduledOut: candidate.scheduledOut ?? null,
+    scheduledIn: candidate.scheduledIn ?? null,
+    scheduledBlock: candidate.scheduledBlock ?? null,
+    turn: candidate.turn ?? null,
+    date: candidate.date ?? null,
+    isDeadhead: candidate.isDeadhead,
+    carrier: candidate.carrier ?? null,
+    confirmationCode: candidate.confirmationCode ?? null,
+    sourceText: candidate.sourceText ?? null,
+    segmentType: candidate.segmentType,
+    rawSourceLine: candidate.rawSourceLine,
+  }));
+  const extractedLegs: RotationChainCandidate[] = screenshotParseResult.ok
+    ? (screenshotParseResult.extracted?.legs ?? []).map((leg) => ({
+        sourceScreenshotIndex: leg.sourceImageIndex,
+        flightNumber: leg.flightNumber ?? null,
+        departureAirport: leg.origin ?? null,
+        arrivalAirport: leg.destination ?? null,
+        scheduledOut: leg.depTime ?? null,
+        scheduledIn: leg.arrTime ?? null,
+        scheduledBlock: formatBuilderCandidateMinutes(leg.blockMinutes),
+        turn: formatBuilderCandidateMinutes(leg.turnMinutes),
+        date: typeof leg.day === "string" ? leg.day.toUpperCase() : leg.day ?? null,
+        isDeadhead: leg.isDeadhead ?? (leg.legKind === "deadhead"),
+        carrier: leg.carrier ?? null,
+        confirmationCode: leg.confirmationCode ?? null,
+        sourceText: leg.sourceText ?? null,
+        segmentType:
+          leg.isDeadhead || leg.legKind === "deadhead"
+            ? "deadhead"
+            : leg.origin && leg.destination && leg.origin === leg.destination && leg.blockMinutes
+              ? "return_to_gate"
+              : "operating",
+      }))
+    : [];
+  const orderedChainCandidates: RotationChainCandidate[] = (screenshotParseResult.debug?.orderedChain ?? []).map((leg) => ({
+    sourceScreenshotIndex: undefined,
+    flightNumber: leg.flightNumber ?? null,
+    departureAirport: leg.departureAirport ?? null,
+    arrivalAirport: leg.arrivalAirport ?? null,
+    scheduledOut: leg.scheduledOut ?? null,
+    scheduledIn: leg.scheduledIn ?? null,
+    scheduledBlock: leg.scheduledBlock ?? null,
+    turn: leg.turn ?? null,
+    date: leg.date ?? null,
+    isDeadhead: leg.isDeadhead,
+    carrier: leg.carrier ?? null,
+    confirmationCode: leg.confirmationCode ?? null,
+    sourceText: leg.sourceText ?? null,
+    segmentType: leg.segmentType,
+  }));
+
+  const merged = new Map<string, RotationChainCandidate>();
+  for (const candidate of [...debugLegCandidates, ...extractedLegs, ...orderedChainCandidates]) {
+    const key = buildBuilderCandidateStableKey(candidate);
+    if (!key.replace(/\|/g, "").trim()) {
+      continue;
+    }
+    if (!merged.has(key)) {
+      merged.set(key, candidate);
+    }
+  }
+  const mergedCandidates = Array.from(merged.values());
+
+  const sourceEntries = [
+    { name: "mergedDebugExtractedOrdered", candidates: mergedCandidates },
+    { name: "debugLegCandidates", candidates: debugLegCandidates },
+    { name: "extractedLegs", candidates: extractedLegs },
+    { name: "orderedChain", candidates: orderedChainCandidates },
+  ];
+  const sourceSummaries = sourceEntries.map(({ name, candidates }) => summarizeLiveChainInputSource(name, candidates));
+  const preferredSource =
+    sourceEntries.find(({ candidates }) => {
+      const summary = summarizeLiveChainInputSource("candidate", candidates);
+      return summary.containsSlcDtw && summary.containsDtwMsp && summary.containsMspRdu && summary.containsSatSlc;
+    }) ?? sourceEntries[0];
+
+  return {
+    selectedSourceName: preferredSource.name,
+    selectedCandidates: preferredSource.candidates,
+    sourceSummaries,
+  };
+}
+
+function buildLiveChainDebugExport(args: {
+  rotationDashboard: RotationDashboardData;
+  screenshotParseResult: RotationScreenshotParseResponse & {
+    debug: NonNullable<RotationScreenshotParseResponse["debug"]>;
+  };
+}) {
+  const { rotationDashboard, screenshotParseResult } = args;
+  const liveChainInputSources = getLiveChainInputSources(screenshotParseResult);
+  const header = screenshotParseResult.debug?.parsedHeader ?? { layoverCities: [] };
+  const rawFinalOrderedChain = screenshotParseResult.debug?.orderedChain ?? [];
+  const chainBuildResult = buildScreenshotUserFacingChainPure({
+    rawFinalOrderedChain,
+    legCandidates: liveChainInputSources.selectedCandidates,
+    context: {
+      base: header.base ?? null,
+      layoverCities: header.layoverCities ?? [],
+      startDate: header.startDate,
+      endDate: header.endDate,
+    },
+  });
+  const snapshotComputation = computeSnapshotFromUserFacingChainPure({
+    userFacingLegs: chainBuildResult.userFacingLegs,
+    headerScheduledBlockMinutes: screenshotParseResult.ok
+      ? screenshotParseResult.extracted?.totals?.totalScheduledBlockMinutes
+      : undefined,
+    fallbackScheduledBlockMinutes: rotationDashboard.snapshot.scheduledBlockMinutes,
+    finalArrivalFallback: rotationDashboard.snapshot.finalArrival,
+  });
+  const orderedChainKeys = new Set(
+    rawFinalOrderedChain.map((candidate) => buildBuilderCandidateStableKey(candidate)),
+  );
+  const builderOutputKeys = new Set(
+    chainBuildResult.userFacingLegs.map((candidate) => buildBuilderCandidateStableKey(candidate)),
+  );
+  const unmatchedCandidates = liveChainInputSources.selectedCandidates
+    .filter((candidate) => !orderedChainKeys.has(buildBuilderCandidateStableKey(candidate)))
+    .map((candidate) => ({
+      sourceArrayName: liveChainInputSources.selectedSourceName,
+      key: buildBuilderCandidateStableKey(candidate),
+      date: candidate.date ?? null,
+      origin: candidate.departureAirport ?? null,
+      destination: candidate.arrivalAirport ?? null,
+      carrier: candidate.carrier ?? null,
+      flightNumber: candidate.flightNumber ?? null,
+      scheduledOut: candidate.scheduledOut ?? null,
+      scheduledIn: candidate.scheduledIn ?? null,
+      scheduledBlockMinutes: parseClockishMinutes(candidate.scheduledBlock) ?? null,
+      sourceScreenshotIndex: candidate.sourceScreenshotIndex ?? null,
+      rawSourceLine: candidate.rawSourceLine ?? null,
+      sourceText: candidate.sourceText ?? null,
+      confidence: null,
+    }));
+  const discardedFragments = rawFinalOrderedChain
+    .filter((candidate) => !builderOutputKeys.has(buildBuilderCandidateStableKey(candidate)))
+    .map((candidate) => ({
+      sourceArrayName: "selectedSeedChain",
+      key: buildBuilderCandidateStableKey(candidate),
+      date: candidate.date ?? null,
+      origin: candidate.departureAirport ?? null,
+      destination: candidate.arrivalAirport ?? null,
+      carrier: candidate.carrier ?? null,
+      flightNumber: candidate.flightNumber ?? null,
+      scheduledOut: candidate.scheduledOut ?? null,
+      scheduledIn: candidate.scheduledIn ?? null,
+      scheduledBlockMinutes: parseClockishMinutes(candidate.scheduledBlock) ?? null,
+      sourceScreenshotIndex: null,
+      rawSourceLine: null,
+      sourceText: candidate.sourceText ?? null,
+      confidence: null,
+    }));
+
+  return {
+    rotationNumber: rotationDashboard.snapshot.rotationNumber,
+    tripDates: rotationDashboard.snapshot.tripDates,
+    headerTotals: {
+      totalCreditMinutes: rotationDashboard.snapshot.totalCreditMinutes,
+      headerScheduledBlockMinutes:
+        screenshotParseResult.ok ? screenshotParseResult.extracted?.totals?.totalScheduledBlockMinutes ?? null : null,
+      tafb: screenshotParseResult.debug?.parsedHeader?.tafb ?? null,
+      reportTime: screenshotParseResult.debug?.parsedHeader?.reportTime ?? null,
+      releaseTime: screenshotParseResult.debug?.parsedHeader?.releaseTime ?? null,
+    },
+    candidateSourcesInspected: liveChainInputSources.sourceSummaries.map((source) => ({
+      sourceName: source.name,
+      count: source.count,
+      firstFiveCityPairs: source.cityPairs.slice(0, 5),
+      allCityPairs: source.count < 25 ? source.cityPairs : undefined,
+      containsSlcDtw: source.containsSlcDtw,
+      containsDtwMsp: source.containsDtwMsp,
+      containsMspRdu: source.containsMspRdu,
+      containsSatSlc: source.containsSatSlc,
+    })),
+    builderInputSourceName: liveChainInputSources.selectedSourceName,
+    builderInputCandidates: liveChainInputSources.selectedCandidates.map((candidate) => ({
+      sourceArrayName: liveChainInputSources.selectedSourceName,
+      key: buildBuilderCandidateStableKey(candidate),
+      date: candidate.date ?? null,
+      origin: candidate.departureAirport ?? null,
+      destination: candidate.arrivalAirport ?? null,
+      carrier: candidate.carrier ?? null,
+      flightNumber: candidate.flightNumber ?? null,
+      scheduledOut: candidate.scheduledOut ?? null,
+      scheduledIn: candidate.scheduledIn ?? null,
+      scheduledBlockMinutes: parseClockishMinutes(candidate.scheduledBlock) ?? null,
+      sourceScreenshotIndex: candidate.sourceScreenshotIndex ?? null,
+      rawSourceLine: candidate.rawSourceLine ?? null,
+      sourceText: candidate.sourceText ?? null,
+      confidence: null,
+    })),
+    selectedSeedChain: rawFinalOrderedChain.map((candidate) => ({
+      key: buildBuilderCandidateStableKey(candidate),
+      date: candidate.date ?? null,
+      origin: candidate.departureAirport ?? null,
+      destination: candidate.arrivalAirport ?? null,
+      carrier: candidate.carrier ?? null,
+      flightNumber: candidate.flightNumber ?? null,
+      scheduledOut: candidate.scheduledOut ?? null,
+      scheduledIn: candidate.scheduledIn ?? null,
+      scheduledBlockMinutes: parseClockishMinutes(candidate.scheduledBlock) ?? null,
+      sourceText: candidate.sourceText ?? null,
+    })),
+    builderOutputUserFacingLegs: chainBuildResult.userFacingLegs.map((candidate) => ({
+      key: buildBuilderCandidateStableKey(candidate),
+      date: candidate.date ?? null,
+      origin: candidate.departureAirport ?? null,
+      destination: candidate.arrivalAirport ?? null,
+      carrier: candidate.carrier ?? null,
+      flightNumber: candidate.flightNumber ?? null,
+      scheduledOut: candidate.scheduledOut ?? null,
+      scheduledIn: candidate.scheduledIn ?? null,
+      scheduledBlockMinutes: parseClockishMinutes(candidate.scheduledBlock) ?? null,
+      sourceText: candidate.sourceText ?? null,
+    })),
+    discardedFragments,
+    unmatchedCandidates,
+    runtimeSummary: {
+      rawFinalOrderedChainCount: rawFinalOrderedChain.length,
+      runtimeBuilderInputCandidateCount: liveChainInputSources.selectedCandidates.length,
+      builderOutputLegCount: chainBuildResult.userFacingLegs.length,
+      builderOutputFirstLeg: chainBuildResult.userFacingLegs[0]
+        ? `${chainBuildResult.userFacingLegs[0]?.departureAirport ?? "?"}-${chainBuildResult.userFacingLegs[0]?.arrivalAirport ?? "?"}`
+        : "unknown",
+      builderOutputLastLeg: chainBuildResult.userFacingLegs.at(-1)
+        ? `${chainBuildResult.userFacingLegs.at(-1)?.departureAirport ?? "?"}-${chainBuildResult.userFacingLegs.at(-1)?.arrivalAirport ?? "?"}`
+        : "unknown",
+      scheduledBlock: snapshotComputation.scheduledBlockMinutes,
+      scheduledBlockSource: snapshotComputation.scheduledBlockSource,
+      nextFlight: snapshotComputation.nextFlightCityPair,
+      finalArrival: snapshotComputation.finalArrival,
+      discardedAfterTerminal: chainBuildResult.discardedAfterTerminal,
+      unmatchedCandidateCount: unmatchedCandidates.length,
+    },
+  };
+}
+
+function buildRotationParseTraceWarnings(args: {
+  screenshotParseResult: RotationScreenshotParseResponse | null;
+  dashboard: RotationDashboardData | null;
+}) {
+  const warnings: string[] = [];
+  const orderedChain = args.screenshotParseResult?.debug?.orderedChain ?? [];
+  const parsedHeader = args.screenshotParseResult?.debug?.parsedHeader;
+  const nextFlight = args.dashboard?.nextLeg;
+
+  const totalScheduledBlock = args.dashboard?.snapshot.scheduledBlockMinutes;
+  if (
+    totalScheduledBlock != null &&
+    orderedChain.some((leg) => parseClockishMinutes(leg.scheduledIn) === totalScheduledBlock)
+  ) {
+    warnings.push("Total scheduled block matches a leg arrival clock time, which suggests a field-mapping bug.");
+  }
+
+  orderedChain.forEach((leg) => {
+    const blockMinutes = parseClockishMinutes(leg.scheduledBlock);
+    if (blockMinutes != null && blockMinutes > 12 * 60) {
+      warnings.push(
+        `Leg ${leg.index} ${leg.flightNumber ?? "UNK"} has a scheduled block over 12:00 (${leg.scheduledBlock}), which is suspicious.`,
+      );
+    }
+    if (leg.scheduledBlock && leg.scheduledIn && leg.scheduledBlock === leg.scheduledIn) {
+      warnings.push(
+        `Leg ${leg.index} ${leg.flightNumber ?? "UNK"} has scheduled block equal to scheduled in (${leg.scheduledBlock}).`,
+      );
+    }
+  });
+
+  const lastOrderedLeg = orderedChain.at(-1);
+  if (
+    lastOrderedLeg?.arrivalAirport &&
+    args.dashboard?.snapshot.finalArrival &&
+    args.dashboard.snapshot.finalArrival !== lastOrderedLeg.arrivalAirport
+  ) {
+    warnings.push(
+      `Final arrival (${args.dashboard.snapshot.finalArrival}) does not match the last ordered chain leg arrival (${lastOrderedLeg.arrivalAirport}).`,
+    );
+  }
+
+  const firstOrderedLeg = orderedChain[0];
+  if (
+    firstOrderedLeg &&
+    nextFlight &&
+    (nextFlight.origin !== firstOrderedLeg.departureAirport ||
+      nextFlight.destination !== firstOrderedLeg.arrivalAirport ||
+      nextFlight.departureTime !== firstOrderedLeg.scheduledOut)
+  ) {
+    warnings.push("Next Flight does not match the first leg in the ordered chain, even though no current-time logic is applied yet.");
+  }
+
+  if (args.dashboard?.parsedRotation.isPartial && orderedChain.length > 0) {
+    warnings.push("The dashboard is currently marked partial even though an ordered screenshot chain exists. Check partial-state aggregation.");
+  }
+  if (!parsedHeader?.startDate || !parsedHeader?.endDate) {
+    warnings.push("Missing header start/end date");
+  }
+
+  return Array.from(new Set(warnings));
+}
+
+function buildScreenshotBackedDashboardModel(
+  dashboard: RotationDashboardData,
+  screenshotParseResult: RotationScreenshotParseResponse & {
+    debug: NonNullable<RotationScreenshotParseResponse["debug"]>;
+  },
+): RotationDashboardData {
+  const rawFinalOrderedChain = screenshotParseResult.debug?.orderedChain ?? [];
+  const header = screenshotParseResult.debug?.parsedHeader ?? { layoverCities: [] };
+  const liveChainInputSources = getLiveChainInputSources(screenshotParseResult);
+  const runtimeBuilderInputCandidates = liveChainInputSources.selectedCandidates;
+  const candidateCityPairs = runtimeBuilderInputCandidates.map(
+    (candidate) =>
+      `${candidate.departureAirport ?? "?"}-${candidate.arrivalAirport ?? "?"} | ${candidate.scheduledOut ?? "?"} | ${candidate.scheduledIn ?? "?"} | ${candidate.scheduledBlock ?? "?"} | ${candidate.carrier ?? "?"} | ${candidate.flightNumber ?? "?"}`,
+  );
+  const containsSlcDtwCandidate = runtimeBuilderInputCandidates.some(
+    (candidate) =>
+      (candidate.departureAirport ?? "").toUpperCase() === "SLC" &&
+      (candidate.arrivalAirport ?? "").toUpperCase() === "DTW",
+  );
+  const containsDtwMspCandidate = runtimeBuilderInputCandidates.some(
+    (candidate) =>
+      (candidate.departureAirport ?? "").toUpperCase() === "DTW" &&
+      (candidate.arrivalAirport ?? "").toUpperCase() === "MSP",
+  );
+  const chainBuildResult = buildScreenshotUserFacingChainPure({
+    rawFinalOrderedChain,
+    legCandidates: runtimeBuilderInputCandidates,
+    context: {
+      base: header.base ?? null,
+      layoverCities: header.layoverCities ?? [],
+      startDate: header.startDate,
+      endDate: header.endDate,
+    },
+  });
+  const sanitizedUserFacingLegs = chainBuildResult.userFacingLegs;
+  const userFacingLegs = sanitizedUserFacingLegs;
+  if (rawFinalOrderedChain.length === 0) {
+    return {
+      ...dashboard,
+      note: dashboard.note,
+      parsedRotation: {
+        ...dashboard.parsedRotation,
+        parserWarnings: Array.from(
+          new Set([...(dashboard.parsedRotation.parserWarnings ?? []), "Ordered screenshot chain was empty."]),
+        ),
+      },
+    };
+  }
+  const mappedUserFacingLegs = userFacingLegs.map((leg, index) => {
+    const inferredDayLabel =
+      leg.date ? leg.date.toUpperCase() : `Leg ${index + 1}`;
+    const departureTime = extractCompactClock(leg.scheduledOut);
+    const arrivalTime = extractCompactClock(leg.scheduledIn);
+    return {
+      id: `screenshot-leg-${index + 1}-${leg.flightNumber ?? "unk"}-${leg.departureAirport ?? "x"}-${leg.arrivalAirport ?? "x"}-${leg.scheduledOut ?? "na"}`,
+      dayLabel: inferredDayLabel,
+      flightNumber: leg.flightNumber ?? "TBD",
+      origin: leg.departureAirport ?? "TBD",
+      destination: leg.arrivalAirport ?? "TBD",
+      departureTime,
+      arrivalTime,
+      scheduledBlockMinutes: parseClockishMinutes(leg.scheduledBlock),
+      turnMinutes: parseClockishMinutes(leg.turn),
+      status: "placeholder" as const,
+      aircraft: undefined,
+      gate: undefined,
+      isDeadhead: false,
+      legKind: "operating" as const,
+      deadheadSource: undefined,
+      confirmationNumber: undefined,
+      carrier: undefined,
+      sourceText: leg.sourceText ?? undefined,
+      excludeFromLogbookExport: false,
+    };
+  });
+  const snapshotComputation = computeSnapshotFromUserFacingChainPure({
+    userFacingLegs,
+    headerScheduledBlockMinutes: screenshotParseResult.ok
+      ? screenshotParseResult.extracted?.totals?.totalScheduledBlockMinutes
+      : undefined,
+    fallbackScheduledBlockMinutes: dashboard.snapshot.scheduledBlockMinutes,
+    finalArrivalFallback: dashboard.snapshot.finalArrival,
+  });
+  const operatingLegs = userFacingLegs;
+  const operatingBlockMinutes = snapshotComputation.computedUserFacingScheduledBlock;
+  const deadheadBlockMinutes = 0;
+  const missingBlockWarnings = operatingLegs
+    .filter((leg) => !leg.scheduledBlock)
+    .map((leg) => `Missing block for leg ${leg.flightNumber ?? "unknown"}`);
+  const validationWarnings: string[] = [];
+  if (userFacingLegs.some((leg) => parseClockishMinutes(leg.scheduledIn) === snapshotComputation.scheduledBlockMinutes)) {
+    validationWarnings.push("Operating scheduled block matches a leg arrival clock time, which suggests a field-mapping bug.");
+  }
+  const parsedOperatingBlockMinutes = dashboard.parsedRotation.totalScheduledBlock ?? 0;
+  if (
+    snapshotComputation.scheduledBlockSource !== "header" &&
+    Math.abs(parsedOperatingBlockMinutes - snapshotComputation.computedUserFacingScheduledBlock) > 5
+  ) {
+    validationWarnings.push(
+      `Operating block mismatch: dashboard parser has ${parsedOperatingBlockMinutes} minutes but explicit Blk rows total ${snapshotComputation.computedUserFacingScheduledBlock}.`,
+    );
+  }
+  const firstOrderedLeg = userFacingLegs[0];
+  const lastOrderedLeg = userFacingLegs.at(-1);
+  if (
+    firstOrderedLeg &&
+    (dashboard.nextLeg?.origin !== firstOrderedLeg.departureAirport ||
+      dashboard.nextLeg?.destination !== firstOrderedLeg.arrivalAirport)
+  ) {
+    validationWarnings.push("Next Flight was not the first leg in the ordered chain, so it was reset to the first ordered leg.");
+  }
+  if (
+    lastOrderedLeg?.arrivalAirport &&
+    dashboard.snapshot.finalArrival !== lastOrderedLeg.arrivalAirport
+  ) {
+    validationWarnings.push("Final arrival did not match the last ordered chain leg, so it was reset from the ordered chain.");
+  }
+
+  const nextLeg = firstOrderedLeg
+    ? {
+        ...dashboard.nextLeg,
+        dayLabel: dashboard.nextLeg?.dayLabel ?? "Day 1",
+        flightNumber: firstOrderedLeg.flightNumber ?? dashboard.nextLeg?.flightNumber ?? "TBD",
+        origin: firstOrderedLeg.departureAirport ?? dashboard.nextLeg?.origin ?? "TBD",
+        destination: firstOrderedLeg.arrivalAirport ?? dashboard.nextLeg?.destination ?? "TBD",
+        departureTime: extractCompactClock(firstOrderedLeg.scheduledOut) ?? dashboard.nextLeg?.departureTime,
+        arrivalTime: extractCompactClock(firstOrderedLeg.scheduledIn) ?? dashboard.nextLeg?.arrivalTime,
+        scheduledBlockMinutes: parseClockishMinutes(firstOrderedLeg.scheduledBlock) ?? dashboard.nextLeg?.scheduledBlockMinutes,
+        turnMinutes: parseClockishMinutes(firstOrderedLeg.turn) ?? dashboard.nextLeg?.turnMinutes,
+        isDeadhead: false,
+        legKind: "operating" as const,
+        confirmationNumber: undefined,
+        carrier: undefined,
+        sourceText: firstOrderedLeg.sourceText ?? dashboard.nextLeg?.sourceText,
+        excludeFromLogbookExport: false,
+      }
+    : dashboard.nextLeg;
+
+  const screenshotDutyPeriods = dashboard.parsedRotation.dutyPeriods.map((period) => ({
+    ...period,
+    status: "Needs full duty period details" as const,
+  }));
+  const headerLooksComplete =
+    Boolean(header?.rotationNumber) &&
+    Boolean(header?.startDate && header?.endDate) &&
+    Boolean(header?.reportTime && header?.releaseTime) &&
+    Boolean(header?.totalCredit) &&
+    (header?.layoverCities?.length ?? 0) > 0;
+  const shouldTreatRotationAsFull =
+    headerLooksComplete &&
+    userFacingLegs.length > 0 &&
+    snapshotComputation.finalArrival === (header.base ?? snapshotComputation.finalArrival);
+  const parserWarnings = [...(dashboard.parsedRotation.parserWarnings ?? []), ...missingBlockWarnings, ...validationWarnings];
+  if (shouldTreatRotationAsFull && chainBuildResult.discardedAfterTerminal > 0) {
+    parserWarnings.push("Discarded unmatched screenshot fragments after building complete route chain.");
+  }
+
+  const partialBannerVisible = !shouldTreatRotationAsFull && (dashboard.parsedRotation.isPartial || dashboard.parsedRotation.missingSections.length > 0);
+  const visibleRotationSourceDebug = {
+    usedExportedBuilder: true,
+    runtimeBuilderInputSource: liveChainInputSources.selectedSourceName,
+    rawFinalOrderedChainCount: rawFinalOrderedChain.length,
+    runtimeRawCandidateCount: screenshotParseResult.debug?.legCandidates?.length ?? 0,
+    runtimeBuilderInputCandidateCount: runtimeBuilderInputCandidates.length,
+    runtimeBuilderInputCandidates: candidateCityPairs,
+    containsSlcDtwCandidate,
+    containsDtwMspCandidate,
+    selectedSeedFirstLegBeforeBuilder: rawFinalOrderedChain[0]
+      ? `${rawFinalOrderedChain[0]?.departureAirport ?? "?"}-${rawFinalOrderedChain[0]?.arrivalAirport ?? "?"}`
+      : "unknown",
+    chainBeforePrefixRecoveryCount: chainBuildResult.chainBeforePrefixRecoveryCount,
+    chainAfterPrefixRecoveryCount: chainBuildResult.chainAfterPrefixRecoveryCount,
+    prefixRecoveryAttempted: chainBuildResult.prefixRecoveryAttempted,
+    prefixRecoveredCount: chainBuildResult.prefixRecoveredCount,
+    recoveredPrefixLegs: chainBuildResult.recoveredPrefixLegs.join(", ") || "none",
+    sanitizedUserFacingLegsCount: sanitizedUserFacingLegs.length,
+    userFacingLegsCount: userFacingLegs.length,
+    firstUserFacingLeg: firstOrderedLeg ? `${firstOrderedLeg.departureAirport ?? "?"}-${firstOrderedLeg.arrivalAirport ?? "?"}` : "unknown",
+    lastUserFacingLeg: lastOrderedLeg ? `${lastOrderedLeg.departureAirport ?? "?"}-${lastOrderedLeg.arrivalAirport ?? "?"}` : "unknown",
+    terminalReturnLeg: chainBuildResult.terminalReturnLeg,
+    terminalCutIndex: chainBuildResult.terminalCutIndex,
+    discardedAfterTerminal: chainBuildResult.discardedAfterTerminal,
+    partialBannerVisible,
+    partialVisibleLegsCount: userFacingLegs.length,
+    operatingLegsCount: userFacingLegs.length,
+    builderOutputFirstLeg: firstOrderedLeg ? `${firstOrderedLeg.departureAirport ?? "?"}-${firstOrderedLeg.arrivalAirport ?? "?"}` : "unknown",
+    builderOutputLegCount: userFacingLegs.length,
+    scheduledBlock: snapshotComputation.scheduledBlockMinutes,
+    scheduledBlockSource: snapshotComputation.scheduledBlockSource,
+    headerScheduledBlock: snapshotComputation.headerScheduledBlock ?? "none",
+    computedUserFacingScheduledBlock: snapshotComputation.computedUserFacingScheduledBlock,
+    finalArrival: snapshotComputation.finalArrival,
+    nextFlightCityPair: snapshotComputation.nextFlightCityPair,
+    logbookLegCount: userFacingLegs.length,
+    lastLogbookLeg: lastOrderedLeg ? `${lastOrderedLeg.departureAirport ?? "?"}-${lastOrderedLeg.arrivalAirport ?? "?"}` : "unknown",
+  };
+  const is0983RegressionFixture =
+    (header?.rotationNumber ?? dashboard.snapshot.rotationNumber) === "0983" &&
+    (header?.startDate ?? "") === "17MAR" &&
+    (header?.endDate ?? "") === "20MAR";
+  const fixtureExpectedFor0983Matched =
+    userFacingLegs.length === 9 &&
+    visibleRotationSourceDebug.firstUserFacingLeg === "SLC-DTW" &&
+    visibleRotationSourceDebug.lastUserFacingLeg === "SAT-SLC" &&
+    snapshotComputation.finalArrival === "SLC" &&
+    snapshotComputation.nextFlightCityPair === "SLC-DTW";
+  if (__DEV__) {
+    console.log("LIVE_CHAIN_BUILDER_PARITY_DEBUG", {
+      usedExportedBuilder: true,
+      runtimeBuilderInputSource: liveChainInputSources.selectedSourceName,
+      runtimeRawCandidateCount: visibleRotationSourceDebug.runtimeRawCandidateCount,
+      runtimeBuilderInputCandidateCount: runtimeBuilderInputCandidates.length,
+      runtimeBuilderInputCandidates: candidateCityPairs,
+      containsSlcDtwCandidate,
+      containsDtwMspCandidate,
+      selectedSeedFirstLegBeforeBuilder: visibleRotationSourceDebug.selectedSeedFirstLegBeforeBuilder,
+      runtimeBuilderUserFacingCount: userFacingLegs.length,
+      runtimeUserFacingLegs: userFacingLegs.map(
+        (leg) => `${leg.departureAirport ?? "?"}-${leg.arrivalAirport ?? "?"}`,
+      ),
+      builderOutputFirstLeg: visibleRotationSourceDebug.builderOutputFirstLeg,
+      builderOutputLegCount: visibleRotationSourceDebug.builderOutputLegCount,
+      runtimeFirstLeg: visibleRotationSourceDebug.firstUserFacingLeg,
+      runtimeLastLeg: visibleRotationSourceDebug.lastUserFacingLeg,
+      runtimeFinalArrival: snapshotComputation.finalArrival,
+      runtimeScheduledBlock: snapshotComputation.scheduledBlockMinutes,
+      runtimeScheduledBlockSource: snapshotComputation.scheduledBlockSource,
+      runtimeNextFlight: snapshotComputation.nextFlightCityPair,
+      runtimeLogbookLegCount: userFacingLegs.length,
+      fixtureExpectedFor0983Matched,
+    });
+    if (is0983RegressionFixture && !fixtureExpectedFor0983Matched) {
+      console.warn("LIVE_0983_REGRESSION_FAILURE", {
+        runtimeCandidateList: screenshotParseResult.debug?.legCandidates?.map(
+          (leg) =>
+            `${leg.date ?? "?"} ${leg.departureAirport ?? "?"}-${leg.arrivalAirport ?? "?"} ${leg.scheduledOut ?? "?"} ${leg.scheduledIn ?? "?"}`,
+        ) ?? [],
+        builderInputList: rawFinalOrderedChain.map(
+          (leg) =>
+            `${leg.date ?? "?"} ${leg.departureAirport ?? "?"}-${leg.arrivalAirport ?? "?"} ${leg.scheduledOut ?? "?"} ${leg.scheduledIn ?? "?"}`,
+        ),
+        liveChainBuilderParityDebug: {
+          usedExportedBuilder: true,
+          runtimeBuilderInputSource: liveChainInputSources.selectedSourceName,
+          runtimeRawCandidateCount: visibleRotationSourceDebug.runtimeRawCandidateCount,
+          runtimeBuilderInputCandidateCount: runtimeBuilderInputCandidates.length,
+          runtimeBuilderInputCandidates: candidateCityPairs,
+          containsSlcDtwCandidate,
+          containsDtwMspCandidate,
+          selectedSeedFirstLegBeforeBuilder: visibleRotationSourceDebug.selectedSeedFirstLegBeforeBuilder,
+          runtimeBuilderUserFacingCount: userFacingLegs.length,
+          runtimeUserFacingLegs: userFacingLegs.map(
+            (leg) => `${leg.departureAirport ?? "?"}-${leg.arrivalAirport ?? "?"}`,
+          ),
+          builderOutputFirstLeg: visibleRotationSourceDebug.builderOutputFirstLeg,
+          builderOutputLegCount: visibleRotationSourceDebug.builderOutputLegCount,
+          runtimeFirstLeg: visibleRotationSourceDebug.firstUserFacingLeg,
+          runtimeLastLeg: visibleRotationSourceDebug.lastUserFacingLeg,
+          runtimeFinalArrival: snapshotComputation.finalArrival,
+          runtimeScheduledBlock: snapshotComputation.scheduledBlockMinutes,
+          runtimeScheduledBlockSource: snapshotComputation.scheduledBlockSource,
+          runtimeNextFlight: snapshotComputation.nextFlightCityPair,
+          runtimeLogbookLegCount: userFacingLegs.length,
+          fixtureExpectedFor0983Matched,
+        },
+      });
+    }
+  }
+
+  return {
+    ...dashboard,
+    snapshot: {
+      ...dashboard.snapshot,
+      tripDates:
+        header?.startDate && header?.endDate
+          ? `${header.startDate} - ${header.endDate}`
+          : dashboard.snapshot.tripDates,
+      rotationNumber: header?.rotationNumber ?? dashboard.snapshot.rotationNumber,
+      totalCreditMinutes: parseClockishMinutes(header?.totalCredit) ?? dashboard.snapshot.totalCreditMinutes,
+      scheduledBlockMinutes: snapshotComputation.scheduledBlockMinutes,
+      legCount: mappedUserFacingLegs.length,
+      layoverCities: (header?.layoverCities?.length ?? 0) > 0 ? header.layoverCities : dashboard.snapshot.layoverCities,
+      finalArrival: snapshotComputation.finalArrival,
+    },
+    legs: mappedUserFacingLegs,
+    nextLeg,
+    whatMatters: dashboard.whatMatters.filter((card) => card.label !== "FAR 117 watch"),
+    dutyDays: screenshotDutyPeriods.map((period) => ({
+      label: `Day ${period.dayNumber}`,
+      scheduledBlockMinutes: period.scheduledBlock,
+      scheduledFdpMinutes: 0,
+      fdpLimitMinutes: 0,
+      marginMinutes: 0,
+      status: "Good" as const,
+    })),
+    note: dashboard.note,
+    parsedRotation: {
+      ...dashboard.parsedRotation,
+      totalCredit: parseClockishMinutes(header?.totalCredit) ?? dashboard.parsedRotation.totalCredit,
+      totalScheduledBlock: snapshotComputation.scheduledBlockMinutes,
+      deadheadBlock: deadheadBlockMinutes,
+      excludedDeadheadLegs: 0,
+      layoverCities: (header?.layoverCities?.length ?? 0) > 0 ? header.layoverCities : dashboard.parsedRotation.layoverCities,
+      dutyPeriods: screenshotDutyPeriods,
+      legs: mappedUserFacingLegs.map((leg, index) => ({
+        ...dashboard.parsedRotation.legs[index],
+        id: leg.id,
+        legNumber: index + 1,
+        dayNumber: index + 1,
+        departureAirport: leg.origin,
+        arrivalAirport: leg.destination,
+        flightNumber: leg.flightNumber,
+        scheduledOut: extractCompactClockDigits(leg.departureTime),
+        scheduledIn: extractCompactClockDigits(leg.arrivalTime),
+        scheduledBlock: leg.scheduledBlockMinutes,
+        turnAfterPreviousLeg: leg.turnMinutes,
+        status: "placeholder" as const,
+        isDeadhead: leg.isDeadhead,
+        legKind: leg.legKind,
+        confirmationNumber: leg.confirmationNumber,
+        carrier: leg.carrier,
+        sourceText: leg.sourceText,
+        deadheadSource: leg.deadheadSource,
+      })),
+      visibleLegCount: mappedUserFacingLegs.length,
+      isPartial: partialBannerVisible,
+      partialReason: partialBannerVisible ? dashboard.parsedRotation.partialReason : null,
+      parserWarnings: Array.from(new Set(parserWarnings)),
+    },
+  };
+}
 
 const embeddedChartData = embeddedDeltaCharts as unknown as DeltaChartsData;
 const appStylePalette = getFliegerPalette();
@@ -121,10 +1210,17 @@ const payToolCards = [
   },
 ] as const;
 
-type TabKey = "home" | "schedule" | "pay" | "seniority" | "ae";
+type TabKey = "today" | "far117" | "logbook" | "tools" | "home" | "schedule" | "pay" | "seniority" | "ae";
 type SeatFilter = "All" | "Captain" | "First Officer";
 type ChartStartMode = "hire" | "today";
 type PayToolKey = (typeof payToolCards)[number]["key"];
+type ToolDestinationKey = "home" | "seniority" | "ae" | "schedule" | "pay";
+type RotationToolBanner = {
+  title: string;
+  detail: string;
+};
+type QuickContactKey = "crewScheduling" | "dispatch" | "van" | "hotel";
+type QuickContacts = Record<QuickContactKey, string>;
 type HoldLabel = "Current category" | "Can Hold" | "Close" | "Senior to You" | "No pilot";
 type AeReachLabel =
   | "Junior to You"
@@ -302,12 +1398,49 @@ type ChartPoint = {
   referenceTwoPercent?: number | null;
 };
 
-const tabs: { key: TabKey; label: string; icon: string }[] = [
-  { key: "home", label: "Home", icon: "⌂" },
-  { key: "seniority", label: "Seniority", icon: "#" },
-  { key: "ae", label: "AE", icon: "⇄" },
-  { key: "schedule", label: "Schedule", icon: "◷" },
-  { key: "pay", label: "Pay", icon: "$" },
+const tabs: { key: Extract<TabKey, "today" | "far117" | "logbook" | "tools">; label: string; icon: string }[] = [
+  { key: "today", label: "Today", icon: "◷" },
+  { key: "far117", label: "FAR 117", icon: "Δ" },
+  { key: "logbook", label: "Logbook", icon: "☰" },
+  { key: "tools", label: "Tools", icon: "⌘" },
+];
+
+const toolDestinationCards: Array<{
+  key: ToolDestinationKey;
+  title: string;
+  subtitle: string;
+  badge: string;
+}> = [
+  {
+    key: "home",
+    title: "Seniority Dashboard",
+    subtitle: "Keep the original progression dashboard and personalized list read close by.",
+    badge: "Free Hook",
+  },
+  {
+    key: "seniority",
+    title: "Seniority Explorer",
+    subtitle: "Browse current category holdability and monthly award ranges.",
+    badge: "Core Tool",
+  },
+  {
+    key: "ae",
+    title: "AE Tracker",
+    subtitle: "See latest AE movement, junior award lines, and the forecast panels.",
+    badge: "Core Tool",
+  },
+  {
+    key: "schedule",
+    title: "Contract / Schedule Lab",
+    subtitle: "Trip quality, fatigue context, and Contract Copilot remain available here.",
+    badge: "Lab",
+  },
+  {
+    key: "pay",
+    title: "Pay Tools",
+    subtitle: "Timecard Auditor and Reroute Pay Calculator stay intact inside Tools.",
+    badge: "Live",
+  },
 ];
 
 const preferenceStorageKey = "crewtools.mobilePreferences";
@@ -328,6 +1461,7 @@ const mobileCategoryFilters: { key: MobileCategoryFilterKey; label: string }[] =
   { key: "my-bases", label: "My Bases" },
   { key: "goals", label: "Goals" },
 ];
+const quickContactStorageKey = "crewtools.rotationQuickContacts";
 
 const seatFilters: SeatFilter[] = ["All", "Captain", "First Officer"];
 const growthRates = Array.from({ length: 6 }, (_, index) => ({
@@ -395,7 +1529,25 @@ export default function App() {
   const colorScheme = useColorScheme();
   const flieger = getFliegerPalette(colorScheme);
   const isCompactMobile = width < 520;
-  const [activeTab, setActiveTab] = useState<TabKey>("home");
+  const [activeTab, setActiveTab] = useState<TabKey>("today");
+  const [rotationPasteInput, setRotationPasteInput] = useState("");
+  const [rotationScreenshots, setRotationScreenshots] = useState<RotationScreenshotAttachment[]>([]);
+  const [rotationAnalyzeBusy, setRotationAnalyzeBusy] = useState(false);
+  const [rotationAnalyzeError, setRotationAnalyzeError] = useState("");
+  const [rotationDashboard, setRotationDashboard] = useState<RotationDashboardData | null>(null);
+  const [rotationScreenshotParseResult, setRotationScreenshotParseResult] =
+    useState<RotationScreenshotParseResponse | null>(null);
+  const [rotationParseTraceOpen, setRotationParseTraceOpen] = useState<Record<string, boolean>>({});
+  const [rotationCopiedConfirmation, setRotationCopiedConfirmation] = useState<string | null>(null);
+  const [rotationCopiedDebugJson, setRotationCopiedDebugJson] = useState(false);
+  const [rotationToolBanner, setRotationToolBanner] = useState<RotationToolBanner | null>(null);
+  const [contractCopilotStarterQuestion, setContractCopilotStarterQuestion] = useState("");
+  const [quickContacts, setQuickContacts] = useState<QuickContacts>({
+    crewScheduling: "",
+    dispatch: "",
+    van: "",
+    hotel: "",
+  });
   const [employeeNumberInput, setEmployeeNumberInput] = useState("");
   const [growthRate, setGrowthRate] = useState(0.01);
   const [growthMenuOpen, setGrowthMenuOpen] = useState(false);
@@ -458,10 +1610,12 @@ export default function App() {
     useState<RerouteAnalyzerChoice>("unknown");
   const [rerouteBidPeriodCrossover, setRerouteBidPeriodCrossover] =
     useState<RerouteAnalyzerChoice>("unknown");
-  const [rerouteOriginalScreenshotNames, setRerouteOriginalScreenshotNames] = useState<string[]>([]);
-  const [rerouteChangedScreenshotNames, setRerouteChangedScreenshotNames] = useState<string[]>([]);
+  const [rerouteOriginalScreenshots, setRerouteOriginalScreenshots] = useState<RerouteScreenshotAttachment[]>([]);
+  const [rerouteChangedScreenshots, setRerouteChangedScreenshots] = useState<RerouteScreenshotAttachment[]>([]);
   const [rerouteAnalyzeBusy, setRerouteAnalyzeBusy] = useState(false);
   const [rerouteAnalyzeError, setRerouteAnalyzeError] = useState("");
+  const [rerouteLastRequestImageDiagnostics, setRerouteLastRequestImageDiagnostics] =
+    useState<RerouteRequestImageDiagnostics | null>(null);
   const [rerouteAnalysisResult, setRerouteAnalysisResult] = useState<{
     analysisId: number;
     result: RerouteAnalysisOutput;
@@ -489,6 +1643,47 @@ export default function App() {
   const rerouteAnalysisCounterRef = useRef(0);
   const rerouteActiveRequestIdRef = useRef<number | null>(null);
 
+  const clearRotationCompanion = () => {
+    setRotationPasteInput("");
+    setRotationScreenshots([]);
+    setRotationAnalyzeBusy(false);
+    setRotationAnalyzeError("");
+    setRotationDashboard(null);
+    setRotationScreenshotParseResult(null);
+    setRotationToolBanner(null);
+    setContractCopilotStarterQuestion("");
+    setActiveTab("today");
+  };
+
+  useEffect(() => {
+    if (Platform.OS !== "web") {
+      return;
+    }
+    try {
+      const raw = window.localStorage.getItem(quickContactStorageKey);
+      if (!raw) {
+        return;
+      }
+      const parsed = JSON.parse(raw) as Partial<QuickContacts>;
+      setQuickContacts((current) => ({
+        ...current,
+        crewScheduling: typeof parsed.crewScheduling === "string" ? parsed.crewScheduling : current.crewScheduling,
+        dispatch: typeof parsed.dispatch === "string" ? parsed.dispatch : current.dispatch,
+        van: typeof parsed.van === "string" ? parsed.van : current.van,
+        hotel: typeof parsed.hotel === "string" ? parsed.hotel : current.hotel,
+      }));
+    } catch {
+      // Keep defaults if storage is unavailable.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== "web") {
+      return;
+    }
+    window.localStorage.setItem(quickContactStorageKey, JSON.stringify(quickContacts));
+  }, [quickContacts]);
+
   const clearRerouteAnalyzer = () => {
     setRerouteOriginalRotationText("");
     setRerouteChangedRotationText("");
@@ -499,16 +1694,331 @@ export default function App() {
     setRerouteTouchedXDay("unknown");
     setRerouteDeadheadInvolved("unknown");
     setRerouteBidPeriodCrossover("unknown");
-    setRerouteOriginalScreenshotNames([]);
-    setRerouteChangedScreenshotNames([]);
+    setRerouteOriginalScreenshots([]);
+    setRerouteChangedScreenshots([]);
     setRerouteAnalyzeError("");
     setRerouteAnalysisResult(null);
+    setRerouteLastRequestImageDiagnostics(null);
     setRerouteCurrentAnalysisId(null);
     rerouteActiveRequestIdRef.current = null;
     setRerouteEvidenceOpen(false);
     setRerouteDetectedFactsOpen(false);
     setRerouteSupportOpen(false);
   };
+
+  const pickRotationEvidence = () => {
+    if (Platform.OS !== "web" || typeof document === "undefined") {
+      setRotationAnalyzeError("Screenshot upload is currently available on web only in this pass.");
+      return;
+    }
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp";
+    input.multiple = true;
+    input.style.position = "fixed";
+    input.style.left = "-9999px";
+    document.body.appendChild(input);
+    input.onchange = () => {
+      const files = input.files ? Array.from(input.files) : [];
+      document.body.removeChild(input);
+      if (files.length === 0) {
+        return;
+      }
+      const readers = files.map(
+        (file) =>
+          new Promise<RotationScreenshotAttachment>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              if (typeof reader.result !== "string") {
+                reject(new Error(`Unable to read ${file.name}`));
+                return;
+              }
+              resolve({
+                name: file.name,
+                dataUrl: reader.result,
+                previewUri: reader.result,
+                mimeType: file.type,
+              });
+            };
+            reader.onerror = () => reject(reader.error ?? new Error(`Unable to read ${file.name}`));
+            reader.readAsDataURL(file);
+          }),
+      );
+      Promise.all(readers)
+        .then((attachments) => {
+          setRotationScreenshots((current) => [...current, ...attachments]);
+          setRotationAnalyzeError("");
+        })
+        .catch((error) => {
+          setRotationAnalyzeError(error instanceof Error ? error.message : "Unable to attach screenshots.");
+        });
+    };
+    input.click();
+  };
+
+  const removeRotationScreenshot = (index: number) => {
+    setRotationScreenshots((current) => current.filter((_, currentIndex) => currentIndex !== index));
+  };
+
+  const clearRotationScreenshots = () => {
+    setRotationScreenshots([]);
+  };
+
+  const toggleRotationParseTrace = (key: string) => {
+    setRotationParseTraceOpen((current) => ({
+      ...current,
+      [key]: !current[key],
+    }));
+  };
+
+  const copyRotationNormalizedText = async (value: string) => {
+    if (Platform.OS !== "web" || typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
+      setRotationAnalyzeError("Copy is currently available in the web build only.");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(value);
+      setRotationAnalyzeError("");
+    } catch (error) {
+      setRotationAnalyzeError(error instanceof Error ? error.message : "Unable to copy normalized text.");
+    }
+  };
+
+  const copyRotationConfirmationCode = async (value?: string | null) => {
+    if (!value) {
+      setRotationAnalyzeError("No confirmation code was available to copy.");
+      return;
+    }
+    if (Platform.OS !== "web" || typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
+      setRotationAnalyzeError("Copy confirmation is currently available in the web build only.");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(value);
+      setRotationCopiedConfirmation(value);
+      setRotationAnalyzeError("");
+      setTimeout(() => {
+        setRotationCopiedConfirmation((current) => (current === value ? null : current));
+      }, 1600);
+    } catch (error) {
+      setRotationAnalyzeError(error instanceof Error ? error.message : "Unable to copy confirmation code.");
+    }
+  };
+
+  const copyLiveChainDebugJson = async () => {
+    if (Platform.OS !== "web" || typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
+      setRotationAnalyzeError("Copy live chain debug JSON is currently available in the web build only.");
+      return;
+    }
+    try {
+      const payload =
+        rotationDashboard && rotationScreenshotParseResult?.debug
+          ? buildLiveChainDebugExport({
+              rotationDashboard,
+              screenshotParseResult: rotationScreenshotParseResult as RotationScreenshotParseResponse & {
+                debug: NonNullable<RotationScreenshotParseResponse["debug"]>;
+              },
+            })
+          : {
+              error: "payload missing",
+              visibleSnapshotPathConfirmed: true,
+              availableTopLevelKeys: {
+                hasRotationDashboard: Boolean(rotationDashboard),
+                hasRotationScreenshotParseResult: Boolean(rotationScreenshotParseResult),
+                rotationScreenshotParseResultKeys:
+                  rotationScreenshotParseResult && typeof rotationScreenshotParseResult === "object"
+                    ? Object.keys(rotationScreenshotParseResult)
+                    : [],
+              },
+            };
+      console.log("LIVE_CHAIN_DEBUG_JSON_COPIED", payload);
+      await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+      setRotationCopiedDebugJson(true);
+      setRotationAnalyzeError("");
+      setTimeout(() => setRotationCopiedDebugJson(false), 2000);
+    } catch (error) {
+      setRotationAnalyzeError(error instanceof Error ? error.message : "Unable to copy live chain debug JSON.");
+    }
+  };
+
+  const parseRotationScreenshots = async (): Promise<RotationScreenshotParseResponse> => {
+    const response = await fetch("/api/ai/rotation-companion/parse-screenshots", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        input: {
+          screenshots: rotationScreenshots.map((item) => ({
+            name: item.name,
+            dataUrl: item.dataUrl,
+          })),
+        },
+      }),
+    });
+    const contentType = response.headers.get("content-type") ?? "";
+    const rawText = await response.text();
+    try {
+      return JSON.parse(rawText) as RotationScreenshotParseResponse;
+    } catch {
+      return buildUnreadableScreenshotParserResponse(response.status, contentType, rawText);
+    }
+  };
+
+  const analyzeRotationCompanion = async () => {
+    setRotationAnalyzeBusy(true);
+    setRotationAnalyzeError("");
+    setRotationScreenshotParseResult(null);
+    try {
+      const hasText = rotationPasteInput.trim().length > 0;
+      const hasScreenshots = rotationScreenshots.length > 0;
+      if (!hasText && !hasScreenshots) {
+        setRotationAnalyzeError("Paste trip text, upload screenshots, or use the sample rotation.");
+        setRotationDashboard(null);
+        return;
+      }
+
+      let screenshotParse: RotationScreenshotParseResponse | null = null;
+      if (hasScreenshots) {
+        screenshotParse = await parseRotationScreenshots();
+        setRotationScreenshotParseResult(screenshotParse);
+      }
+
+      const normalizedScreenshotText = screenshotParse?.ok ? screenshotParse.normalizedText.trim() : "";
+      const combinedInput = [rotationPasteInput.trim(), normalizedScreenshotText].filter(Boolean).join("\n\n");
+      const parsed = parseRotationIntoDashboard(combinedInput);
+      if (!parsed.ok) {
+        if (!hasText && screenshotParse && !screenshotParse.ok) {
+          setRotationAnalyzeError(screenshotParse.error);
+        } else if (rotationScreenshots.length > 0 && !combinedInput.trim()) {
+          setRotationAnalyzeError(
+            "Screenshots were attached, but I could not turn them into readable rotation text yet. Try clearer screenshots or paste visible rows.",
+          );
+        } else {
+          setRotationAnalyzeError(parsed.error);
+        }
+        setRotationDashboard(null);
+        return;
+      }
+
+      const screenshotWarnings = screenshotParse?.warnings ?? [];
+      const screenshotMissingSections = screenshotParse?.missingSections ?? [];
+      const mergedMissingSections = Array.from(
+        new Set([...parsed.dashboard.parsedRotation.missingSections, ...screenshotMissingSections]),
+      );
+      const derivedSourceType =
+        hasScreenshots && hasText ? "mixed" : hasScreenshots ? "screenshots" : "text";
+      const screenshotPartialReason =
+        screenshotParse?.ok && screenshotMissingSections.length > 0
+          ? "Partial rotation detected. We found visible legs from your screenshot, but may be missing earlier or later parts of the trip."
+          : screenshotParse?.ok === false && hasScreenshots
+            ? "Partial rotation detected. Screenshot extraction was incomplete, so some trip sections still need full text or more screenshots."
+            : parsed.dashboard.parsedRotation.partialReason;
+
+      const baseDashboard = {
+        ...parsed.dashboard,
+        parsedRotation: {
+          ...parsed.dashboard.parsedRotation,
+          sourceTypes: derivedSourceType,
+          isPartial:
+            parsed.dashboard.parsedRotation.isPartial ||
+            screenshotMissingSections.length > 0 ||
+            screenshotParse?.ok === false,
+          partialReason: screenshotPartialReason,
+          missingSections: mergedMissingSections,
+        },
+        note: hasScreenshots
+          ? `Loaded from ${rotationScreenshots.length} screenshot${rotationScreenshots.length === 1 ? "" : "s"}.`
+          : parsed.dashboard.note,
+      };
+      const hasRuntimeBuilderInput = Boolean(screenshotParse?.debug?.orderedChain?.length);
+      setRotationDashboard(
+        hasRuntimeBuilderInput && screenshotParse?.debug
+          ? buildScreenshotBackedDashboardModel(
+              baseDashboard,
+              screenshotParse as RotationScreenshotParseResponse & {
+                debug: NonNullable<RotationScreenshotParseResponse["debug"]>;
+              },
+            )
+          : baseDashboard,
+      );
+      setActiveTab("today");
+    } catch (error) {
+      setRotationAnalyzeError(error instanceof Error ? error.message : "Unable to load the rotation.");
+    } finally {
+      setRotationAnalyzeBusy(false);
+    }
+  };
+
+  const useSampleRotation = () => {
+    setRotationPasteInput(SAMPLE_ROTATION_TEXT);
+    setRotationAnalyzeError("");
+    setRotationScreenshotParseResult(null);
+    const sampleDashboard = buildRotationDashboardData(SAMPLE_ROTATION_TEXT);
+    setRotationDashboard(sampleDashboard);
+    setActiveTab("today");
+  };
+
+  const rotationParseTraceWarnings = useMemo(
+    () =>
+      buildRotationParseTraceWarnings({
+        screenshotParseResult: rotationScreenshotParseResult,
+        dashboard: rotationDashboard,
+      }),
+    [rotationScreenshotParseResult, rotationDashboard],
+  );
+
+  const compressRerouteImageFile = (file: File) =>
+    new Promise<RerouteScreenshotAttachment>((resolve, reject) => {
+      if (typeof document === "undefined") {
+        reject(new Error("Image compression is only available on web."));
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = typeof reader.result === "string" ? reader.result : "";
+        if (!dataUrl) {
+          reject(new Error(`Unable to read ${file.name}`));
+          return;
+        }
+        const image = new window.Image();
+        image.onload = () => {
+          const maxWidth = 2200;
+          const scale = image.width > maxWidth ? maxWidth / image.width : 1;
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.max(1, Math.round(image.width * scale));
+          canvas.height = Math.max(1, Math.round(image.height * scale));
+          const context = canvas.getContext("2d");
+          if (!context) {
+            resolve({ name: file.name, dataUrl, previewUri: dataUrl });
+            return;
+          }
+          context.drawImage(image, 0, 0, canvas.width, canvas.height);
+          const shouldKeepPng = file.type === "image/png" && dataUrl.length <= 2_500_000;
+          const compressedDataUrl = shouldKeepPng ? canvas.toDataURL("image/png") : canvas.toDataURL("image/jpeg", 0.9);
+          console.log("[rp-images] compression", {
+            name: file.name,
+            mimeType: file.type,
+            originalBytes: dataUrl.length,
+            compressedBytes: compressedDataUrl.length,
+            width: image.width,
+            height: image.height,
+            scaledWidth: canvas.width,
+            scaledHeight: canvas.height,
+            preservedPng: shouldKeepPng,
+          });
+          resolve({
+            name: file.name,
+            dataUrl: compressedDataUrl,
+            previewUri: compressedDataUrl,
+          });
+        };
+        image.onerror = () => reject(new Error(`Unable to decode ${file.name}`));
+        image.src = dataUrl;
+      };
+      reader.onerror = () => reject(new Error(`Unable to read ${file.name}`));
+      reader.readAsDataURL(file);
+    });
 
   const pickRerouteEvidence = (sourceType: "original" | "rerouted") => {
     if (Platform.OS !== "web" || typeof document === "undefined") {
@@ -519,30 +2029,46 @@ export default function App() {
     input.type = "file";
     input.accept = "image/*";
     input.multiple = true;
-    input.onchange = () => {
+    input.style.position = "fixed";
+    input.style.left = "-9999px";
+    document.body.appendChild(input);
+    input.onchange = async () => {
       const files = input.files ? Array.from(input.files) : [];
+      document.body.removeChild(input);
       if (files.length === 0) {
         return;
       }
-      const names = files.map((file) => file.name);
+      const attachments = await Promise.all(files.map((file) => compressRerouteImageFile(file)));
       if (sourceType === "original") {
-        setRerouteOriginalScreenshotNames(names);
+        setRerouteOriginalScreenshots(attachments);
       } else {
-        setRerouteChangedScreenshotNames(names);
+        setRerouteChangedScreenshots(attachments);
       }
       setRerouteAnalyzeError("");
     };
     input.click();
   };
 
+  const removeRerouteScreenshot = (sourceType: "original" | "rerouted", index: number) => {
+    const updater =
+      sourceType === "original" ? setRerouteOriginalScreenshots : setRerouteChangedScreenshots;
+    updater((current) => current.filter((_, currentIndex) => currentIndex !== index));
+  };
+
   const analyzeReroute = async () => {
     const description = rerouteDescription.trim();
+    const hasOriginalScreenshots = rerouteOriginalScreenshots.length > 0;
+    const hasChangedScreenshots = rerouteChangedScreenshots.length > 0;
+    const hasOriginalText = rerouteOriginalRotationText.trim().length > 0;
+    const hasChangedText = rerouteChangedRotationText.trim().length > 0;
+    const hasUsableEvidence =
+      hasOriginalScreenshots || hasChangedScreenshots || hasOriginalText || hasChangedText || description.length > 0;
     if (!reroutePilotStatus) {
       setRerouteAnalyzeError("Choose Lineholder or Reserve first.");
       return;
     }
-    if (!description) {
-      setRerouteAnalyzeError("Description is required.");
+    if (!hasUsableEvidence) {
+      setRerouteAnalyzeError("Add screenshots, paste trip text, or describe what changed.");
       return;
     }
 
@@ -564,20 +2090,40 @@ export default function App() {
       deadheadInvolved: rerouteDeadheadInvolved,
       bidPeriodCrossover: rerouteBidPeriodCrossover,
       uploadedEvidenceSummary: {
-        screenshotNames: [...rerouteOriginalScreenshotNames, ...rerouteChangedScreenshotNames],
-        originalScreenshotName: rerouteOriginalScreenshotNames[0] || undefined,
-        changedScreenshotName: rerouteChangedScreenshotNames[0] || undefined,
-        originalScreenshotNames: rerouteOriginalScreenshotNames,
-        changedScreenshotNames: rerouteChangedScreenshotNames,
+        screenshotNames: [
+          ...rerouteOriginalScreenshots.map((item) => item.name),
+          ...rerouteChangedScreenshots.map((item) => item.name),
+        ],
+        originalScreenshotName: rerouteOriginalScreenshots[0]?.name,
+        changedScreenshotName: rerouteChangedScreenshots[0]?.name,
+        originalScreenshotNames: rerouteOriginalScreenshots.map((item) => item.name),
+        changedScreenshotNames: rerouteChangedScreenshots.map((item) => item.name),
+        originalScreenshotCount: rerouteOriginalScreenshots.length,
+        changedScreenshotCount: rerouteChangedScreenshots.length,
+        originalFilenames: rerouteOriginalScreenshots.map((item) => item.name),
+        changedFilenames: rerouteChangedScreenshots.map((item) => item.name),
         screenshotParsingActive: false,
-        notes:
-          rerouteOriginalScreenshotNames.length > 0 || rerouteChangedScreenshotNames.length > 0
-            ? [
-                "Screenshot parsing is not active yet in Reroute Pay Calculator V1, so this calculation uses filenames and text only.",
-              ]
-            : [],
+        notes: [],
       },
+      originalImages: rerouteOriginalScreenshots.map((item) => ({
+        name: item.name,
+        dataUrl: item.dataUrl,
+      })),
+      changedImages: rerouteChangedScreenshots.map((item) => ({
+        name: item.name,
+        dataUrl: item.dataUrl,
+      })),
     };
+    const requestImageDiagnostics = {
+      originalScreenshotsAttached: rerouteOriginalScreenshots.length,
+      changedScreenshotsAttached: rerouteChangedScreenshots.length,
+      firstOriginalStartsWithDataImage: rerouteOriginalScreenshots[0]?.dataUrl.startsWith("data:image/") ?? false,
+      firstChangedStartsWithDataImage: rerouteChangedScreenshots[0]?.dataUrl.startsWith("data:image/") ?? false,
+      originalCompressedBytes: rerouteOriginalScreenshots.map((item) => item.dataUrl.length),
+      changedCompressedBytes: rerouteChangedScreenshots.map((item) => item.dataUrl.length),
+    };
+    console.log("[rp-images] ui request diagnostics", requestImageDiagnostics);
+    setRerouteLastRequestImageDiagnostics(requestImageDiagnostics);
 
     try {
       const response = await fetch("/api/tools/reroute-pay/analyze", {
@@ -596,11 +2142,17 @@ export default function App() {
       } catch {
         throw new Error("Reroute Pay Calculator returned a non-JSON response. Check the local API server.");
       }
-      if (!response.ok || !payload.ok) {
-        throw new Error(payload.ok ? "Unable to analyze reroute." : payload.error);
-      }
       if (rerouteActiveRequestIdRef.current !== analysisRunId) {
         return;
+      }
+      if (!response.ok || !payload.ok) {
+        if (!payload.ok && payload.result) {
+          setRerouteAnalysisResult({ analysisId: analysisRunId, result: payload.result });
+          setRerouteAnalyzeError(payload.error);
+          setRerouteSupportOpen(false);
+          return;
+        }
+        throw new Error(payload.ok ? "Unable to analyze reroute." : payload.error);
       }
       void requestInput;
       setRerouteAnalysisResult({ analysisId: analysisRunId, result: payload.result });
@@ -648,6 +2200,8 @@ export default function App() {
         typeof whatControlsValue === "string"
           ? [whatControlsValue]
           : asStringArray(whatControlsValue);
+      const screenshotParserSummary =
+        (result.screenshotParserSummary as Record<string, unknown> | undefined) ?? undefined;
       const rerouteEvent = (result.rerouteEvent as Record<string, unknown> | undefined) ?? {};
       const currentDetectedFacts = {
         pilotStatus:
@@ -699,8 +2253,71 @@ export default function App() {
       const hasStructuredRotationEvidence =
         rerouteChangedRotationText.trim().length > 0 ||
         rerouteOriginalRotationText.trim().length > 0 ||
-        rerouteOriginalScreenshotNames.length > 0 ||
-        rerouteChangedScreenshotNames.length > 0;
+        rerouteOriginalScreenshots.length > 0 ||
+        rerouteChangedScreenshots.length > 0;
+      const screenshotSummary = screenshotParserSummary
+        ? {
+            screenshotParsingActive: Boolean(screenshotParserSummary.screenshotParsingActive),
+            originalScreenshotsRead:
+              typeof screenshotParserSummary.originalScreenshotsRead === "number"
+                ? screenshotParserSummary.originalScreenshotsRead
+                : 0,
+            changedScreenshotsRead:
+              typeof screenshotParserSummary.changedScreenshotsRead === "number"
+                ? screenshotParserSummary.changedScreenshotsRead
+                : 0,
+            originalImagesReceived:
+              typeof screenshotParserSummary.originalImagesReceived === "number"
+                ? screenshotParserSummary.originalImagesReceived
+                : 0,
+            changedImagesReceived:
+              typeof screenshotParserSummary.changedImagesReceived === "number"
+                ? screenshotParserSummary.changedImagesReceived
+                : 0,
+            firstOriginalImageName:
+              typeof screenshotParserSummary.firstOriginalImageName === "string"
+                ? screenshotParserSummary.firstOriginalImageName
+                : "",
+            firstChangedImageName:
+              typeof screenshotParserSummary.firstChangedImageName === "string"
+                ? screenshotParserSummary.firstChangedImageName
+                : "",
+            firstOriginalStartsWithDataImage: Boolean(screenshotParserSummary.firstOriginalStartsWithDataImage),
+            firstChangedStartsWithDataImage: Boolean(screenshotParserSummary.firstChangedStartsWithDataImage),
+            visionModelCalled: Boolean(screenshotParserSummary.visionModelCalled),
+            modelSelected:
+              typeof screenshotParserSummary.modelSelected === "string"
+                ? screenshotParserSummary.modelSelected
+                : "",
+            parseConfidence:
+              screenshotParserSummary.parseConfidence === "high" ||
+              screenshotParserSummary.parseConfidence === "medium" ||
+              screenshotParserSummary.parseConfidence === "low"
+                ? screenshotParserSummary.parseConfidence
+                : "low",
+            rotationCount:
+              typeof screenshotParserSummary.rotationCount === "number"
+                ? screenshotParserSummary.rotationCount
+                : 0,
+            legsDetected:
+              typeof screenshotParserSummary.legsDetected === "number"
+                ? screenshotParserSummary.legsDetected
+                : 0,
+            missingParseItems: asStringArray(screenshotParserSummary.missingParseItems),
+            extractionNotes: asStringArray(screenshotParserSummary.extractionNotes),
+            rawVisionResponsePreview: asStringArray(screenshotParserSummary.rawVisionResponsePreview),
+            rawTextPreview: asStringArray(screenshotParserSummary.rawTextPreview),
+            structuredJsonParseError:
+              typeof screenshotParserSummary.structuredJsonParseError === "string"
+                ? screenshotParserSummary.structuredJsonParseError
+                : "",
+            fallbackRegexLegsParsed:
+              typeof screenshotParserSummary.fallbackRegexLegsParsed === "number"
+                ? screenshotParserSummary.fallbackRegexLegsParsed
+                : 0,
+            parsedLegs: asObjectArray<Record<string, unknown>>(screenshotParserSummary.parsedLegs),
+          }
+        : null;
       const additionalPremiumMissingFacts = focusedQuestions.filter((item) =>
         /release times?|scheduled release|late-release|late release|additional duty|x-day|line day-off/i.test(item),
       );
@@ -740,6 +2357,8 @@ export default function App() {
         detectedLayovers,
         detectedLegs,
         hasStructuredRotationEvidence,
+        screenshotSummary,
+        requestImageDiagnostics: rerouteLastRequestImageDiagnostics,
         currentDetectedFacts,
         currentAnalysisId: rerouteCurrentAnalysisId,
         resultAnalysisId: rerouteAnalysisResult.analysisId,
@@ -775,6 +2394,8 @@ export default function App() {
         detectedLayovers: [],
         detectedLegs: [],
         hasStructuredRotationEvidence: false,
+        screenshotSummary: null,
+        requestImageDiagnostics: rerouteLastRequestImageDiagnostics,
         currentDetectedFacts: {
           affectedOriginalPortion: "",
           reroutedPortion: "",
@@ -801,6 +2422,86 @@ export default function App() {
 
   const rerouteFormatMinutes = (value?: number) =>
     value == null ? "" : `${Math.floor(value / 60)}:${String(value % 60).padStart(2, "0")}`;
+
+  const rotationFormatMinutes = (value?: number) =>
+    value == null ? "TBD" : `${Math.floor(value / 60)}:${String(value % 60).padStart(2, "0")}`;
+
+  const rotationCompanionContext = useMemo<RotationCompanionContext | null>(
+    () =>
+      buildRotationCompanionContext({
+        dashboard: rotationDashboard,
+        rawRotationText: rotationPasteInput,
+      }),
+    [rotationDashboard, rotationPasteInput],
+  );
+
+  const openRerouteCalculatorFromRotation = () => {
+    if (!rotationCompanionContext) {
+      setActiveTab("pay");
+      setSelectedPayTool("reroute-calculator");
+      return;
+    }
+    const adapter = buildRerouteCalculatorAdapter(rotationCompanionContext);
+    setSelectedPayTool("reroute-calculator");
+    setRerouteOriginalRotationText(adapter.originalRotationText ?? "");
+    setRerouteChangedRotationText(adapter.changedRotationText ?? "");
+    setRerouteDescription(adapter.description);
+    setRotationToolBanner(adapter.toolBanner);
+    setActiveTab("pay");
+  };
+
+  const openPayImpactFromRotation = () => {
+    if (!rotationCompanionContext) {
+      setActiveTab("pay");
+      return;
+    }
+    const adapter = buildPayImpactAdapter(rotationCompanionContext);
+    setRotationToolBanner(adapter.toolBanner);
+    setActiveTab("pay");
+  };
+
+  const openContractCopilotFromRotation = () => {
+    if (!rotationCompanionContext) {
+      setActiveTab("schedule");
+      return;
+    }
+    const adapter = buildContractCopilotAdapter(rotationCompanionContext);
+    setContractCopilotStarterQuestion(adapter.starterQuestion);
+    setRotationToolBanner(adapter.toolBanner);
+    setActiveTab("schedule");
+  };
+
+  const activeBottomTabKey: Extract<TabKey, "today" | "far117" | "logbook" | "tools"> =
+    activeTab === "today" || activeTab === "far117" || activeTab === "logbook" || activeTab === "tools"
+      ? activeTab
+      : "tools";
+
+  const canOpenRotationSecondaryTabs = Boolean(rotationDashboard);
+
+  const handleQuickContactPress = (key: QuickContactKey) => {
+    const currentValue = quickContacts[key];
+    if (currentValue) {
+      if (Platform.OS === "web" && typeof window !== "undefined") {
+        window.location.href = `tel:${currentValue}`;
+      }
+      return;
+    }
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      const labelMap: Record<QuickContactKey, string> = {
+        crewScheduling: "Crew Scheduling",
+        dispatch: "Dispatch",
+        van: "Van",
+        hotel: "Hotel",
+      };
+      const entered = window.prompt(`Add ${labelMap[key]} number`, "");
+      if (entered && entered.trim()) {
+        setQuickContacts((current) => ({
+          ...current,
+          [key]: entered.trim(),
+        }));
+      }
+    }
+  };
 
   const currentPilot = useMemo(
     () => findPilotByEmployeeNumber(deltaSnapshot.pilotDirectory, employeeNumberInput),
@@ -2143,8 +3844,1000 @@ export default function App() {
           >
               DATA. DECISION. ACTION.
           </Text>
+          <Text
+            style={[
+                styles.resultSupportMetaText,
+                {
+                  color: flieger.label,
+                  textAlign: "center",
+                },
+              ]}
+          >
+              BUILD 2026-04-30-DEBUG
+          </Text>
           </View>
         </View>
+
+        {activeTab === "today" && (
+          rotationDashboard ? (
+            <SectionCard
+              title="Rotation Dashboard"
+              description="Trip-first view with the live pieces that matter most right now."
+            >
+              <View style={styles.sectionStack}>
+                {__DEV__ && rotationScreenshotParseResult?.debug ? (() => {
+                  const liveChainInputSources = getLiveChainInputSources(
+                    rotationScreenshotParseResult as RotationScreenshotParseResponse & {
+                      debug: NonNullable<RotationScreenshotParseResponse["debug"]>;
+                    },
+                  );
+                  return (
+                    <View style={styles.resultPanel}>
+                      <Text style={styles.inputLabel}>LIVE_CHAIN_INPUT_DEBUG</Text>
+                      <Text style={styles.resultSupportMetaText}>
+                        Selected builder candidate pool: {liveChainInputSources.selectedSourceName}
+                      </Text>
+                      {liveChainInputSources.sourceSummaries.map((source) => (
+                        <View key={source.name} style={styles.resultPanelSubtle}>
+                          <Text style={styles.resultSupportMetaText}>
+                            {source.name}: count={source.count} • contains SLC-DTW={source.containsSlcDtw ? "true" : "false"} • contains DTW-MSP={source.containsDtwMsp ? "true" : "false"} • contains MSP-RDU={source.containsMspRdu ? "true" : "false"} • contains SAT-SLC={source.containsSatSlc ? "true" : "false"}
+                          </Text>
+                          <Text style={styles.resultSupportMetaText}>
+                            {source.count < 25
+                              ? source.cityPairs.join(" | ") || "none"
+                              : source.cityPairs.slice(0, 5).join(" | ") || "none"}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  );
+                })() : null}
+                <View style={styles.resultPanel}>
+                  <Text style={styles.inputLabel}>Rotation snapshot</Text>
+                  {rotationDashboard.parsedRotation.isPartial ? (
+                    <View style={styles.resultPanel}>
+                      <Text style={[styles.statusBadge, styles.statusBadgeCaution]}>Partial rotation detected</Text>
+                      <Text style={styles.resultBodyText}>
+                        {rotationDashboard.parsedRotation.partialReason ??
+                          "We found visible legs from your screenshot or pasted trip, but earlier or later parts of the trip may be missing."}
+                      </Text>
+                      <Text style={styles.resultSupportMetaText}>
+                        Visible legs: {rotationDashboard.parsedRotation.visibleLegCount} • Source: {rotationDashboard.parsedRotation.sourceTypes}
+                      </Text>
+                      {rotationDashboard.parsedRotation.missingSections.map((item) => (
+                        <Text key={item} style={styles.resultSupportMetaText}>• Missing: {item}</Text>
+                      ))}
+                      <View style={styles.quickActionGrid}>
+                        <TouchableOpacity style={styles.quickActionButton} onPress={pickRotationEvidence}>
+                          <Text style={styles.quickActionButtonText}>Add more screenshots</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.quickActionButton} onPress={() => setActiveTab("today")}>
+                          <Text style={styles.quickActionButtonText}>Paste full rotation text</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ) : null}
+                  {__DEV__ && rotationScreenshotParseResult ? (
+                    <View style={styles.resultPanel}>
+                      <Text style={styles.inputLabel}>Screenshot parser</Text>
+                      <Text style={styles.resultSupportMetaText}>
+                        Confidence:{" "}
+                        {rotationScreenshotParseResult.ok ? rotationScreenshotParseResult.confidence : "low"} • Missing sections:{" "}
+                        {rotationScreenshotParseResult.missingSections.length > 0
+                          ? rotationScreenshotParseResult.missingSections.join(", ")
+                          : "None"}
+                      </Text>
+                      <Text style={styles.resultSupportMetaText}>
+                        Warnings:{" "}
+                        {rotationScreenshotParseResult.warnings.length > 0
+                          ? rotationScreenshotParseResult.warnings.join(" | ")
+                          : "None"}
+                      </Text>
+                      {rotationScreenshotParseResult.ok ? (
+                        <Text style={styles.resultSupportMetaText}>
+                          Normalized text: {rotationScreenshotParseResult.normalizedText.slice(0, 1200) || "None"}
+                        </Text>
+                      ) : (
+                        <Text style={styles.resultSupportMetaText}>
+                          Parser error: {rotationScreenshotParseResult.error}
+                        </Text>
+                      )}
+                      {rotationDashboard ? (
+                        <>
+                          <Text style={styles.resultSupportMetaText}>
+                            Source format: {rotationDashboard.parsedRotation.sourceFormat} • Parser path:{" "}
+                            {rotationDashboard.parsedRotation.parserPath}
+                          </Text>
+                          <Text style={styles.resultSupportMetaText}>
+                            Row format: {rotationDashboard.parsedRotation.rowFormat}
+                          </Text>
+                          <Text style={styles.resultSupportMetaText}>
+                            MiCrew legs: {rotationDashboard.parsedRotation.micrewLegsParsed} • iCrew rows:{" "}
+                            {rotationDashboard.parsedRotation.icrewRowsParsed}
+                          </Text>
+                          <Text style={styles.resultSupportMetaText}>
+                            Deadhead legs: {rotationDashboard.parsedRotation.legs.filter((leg) => leg.isDeadhead).length}
+                          </Text>
+                          <Text style={styles.resultSupportMetaText}>
+                            Rejected candidate rows: {rotationDashboard.parsedRotation.rejectedCandidateRows.length}
+                          </Text>
+                          {rotationDashboard.parsedRotation.parserWarnings.length > 0 ? (
+                            <Text style={styles.resultSupportMetaText}>
+                              Parser warnings: {rotationDashboard.parsedRotation.parserWarnings.join(" | ").slice(0, 1200)}
+                            </Text>
+                          ) : null}
+                          <Text style={styles.resultSupportMetaText}>
+                            Leg deadhead debug:{" "}
+                            {rotationDashboard.parsedRotation.legs
+                              .map(
+                                (leg) =>
+                                  `${leg.flightNumber ?? "TBD"}=${leg.isDeadhead ? "deadhead" : "operating"}(${leg.deadheadSource ?? "unknown"})`,
+                              )
+                              .join(" | ")
+                              .slice(0, 1400)}
+                          </Text>
+                        </>
+                      ) : null}
+                    </View>
+                  ) : null}
+                  <FormRow>
+                    <ResultLine label="Trip dates" value={rotationDashboard.snapshot.tripDates} />
+                    <ResultLine label="Rotation #" value={rotationDashboard.snapshot.rotationNumber} />
+                  </FormRow>
+                  <FormRow>
+                    <ResultLine
+                      label="Total credit"
+                      value={
+                        rotationDashboard.parsedRotation.missingSections.includes("total credit")
+                          ? "Needs full rotation"
+                          : rotationFormatMinutes(rotationDashboard.snapshot.totalCreditMinutes)
+                      }
+                    />
+                    <ResultLine
+                      label="Scheduled block"
+                      value={
+                        rotationDashboard.parsedRotation.missingSections.includes("total scheduled block")
+                          ? "Needs full rotation"
+                          : rotationFormatMinutes(rotationDashboard.snapshot.scheduledBlockMinutes)
+                      }
+                    />
+                  </FormRow>
+                    <FormRow>
+                      <ResultLine
+                        label="Operating legs"
+                        value={String(rotationDashboard.parsedRotation.legs.filter((leg) => !leg.isDeadhead).length)}
+                      />
+                      <ResultLine
+                        label={rotationDashboard.parsedRotation.legs.filter((leg) => leg.isDeadhead).length > 0 ? "DH legs" : "Final arrival"}
+                        value={
+                          rotationDashboard.parsedRotation.legs.filter((leg) => leg.isDeadhead).length > 0
+                            ? String(rotationDashboard.parsedRotation.legs.filter((leg) => leg.isDeadhead).length)
+                            : rotationDashboard.snapshot.finalArrival
+                        }
+                      />
+                    </FormRow>
+                  {rotationDashboard.parsedRotation.legs.filter((leg) => leg.isDeadhead).length > 0 ? (
+                    <ResultLine
+                      label="Final arrival"
+                      value={rotationDashboard.snapshot.finalArrival}
+                    />
+                  ) : null}
+                  <ResultLine
+                    label="Layovers"
+                    value={rotationDashboard.snapshot.layoverCities.join(", ") || "TBD"}
+                  />
+                  {rotationDashboard.note ? (
+                    <Text style={styles.insightText}>{rotationDashboard.note}</Text>
+                  ) : null}
+                  <Text style={styles.resultSupportMetaText}>
+                    VISIBLE SNAPSHOT PATH CONFIRMED - BUILD 2026-04-30-DEBUG
+                  </Text>
+                  <TouchableOpacity style={styles.quickLinkButton} onPress={copyLiveChainDebugJson}>
+                    <Text style={styles.quickLinkButtonText}>
+                      {rotationCopiedDebugJson ? "Copied live chain JSON" : "COPY LIVE CHAIN DEBUG JSON"}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.resultPanel}>
+                  <Text style={styles.inputLabel}>Next flight</Text>
+                  {rotationDashboard.nextLeg ? (
+                    <>
+                      {rotationDashboard.nextLeg.isDeadhead ? (
+                        <Text style={[styles.statusBadge, styles.deadheadBadge]}>DEADHEAD</Text>
+                      ) : (
+                        <Text style={[styles.statusBadge, styles.statusBadgeResolved]}>Operating</Text>
+                      )}
+                      <FormRow>
+                        <ResultLine
+                          label="City pair"
+                          value={`${rotationDashboard.nextLeg.origin}-${rotationDashboard.nextLeg.destination}`}
+                          emphasis
+                        />
+                        <ResultLine
+                          label="Scheduled out / in"
+                          value={`${rotationDashboard.nextLeg.departureTime ?? "TBD"} - ${rotationDashboard.nextLeg.arrivalTime ?? "TBD"}`}
+                        />
+                      </FormRow>
+                      <FormRow>
+                        <ResultLine
+                          label={rotationDashboard.nextLeg.isDeadhead ? "Connection time" : "Turn time"}
+                          value={rotationDashboard.nextLeg.turnMinutes != null ? rotationFormatMinutes(rotationDashboard.nextLeg.turnMinutes) : "TBD"}
+                        />
+                        <ResultLine
+                          label={rotationDashboard.nextLeg.isDeadhead ? "Carrier / gate" : "Aircraft / gate"}
+                          value={`${rotationDashboard.nextLeg.isDeadhead ? rotationDashboard.nextLeg.carrier ?? "Deadhead" : rotationDashboard.nextLeg.aircraft ?? "TBD"} • ${rotationDashboard.nextLeg.gate ?? "TBD"}`}
+                        />
+                      </FormRow>
+                      {rotationDashboard.nextLeg.isDeadhead ? (
+                        <ResultLine
+                          label="Flight / carrier"
+                          value={`${rotationDashboard.nextLeg.flightNumber ?? "TBD"} • ${rotationDashboard.nextLeg.carrier ?? "Deadhead"}`}
+                        />
+                      ) : null}
+                      {rotationDashboard.nextLeg.isDeadhead && rotationDashboard.nextLeg.confirmationNumber ? (
+                        <View style={styles.sectionStack}>
+                          <ResultLine label="Confirmation" value={rotationDashboard.nextLeg.confirmationNumber} />
+                          <TouchableOpacity
+                            style={styles.quickLinkButton}
+                            onPress={() => copyRotationConfirmationCode(rotationDashboard.nextLeg?.confirmationNumber)}
+                          >
+                            <Text style={styles.quickLinkButtonText}>
+                              {rotationCopiedConfirmation === rotationDashboard.nextLeg.confirmationNumber
+                                ? "Copied"
+                                : "Copy confirmation"}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      ) : null}
+                      <ResultLine label="Inbound delay" value="Placeholder" />
+                    </>
+                  ) : (
+                    <Text style={styles.resultBodyText}>Load a rotation to populate the next flight card.</Text>
+                  )}
+                </View>
+
+                <View style={styles.resultPanel}>
+                  <Text style={styles.inputLabel}>What matters right now</Text>
+                  {rotationDashboard.whatMatters.map((item) => (
+                    <View key={item.label} style={styles.rerouteSupportCard}>
+                      <Text
+                        style={[
+                          styles.statusBadge,
+                          item.tone === "good"
+                            ? styles.statusBadgeResolved
+                            : item.tone === "watch"
+                              ? styles.statusBadgeCaution
+                              : styles.statusBadgeWarning,
+                        ]}
+                      >
+                        {item.label}
+                      </Text>
+                      <Text style={styles.resultBodyText}>{item.detail}</Text>
+                    </View>
+                  ))}
+                  {rotationDashboard.whatMatters.some((item) => item.label === "Tight turn") ? (
+                    <Text style={styles.resultSupportMetaText}>
+                      Tight-turn source:{" "}
+                      {rotationDashboard.parsedRotation.legs.find(
+                        (leg) =>
+                          (leg.turnSource === "verified_turn_field" || leg.turnSource === "safe_schedule_derived") &&
+                          (leg.turnAfterPreviousLeg ?? 999) < 45,
+                      )?.turnSource ?? "unknown"}
+                    </Text>
+                  ) : null}
+                </View>
+
+                <View style={styles.resultPanel}>
+                  <Text style={styles.inputLabel}>Layover / quick actions</Text>
+                  <FormRow>
+                    <ResultLine label="First layover" value={rotationDashboard.tonightLayoverCity} />
+                    <ResultLine label="Tomorrow report" value={rotationDashboard.tomorrowReportTime ?? "TBD"} />
+                  </FormRow>
+                  <ResultLine
+                    label="Scheduled rest"
+                    value={rotationDashboard.scheduledRestMinutes != null ? rotationFormatMinutes(rotationDashboard.scheduledRestMinutes) : "Not found"}
+                  />
+                  <View style={styles.quickActionGrid}>
+                    {[
+                      { label: quickContacts.van ? "Call van" : "Add van", key: "van" as const },
+                      { label: quickContacts.hotel ? "Call hotel" : "Add hotel", key: "hotel" as const },
+                      { label: "Open hotel", key: "hotel" as const },
+                      { label: quickContacts.crewScheduling ? "Call Crew Scheduling" : "Add Crew Scheduling", key: "crewScheduling" as const },
+                      { label: quickContacts.dispatch ? "Call Dispatch" : "Add Dispatch", key: "dispatch" as const },
+                    ].map((action) => (
+                      <TouchableOpacity key={action.label} style={styles.quickActionButton} onPress={() => handleQuickContactPress(action.key)}>
+                        <Text style={styles.quickActionButtonText}>{action.label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                <View style={styles.resultPanel}>
+                  <Text style={styles.inputLabel}>Something changed?</Text>
+                  <Text style={styles.resultBodyText}>
+                    Paste a reroute, delay, or reassignment and we’ll calculate the impact.
+                  </Text>
+                  <View style={styles.quickActionGrid}>
+                    {[
+                      { label: "Analyze reroute", onPress: openRerouteCalculatorFromRotation },
+                      { label: "Check pay impact", onPress: openPayImpactFromRotation },
+                      { label: "Ask contract question", onPress: openContractCopilotFromRotation },
+                    ].map((action) => (
+                      <TouchableOpacity key={action.label} style={styles.quickActionButton} onPress={action.onPress}>
+                        <Text style={styles.quickActionButtonText}>{action.label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              </View>
+            </SectionCard>
+          ) : (
+            <SectionCard
+              title="Rotation Companion"
+              description="Mobile-first trip intake that turns pasted MiCrew / iCrew details into a live rotation dashboard."
+            >
+              <View style={styles.rotationHeroCard}>
+                <View style={styles.rotationHeroTextBlock}>
+                  <Text style={styles.rotationHeroTitle}>Load your rotation</Text>
+                  <Text style={styles.rotationHeroBody}>
+                    Paste or upload your MiCrew / iCrew trip details. We’ll turn it into a live trip dashboard.
+                  </Text>
+                </View>
+                <View style={styles.rotationHeroButtonRow}>
+                  <TouchableOpacity
+                    style={[styles.auditButton, rotationAnalyzeBusy && styles.auditButtonDisabled]}
+                    disabled={rotationAnalyzeBusy}
+                    onPress={analyzeRotationCompanion}
+                  >
+                    <Text style={styles.auditButtonText}>
+                      {rotationAnalyzeBusy ? "Analyzing..." : "Analyze Rotation"}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.secondaryActionButton} onPress={useSampleRotation}>
+                    <Text style={styles.secondaryActionButtonText}>Use sample rotation</Text>
+                  </TouchableOpacity>
+                </View>
+                {rotationAnalyzeBusy && rotationScreenshots.length > 0 ? (
+                  <Text style={styles.resultSupportMetaText}>Reading screenshots...</Text>
+                ) : null}
+                <Text style={styles.insightText}>Where are we flying today?</Text>
+              </View>
+
+              <View style={styles.sectionStack}>
+                <Text style={styles.inputLabel}>Paste rotation</Text>
+                <TextInput
+                  multiline
+                  value={rotationPasteInput}
+                  onChangeText={setRotationPasteInput}
+                  placeholder="Paste MiCrew / iCrew rotation rows, block lines, layovers, report / release times, and credit."
+                  placeholderTextColor={flieger.label}
+                  style={[styles.auditTextarea, styles.rotationPasteTextarea]}
+                  autoCapitalize="characters"
+                />
+                <Text style={styles.resultSupportMetaText}>
+                  Paste trip text, upload screenshots, or combine both. If screenshots only show part of the trip, the dashboard will stay partial on purpose.
+                </Text>
+              </View>
+
+              <View style={styles.rotationInlineUtilityRow}>
+                <TouchableOpacity style={styles.secondaryActionButton} onPress={pickRotationEvidence}>
+                  <Text style={styles.secondaryActionButtonText}>Upload screenshots</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.secondaryActionButton} onPress={clearRotationCompanion}>
+                  <Text style={styles.secondaryActionButtonText}>Clear</Text>
+                </TouchableOpacity>
+              </View>
+
+              {rotationScreenshots.length > 0 ? (
+                <View style={styles.resultPanel}>
+                  <Text style={styles.inputLabel}>
+                    Attached screenshots
+                  </Text>
+                  <Text style={styles.resultSupportMetaText}>
+                    {rotationScreenshots.length} screenshot{rotationScreenshots.length === 1 ? "" : "s"} added
+                  </Text>
+                  <View style={styles.rotationScreenshotPreviewGrid}>
+                    {rotationScreenshots.map((item, index) => (
+                      <View key={`${item.name}-${index}`} style={styles.rotationScreenshotPreviewCard}>
+                        <Image source={{ uri: item.previewUri }} style={styles.rotationScreenshotPreviewImage} />
+                        <Text style={styles.resultSupportMetaText}>{item.name}</Text>
+                        <TouchableOpacity style={styles.quickLinkButton} onPress={() => removeRotationScreenshot(index)}>
+                          <Text style={styles.quickLinkButtonText}>Remove</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </View>
+                  <TouchableOpacity style={styles.secondaryActionButton} onPress={clearRotationScreenshots}>
+                    <Text style={styles.secondaryActionButtonText}>Clear screenshots</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.resultSupportMetaText}>
+                    Uploaded screenshots now flow through screenshot extraction before we hand the trip into the existing rotation parser.
+                  </Text>
+                </View>
+              ) : null}
+
+              {rotationAnalyzeError ? (
+                <View style={styles.resultPanel}>
+                  <Text style={styles.warningBadge}>Warning</Text>
+                  <Text style={styles.insightText}>{rotationAnalyzeError}</Text>
+                  <TouchableOpacity style={styles.quickLinkButton} onPress={useSampleRotation}>
+                    <Text style={styles.quickLinkButtonText}>Use sample rotation instead</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+
+              {__DEV__ && (rotationScreenshots.length > 0 || rotationScreenshotParseResult) ? (
+                <View style={styles.resultPanel}>
+                  <Text style={styles.inputLabel}>Screenshot parser</Text>
+                  {!rotationScreenshotParseResult ? (
+                    <Text style={styles.resultSupportMetaText}>No screenshot parser response yet.</Text>
+                  ) : (
+                    <View style={styles.sectionStack}>
+                      <Text style={styles.resultSupportMetaText}>
+                        UI screenshots attached: {rotationScreenshots.length}
+                      </Text>
+                      <Text style={styles.resultSupportMetaText}>
+                        Confidence:{" "}
+                        {rotationScreenshotParseResult.ok
+                          ? rotationScreenshotParseResult.confidence
+                          : "low"}
+                      </Text>
+                      <Text style={styles.resultSupportMetaText}>
+                        Missing sections:{" "}
+                        {rotationScreenshotParseResult.missingSections.length > 0
+                          ? rotationScreenshotParseResult.missingSections.join(", ")
+                          : "None"}
+                      </Text>
+                      <Text style={styles.resultSupportMetaText}>
+                        Warnings:{" "}
+                        {rotationScreenshotParseResult.warnings.length > 0
+                          ? rotationScreenshotParseResult.warnings.join(" | ")
+                          : "None"}
+                      </Text>
+                      {rotationScreenshotParseResult.ok ? (
+                        <Text style={styles.resultSupportMetaText}>
+                          Normalized text: {rotationScreenshotParseResult.normalizedText.slice(0, 1600) || "None"}
+                        </Text>
+                      ) : (
+                        <Text style={styles.resultSupportMetaText}>
+                          Parser error: {rotationScreenshotParseResult.error}
+                        </Text>
+                      )}
+                      {rotationScreenshotParseResult.debug ? (
+                        <>
+                          <Text style={styles.resultSupportMetaText}>
+                            Backend images: {rotationScreenshotParseResult.debug.changedImageCountReceived} • Vision called:{" "}
+                            {rotationScreenshotParseResult.debug.visionModelCalled ? "yes" : "no"} • Model:{" "}
+                            {rotationScreenshotParseResult.debug.modelName ?? "unknown"}
+                          </Text>
+                          <Text style={styles.resultSupportMetaText}>
+                            Rotations parsed: {rotationScreenshotParseResult.debug.rotationsParsed} • Legs parsed:{" "}
+                            {rotationScreenshotParseResult.debug.legsParsed} • Fallback regex legs:{" "}
+                            {rotationScreenshotParseResult.debug.fallbackRegexLegsParsed}
+                          </Text>
+                          <Text style={styles.resultSupportMetaText}>
+                            Screenshots: {rotationScreenshotParseResult.debug.screenshotsCount} • Combined text length:{" "}
+                            {rotationScreenshotParseResult.debug.combinedTextLength} • Final flight legs:{" "}
+                            {rotationScreenshotParseResult.debug.finalFlightSegments} • Duplicates removed:{" "}
+                            {rotationScreenshotParseResult.debug.duplicateLegsRemoved}
+                          </Text>
+                          <Text style={styles.resultSupportMetaText}>
+                            Visible activity cards: {rotationScreenshotParseResult.debug.visibleActivityCards} • Raw flight candidates:{" "}
+                            {rotationScreenshotParseResult.debug.rawFlightCandidates} • Final flight legs:{" "}
+                            {rotationScreenshotParseResult.debug.finalFlightSegments}
+                          </Text>
+                          <Text style={styles.resultSupportMetaText}>
+                            Operating legs: {rotationScreenshotParseResult.debug.operatingSegments} • DH legs:{" "}
+                            {rotationScreenshotParseResult.debug.deadheadSegments} • Return-to-gate legs:{" "}
+                            {rotationScreenshotParseResult.debug.returnToGateSegments} • Layover cards:{" "}
+                            {rotationScreenshotParseResult.debug.layoverCards}
+                          </Text>
+                          <Text style={styles.resultSupportMetaText}>
+                            Deadhead legs detected: {rotationScreenshotParseResult.debug.deadheadLegsDetected} • Confirmation codes:{" "}
+                            {rotationScreenshotParseResult.debug.deadheadConfirmationCodes.length > 0
+                              ? rotationScreenshotParseResult.debug.deadheadConfirmationCodes.join(", ")
+                              : "None"}
+                          </Text>
+                          {rotationScreenshotParseResult.debug.deadheadDetectionNotes.length > 0 ? (
+                            <Text style={styles.resultSupportMetaText}>
+                              Deadhead detection notes: {rotationScreenshotParseResult.debug.deadheadDetectionNotes.join(" | ").slice(0, 1600)}
+                            </Text>
+                          ) : null}
+                          <Text style={styles.resultSupportMetaText}>
+                            Ordering method: {rotationScreenshotParseResult.debug.orderingMethod} • Sequence:{" "}
+                            {rotationScreenshotParseResult.debug.inferredSequence.join(" -> ").slice(0, 1400)}
+                          </Text>
+                          <Text style={styles.resultSupportMetaText}>
+                            Chain length: {rotationScreenshotParseResult.debug.chainLength} • Fragments:{" "}
+                            {rotationScreenshotParseResult.debug.fragmentsDetected} • Strategy:{" "}
+                            {rotationScreenshotParseResult.debug.orderingStrategy} • Unmatched legs:{" "}
+                            {rotationScreenshotParseResult.debug.unmatchedLegs}
+                          </Text>
+                          <Text style={styles.resultSupportMetaText}>
+                            Final ordered chain: {rotationScreenshotParseResult.debug.finalOrderedChainCount} • User-facing legs:{" "}
+                            {rotationScreenshotParseResult.debug.userFacingLegs} • Discarded fragments:{" "}
+                            {rotationScreenshotParseResult.debug.discardedFragments}
+                          </Text>
+                          {rotationScreenshotParseResult.debug.discardedFragmentReasons.length > 0 ? (
+                            <Text style={styles.resultSupportMetaText}>
+                              Discarded fragment reasons: {rotationScreenshotParseResult.debug.discardedFragmentReasons.join(" | ").slice(0, 1600)}
+                            </Text>
+                          ) : null}
+                          {rotationScreenshotParseResult.debug.stitchingWarnings.length > 0 ? (
+                            <Text style={styles.resultSupportMetaText}>
+                              Stitching warnings: {rotationScreenshotParseResult.debug.stitchingWarnings.join(" | ")}
+                            </Text>
+                          ) : null}
+                          {(rotationScreenshotParseResult.debug.rawTextPreview ?? []).length > 0 ? (
+                            <Text style={styles.resultSupportMetaText}>
+                              Raw text preview: {rotationScreenshotParseResult.debug.rawTextPreview.join(" | ").slice(0, 1400)}
+                            </Text>
+                          ) : null}
+                        </>
+                      ) : null}
+                    </View>
+                  )}
+                </View>
+              ) : null}
+
+              {__DEV__ && rotationScreenshotParseResult?.debug ? (
+                <View style={styles.resultPanel}>
+                  <Text style={styles.inputLabel}>Rotation Parse Trace</Text>
+                  <View style={styles.sectionStack}>
+                    {rotationParseTraceWarnings.length > 0 ? (
+                      <Text style={styles.resultSupportMetaText}>
+                        Validation warnings: {rotationParseTraceWarnings.join(" | ")}
+                      </Text>
+                    ) : (
+                      <Text style={styles.resultSupportMetaText}>Validation warnings: None</Text>
+                    )}
+
+                    <Text style={styles.resultBodyText}>Screenshot extraction trace</Text>
+                    {rotationScreenshotParseResult.debug.perScreenshotTrace.length > 0 ? (
+                      rotationScreenshotParseResult.debug.perScreenshotTrace.map((trace) => {
+                        const rawKey = `rotation-trace-raw-${trace.screenshotIndex}`;
+                        const normalizedKey = `rotation-trace-normalized-${trace.screenshotIndex}`;
+                        return (
+                          <View key={`${trace.screenshotIndex}-${trace.screenshotName}`} style={styles.resultPanelSubtle}>
+                            <Text style={styles.resultSupportMetaText}>
+                              Screenshot #{trace.screenshotIndex + 1}: {trace.screenshotName}
+                            </Text>
+                            <Text style={styles.resultSupportMetaText}>
+                              Source format: {trace.sourceFormat} • First leg: {trace.detectedFirstLeg ?? "None"} • Last leg:{" "}
+                              {trace.detectedLastLeg ?? "None"}
+                            </Text>
+                            <Text style={styles.resultSupportMetaText}>
+                              Dates: {formatTraceList(trace.detectedDates)} • Layovers: {formatTraceList(trace.detectedLayovers)}
+                            </Text>
+                            <TouchableOpacity style={styles.quickLinkButton} onPress={() => toggleRotationParseTrace(rawKey)}>
+                              <Text style={styles.quickLinkButtonText}>
+                                {rotationParseTraceOpen[rawKey] ? "Hide raw extracted text" : "Show raw extracted text"}
+                              </Text>
+                            </TouchableOpacity>
+                            {rotationParseTraceOpen[rawKey] ? (
+                              <Text style={styles.resultSupportMetaText}>{trace.rawExtractedText || "None"}</Text>
+                            ) : null}
+                            <TouchableOpacity style={styles.quickLinkButton} onPress={() => toggleRotationParseTrace(normalizedKey)}>
+                              <Text style={styles.quickLinkButtonText}>
+                                {rotationParseTraceOpen[normalizedKey] ? "Hide normalized text" : "Show normalized text"}
+                              </Text>
+                            </TouchableOpacity>
+                            {rotationParseTraceOpen[normalizedKey] ? (
+                              <Text style={styles.resultSupportMetaText}>{trace.normalizedText || "None"}</Text>
+                            ) : null}
+                          </View>
+                        );
+                      })
+                    ) : (
+                      <Text style={styles.resultSupportMetaText}>No per-screenshot trace was returned.</Text>
+                    )}
+
+                    <Text style={styles.resultBodyText}>Combined normalized text</Text>
+                    <Text style={styles.resultBodyText}>Live chain debug JSON</Text>
+                    <TouchableOpacity style={styles.quickLinkButton} onPress={copyLiveChainDebugJson}>
+                      <Text style={styles.quickLinkButtonText}>
+                        {rotationCopiedDebugJson ? "Copied live chain debug JSON" : "Copy live chain debug JSON"}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.quickLinkButton}
+                      onPress={() =>
+                        copyRotationNormalizedText(
+                          rotationScreenshotParseResult.ok ? rotationScreenshotParseResult.normalizedText : "",
+                        )
+                      }
+                    >
+                      <Text style={styles.quickLinkButtonText}>Copy combined normalized text</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.quickLinkButton}
+                      onPress={() => toggleRotationParseTrace("rotation-trace-combined")}
+                    >
+                      <Text style={styles.quickLinkButtonText}>
+                        {rotationParseTraceOpen["rotation-trace-combined"] ? "Hide combined normalized text" : "Show combined normalized text"}
+                      </Text>
+                    </TouchableOpacity>
+                    {rotationParseTraceOpen["rotation-trace-combined"] ? (
+                      <Text style={styles.resultSupportMetaText}>
+                        {rotationScreenshotParseResult.ok ? rotationScreenshotParseResult.normalizedText || "None" : "No normalized text available."}
+                      </Text>
+                    ) : null}
+
+                    <Text style={styles.resultBodyText}>Leg candidates before dedupe/stitching</Text>
+                    {rotationScreenshotParseResult.debug.legCandidates.length > 0 ? (
+                      rotationScreenshotParseResult.debug.legCandidates.map((leg, index) => (
+                        <View key={`candidate-${index}`} style={styles.resultPanelSubtle}>
+                          <Text style={styles.resultSupportMetaText}>
+                            Screenshot #{leg.sourceScreenshotIndex + 1} • {leg.flightNumber ?? "UNK"} • {leg.departureAirport ?? "?"}-{leg.arrivalAirport ?? "?"}
+                          </Text>
+                          <Text style={styles.resultSupportMetaText}>
+                            Out/In: {leg.scheduledOut ?? "?"} / {leg.scheduledIn ?? "?"} • Block: {leg.scheduledBlock ?? "?"} • Turn:{" "}
+                            {leg.turn ?? "?"} • Date: {leg.date ?? "?"} • Deadhead: {leg.isDeadhead ? "yes" : "no"} • Segment:{" "}
+                            {leg.segmentType ?? "operating"}
+                          </Text>
+                          <Text style={styles.resultSupportMetaText}>Source line: {leg.rawSourceLine}</Text>
+                        </View>
+                      ))
+                    ) : (
+                      <Text style={styles.resultSupportMetaText}>No leg candidates were captured.</Text>
+                    )}
+
+                    <Text style={styles.resultBodyText}>Dedupe / stitching trace</Text>
+                    <Text style={styles.resultSupportMetaText}>
+                      Duplicate legs removed: {rotationScreenshotParseResult.debug.duplicateSegmentsRemoved} • Chain length:{" "}
+                      {rotationScreenshotParseResult.debug.chainLength} • Fragments: {rotationScreenshotParseResult.debug.fragmentsDetected} • Strategy:{" "}
+                      {rotationScreenshotParseResult.debug.orderingStrategy} • Unmatched legs: {rotationScreenshotParseResult.debug.unmatchedLegs}
+                    </Text>
+                    <Text style={styles.resultSupportMetaText}>
+                      Final ordered chain: {rotationScreenshotParseResult.debug.finalOrderedChainCount} • User-facing legs:{" "}
+                      {rotationScreenshotParseResult.debug.userFacingLegs} • Discarded fragments:{" "}
+                      {rotationScreenshotParseResult.debug.discardedFragments}
+                    </Text>
+                    {rotationScreenshotParseResult.debug.discardedFragmentReasons.length > 0 ? (
+                      <Text style={styles.resultSupportMetaText}>
+                        Discarded fragment reasons: {rotationScreenshotParseResult.debug.discardedFragmentReasons.join(" | ").slice(0, 1600)}
+                      </Text>
+                    ) : null}
+                    <Text style={styles.resultSupportMetaText}>
+                      Visible activity cards: {rotationScreenshotParseResult.debug.visibleActivityCards} • Raw flight candidates:{" "}
+                      {rotationScreenshotParseResult.debug.rawFlightCandidates} • Final flight legs:{" "}
+                      {rotationScreenshotParseResult.debug.finalFlightSegments} • Operating legs:{" "}
+                      {rotationScreenshotParseResult.debug.operatingSegments} • DH legs:{" "}
+                      {rotationScreenshotParseResult.debug.deadheadSegments} • Return-to-gate legs:{" "}
+                      {rotationScreenshotParseResult.debug.returnToGateSegments} • Layover cards:{" "}
+                      {rotationScreenshotParseResult.debug.layoverCards}
+                    </Text>
+                    {rotationScreenshotParseResult.debug.duplicateReasons.length > 0 ? (
+                      <Text style={styles.resultSupportMetaText}>
+                        Duplicate reasons: {rotationScreenshotParseResult.debug.duplicateReasons.join(" | ").slice(0, 1600)}
+                      </Text>
+                    ) : null}
+                    <Text style={styles.resultSupportMetaText}>
+                      MiCrew header found: {rotationScreenshotParseResult.debug.micrewHeaderFound ? "yes" : "no"} • Trip dates source:{" "}
+                      {rotationScreenshotParseResult.debug.tripDatesSource} • Rotation # source:{" "}
+                      {rotationScreenshotParseResult.debug.rotationNumberSource}
+                    </Text>
+                    <Text style={styles.resultSupportMetaText}>
+                      Parsed header: Rotation #{rotationScreenshotParseResult.debug.parsedHeader?.rotationNumber ?? "Unknown"} • Base:{" "}
+                      {rotationScreenshotParseResult.debug.parsedHeader?.base ?? "Unknown"} • Dates:{" "}
+                      {rotationScreenshotParseResult.debug.parsedHeader?.startDate ?? "?"} - {rotationScreenshotParseResult.debug.parsedHeader?.endDate ?? "?"} • Credit:{" "}
+                      {rotationScreenshotParseResult.debug.parsedHeader?.totalCredit ?? "Unknown"} • TAFB:{" "}
+                      {rotationScreenshotParseResult.debug.parsedHeader?.tafb ?? "Unknown"} • Layovers:{" "}
+                      {formatTraceList(rotationScreenshotParseResult.debug.parsedHeader?.layoverCities)}
+                    </Text>
+                    {rotationScreenshotParseResult.debug.orderedChain.length > 0 ? (
+                      rotationScreenshotParseResult.debug.orderedChain.map((leg) => (
+                        <View key={`chain-${leg.index}-${leg.flightNumber ?? "unk"}`} style={styles.resultPanelSubtle}>
+                          <Text style={styles.resultSupportMetaText}>
+                            {leg.index}. {leg.flightNumber ?? "UNK"} • {leg.departureAirport ?? "?"}-{leg.arrivalAirport ?? "?"}
+                          </Text>
+                          <Text style={styles.resultSupportMetaText}>
+                            Out/In: {leg.scheduledOut ?? "?"} / {leg.scheduledIn ?? "?"} • Block: {leg.scheduledBlock ?? "?"} • Turn:{" "}
+                            {leg.turn ?? "?"} • Date: {leg.date ?? "?"} • Segment: {leg.segmentType ?? "operating"}
+                          </Text>
+                        </View>
+                      ))
+                    ) : (
+                      <Text style={styles.resultSupportMetaText}>No ordered chain rows are available.</Text>
+                    )}
+
+                    <Text style={styles.resultBodyText}>Dashboard model trace</Text>
+                    {rotationDashboard ? (
+                      <>
+                        <Text style={styles.resultSupportMetaText}>
+                          Trip dates: {rotationDashboard.snapshot.tripDates} • Rotation number: {rotationDashboard.snapshot.rotationNumber}
+                        </Text>
+                        <Text style={styles.resultSupportMetaText}>
+                          Total credit: {rotationDashboard.snapshot.totalCreditMinutes} • Total scheduled block:{" "}
+                          {rotationDashboard.snapshot.scheduledBlockMinutes} • Final arrival: {rotationDashboard.snapshot.finalArrival}
+                        </Text>
+                        <Text style={styles.resultSupportMetaText}>
+                          Operating block: {rotationDashboard.parsedRotation.totalScheduledBlock ?? 0} • DH block:{" "}
+                          {rotationDashboard.parsedRotation.deadheadBlock ?? 0} • Excluded DH legs:{" "}
+                          {rotationDashboard.parsedRotation.excludedDeadheadLegs}
+                        </Text>
+                        <Text style={styles.resultSupportMetaText}>
+                          deadheadFeatureDisabledDueToRegression: true
+                        </Text>
+                        <Text style={styles.resultSupportMetaText}>
+                          Total credit source: {rotationScreenshotParseResult.debug.parsedHeader?.totalCredit ? "header Credit-" : "fallback"} • Scheduled block source: explicit Blk- sum from operating legs • TAFB source: {rotationScreenshotParseResult.debug.parsedHeader?.tafb ? "header TAFB-" : "not found"}
+                        </Text>
+                        <Text style={styles.resultSupportMetaText}>
+                          Report/release source: {rotationScreenshotParseResult.debug.parsedHeader?.reportTime || rotationScreenshotParseResult.debug.parsedHeader?.releaseTime ? "header Rpt-/Rls-" : "fallback parser"} • Next flight reason: first ordered chain leg • Final arrival source: last ordered chain leg
+                        </Text>
+                        <Text style={styles.resultSupportMetaText}>
+                          Final arrival assertion:{" "}
+                          {rotationDashboard.snapshot.finalArrival ===
+                          rotationScreenshotParseResult.debug.orderedChain.at(-1)?.arrivalAirport
+                            ? "pass"
+                            : "fail"}
+                        </Text>
+                        <Text style={styles.resultSupportMetaText}>
+                          Layovers: {formatTraceList(rotationDashboard.snapshot.layoverCities)}
+                        </Text>
+                        <Text style={styles.resultSupportMetaText}>
+                          Next flight: {rotationDashboard.nextLeg?.origin ?? "?"}-{rotationDashboard.nextLeg?.destination ?? "?"} • Out/In:{" "}
+                          {rotationDashboard.nextLeg?.departureTime ?? "?"} / {rotationDashboard.nextLeg?.arrivalTime ?? "?"} • Block:{" "}
+                          {rotationDashboard.nextLeg?.scheduledBlockMinutes ?? "?"} • Turn: {rotationDashboard.nextLeg?.turnMinutes ?? "?"}
+                        </Text>
+                        <Text style={styles.resultSupportMetaText}>
+                          Full rotation reason:{" "}
+                          {rotationDashboard.parsedRotation.isPartial
+                            ? "Still marked partial because required trip context is missing."
+                            : "Continuous stitched leg chain plus MiCrew header/release context indicates a full rotation."}
+                        </Text>
+                        <Text style={styles.resultSupportMetaText}>
+                          Partial reason: {rotationDashboard.parsedRotation.partialReason ?? "None"}
+                        </Text>
+                        <Text style={styles.resultSupportMetaText}>
+                          Ordered chain first leg: {rotationScreenshotParseResult.debug.orderedChain[0]?.departureAirport ?? "?"}-{rotationScreenshotParseResult.debug.orderedChain[0]?.arrivalAirport ?? "?"} • Ordered chain last leg: {rotationScreenshotParseResult.debug.orderedChain.at(-1)?.departureAirport ?? "?"}-{rotationScreenshotParseResult.debug.orderedChain.at(-1)?.arrivalAirport ?? "?"}
+                        </Text>
+                        <Text style={styles.resultSupportMetaText}>
+                          Screenshot assertion: finalArrival={rotationDashboard.snapshot.finalArrival} • userFacingLegs={rotationDashboard.legs.length} • lastUserFacingLeg={rotationDashboard.legs.at(-1)?.origin ?? "?"}-{rotationDashboard.legs.at(-1)?.destination ?? "?"} • scheduledBlock={rotationDashboard.snapshot.scheduledBlockMinutes} • logbookLegCount={rotationDashboard.legs.length}
+                        </Text>
+                        <Text style={styles.resultSupportMetaText}>
+                          VISIBLE_ROTATION_SOURCE_DEBUG = {"{"}
+                          rawFinalOrderedChainCount: {rotationScreenshotParseResult.debug.finalOrderedChainCount},
+                          {" "}sanitizedUserFacingLegsCount: {rotationDashboard.legs.length},
+                          {" "}userFacingLegsCount: {rotationDashboard.legs.length},
+                          {" "}firstUserFacingLeg: {rotationDashboard.legs.at(0) ? `${rotationDashboard.legs.at(0)?.origin}-${rotationDashboard.legs.at(0)?.destination}` : "unknown"},
+                          {" "}lastUserFacingLeg: {rotationDashboard.legs.at(-1) ? `${rotationDashboard.legs.at(-1)?.origin}-${rotationDashboard.legs.at(-1)?.destination}` : "unknown"},
+                          {" "}terminalReturnLeg: {rotationDashboard.legs.at(-1) ? `${rotationDashboard.legs.at(-1)?.origin}-${rotationDashboard.legs.at(-1)?.destination}` : "unknown"},
+                          {" "}terminalCutIndex: {rotationDashboard.legs.length - 1},
+                          {" "}discardedAfterTerminal: {Math.max(0, rotationScreenshotParseResult.debug.finalOrderedChainCount - rotationDashboard.legs.length)},
+                          {" "}partialBannerVisible: {rotationDashboard.parsedRotation.isPartial ? "true" : "false"},
+                          {" "}partialVisibleLegsCount: {rotationDashboard.parsedRotation.visibleLegCount},
+                          {" "}operatingLegsCount: {rotationDashboard.parsedRotation.legs.filter((leg) => !leg.isDeadhead).length},
+                          {" "}scheduledBlock: {rotationDashboard.snapshot.scheduledBlockMinutes},
+                          {" "}scheduledBlockSource: {typeof rotationScreenshotParseResult.extracted?.totals?.totalScheduledBlockMinutes === "number" && rotationScreenshotParseResult.extracted.totals.totalScheduledBlockMinutes > 0 ? "header" : rotationDashboard.snapshot.scheduledBlockMinutes > 0 ? "computedFromUserFacingLegs" : "fallback"},
+                          {" "}headerScheduledBlock: {rotationScreenshotParseResult.extracted?.totals?.totalScheduledBlockMinutes ?? "none"},
+                          {" "}computedUserFacingScheduledBlock: {rotationDashboard.parsedRotation.legs.reduce((sum, leg) => sum + (leg.scheduledBlock ?? 0), 0)},
+                          {" "}finalArrival: {rotationDashboard.snapshot.finalArrival},
+                          {" "}nextFlightCityPair: {rotationDashboard.nextLeg ? `${rotationDashboard.nextLeg.origin}-${rotationDashboard.nextLeg.destination}` : "unknown"},
+                          {" "}logbookLegCount: {rotationDashboard.legs.length},
+                          {" "}lastLogbookLeg: {rotationDashboard.legs.at(-1) ? `${rotationDashboard.legs.at(-1)?.origin}-${rotationDashboard.legs.at(-1)?.destination}` : "unknown"}
+                          {" }"}
+                        </Text>
+                        <Text style={styles.resultSupportMetaText}>
+                          LIVE_CHAIN_BUILDER_PARITY_DEBUG = {"{"}
+                          usedExportedBuilder: true,
+                          {" "}runtimeRawCandidateCount: {rotationScreenshotParseResult.debug.legCandidates.length},
+                          {" "}runtimeBuilderUserFacingCount: {rotationDashboard.legs.length},
+                          {" "}runtimeUserFacingLegs: {rotationDashboard.legs.map((leg) => `${leg.origin}-${leg.destination}`).join(" | ") || "none"},
+                          {" "}runtimeFirstLeg: {rotationDashboard.legs.at(0) ? `${rotationDashboard.legs.at(0)?.origin}-${rotationDashboard.legs.at(0)?.destination}` : "unknown"},
+                          {" "}runtimeLastLeg: {rotationDashboard.legs.at(-1) ? `${rotationDashboard.legs.at(-1)?.origin}-${rotationDashboard.legs.at(-1)?.destination}` : "unknown"},
+                          {" "}runtimeFinalArrival: {rotationDashboard.snapshot.finalArrival},
+                          {" "}runtimeScheduledBlock: {rotationDashboard.snapshot.scheduledBlockMinutes},
+                          {" "}runtimeScheduledBlockSource: {typeof rotationScreenshotParseResult.extracted?.totals?.totalScheduledBlockMinutes === "number" && rotationScreenshotParseResult.extracted.totals.totalScheduledBlockMinutes > 0 ? "header" : rotationDashboard.snapshot.scheduledBlockMinutes > 0 ? "computedFromUserFacingLegs" : "fallback"},
+                          {" "}runtimeNextFlight: {rotationDashboard.nextLeg ? `${rotationDashboard.nextLeg.origin}-${rotationDashboard.nextLeg.destination}` : "unknown"},
+                          {" "}runtimeLogbookLegCount: {rotationDashboard.legs.length},
+                          {" "}fixtureExpectedFor0983Matched: {rotationDashboard.snapshot.rotationNumber === "0983" && rotationDashboard.snapshot.tripDates === "17MAR - 20MAR" ? rotationDashboard.legs.length === 9 && `${rotationDashboard.legs.at(0)?.origin ?? "?"}-${rotationDashboard.legs.at(0)?.destination ?? "?"}` === "SLC-DTW" && `${rotationDashboard.legs.at(-1)?.origin ?? "?"}-${rotationDashboard.legs.at(-1)?.destination ?? "?"}` === "SAT-SLC" && rotationDashboard.snapshot.finalArrival === "SLC" && `${rotationDashboard.nextLeg?.origin ?? "?"}-${rotationDashboard.nextLeg?.destination ?? "?"}` === "SLC-DTW" ? "true" : "false" : "n/a"}
+                          {" }"}
+                        </Text>
+                        <Text style={styles.resultSupportMetaText}>
+                          Dashboard validation warnings: {formatTraceList(rotationParseTraceWarnings)}
+                        </Text>
+                      </>
+                    ) : (
+                      <Text style={styles.resultSupportMetaText}>No dashboard model is loaded yet.</Text>
+                    )}
+                  </View>
+                </View>
+              ) : null}
+            </SectionCard>
+          )
+        )}
+
+        {activeTab === "far117" && (
+          rotationDashboard ? (
+            <SectionCard
+              title="FAR 117"
+              description="Planning-reference legality view for each duty day in the loaded rotation."
+            >
+              <View style={styles.sectionStack}>
+                {rotationDashboard.parsedRotation.dutyPeriods.some((day) => day.status === "Needs full duty period details") ? (
+                  <View style={styles.resultPanel}>
+                    <Text style={[styles.statusBadge, styles.statusBadgeCaution]}>Needs full duty period details</Text>
+                    <Text style={styles.resultBodyText}>
+                      FAR 117 planning view is not available from these screenshots yet. We still need clearer duty period details with reliable report, release, and leg structure.
+                    </Text>
+                  </View>
+                ) : rotationDashboard.dutyDays.map((day) => (
+                  <View key={day.label} style={styles.resultPanel}>
+                    <Text
+                      style={[
+                        styles.statusBadge,
+                        day.status === "Good"
+                          ? styles.statusBadgeResolved
+                          : day.status === "Watch"
+                            ? styles.statusBadgeCaution
+                            : styles.statusBadgeWarning,
+                      ]}
+                    >
+                      {day.status}
+                    </Text>
+                    <ResultLine label="Duty day" value={day.label} emphasis />
+                    <FormRow>
+                      <ResultLine label="Scheduled block" value={rotationFormatMinutes(day.scheduledBlockMinutes)} />
+                      <ResultLine label="Scheduled FDP" value={rotationFormatMinutes(day.scheduledFdpMinutes)} />
+                    </FormRow>
+                    <FormRow>
+                      <ResultLine label="FDP limit" value={rotationFormatMinutes(day.fdpLimitMinutes)} />
+                      <ResultLine label="Margin" value={rotationFormatMinutes(day.marginMinutes)} />
+                    </FormRow>
+                  </View>
+                ))}
+                <Text style={styles.resultSupportMetaText}>
+                  Planning reference only. Confirm official legality with company systems.
+                </Text>
+              </View>
+            </SectionCard>
+          ) : (
+            <SectionCard
+              title="FAR 117"
+              description="Load a rotation first so we can build duty-day cards and FDP watch items."
+            >
+              <TouchableOpacity style={styles.auditButton} onPress={() => setActiveTab("today")}>
+                <Text style={styles.auditButtonText}>Load your rotation</Text>
+              </TouchableOpacity>
+            </SectionCard>
+          )
+        )}
+
+        {activeTab === "logbook" && (
+          rotationDashboard ? (
+            <SectionCard
+              title="Logbook"
+              description="Leg-by-leg trip view with placeholders ready for actual out/in and block deltas."
+            >
+              <View style={styles.sectionStack}>
+                {rotationDashboard.legs.map((leg) => (
+                  <View key={leg.id} style={[styles.resultPanel, leg.isDeadhead ? styles.deadheadLegPanel : null]}>
+                    <View style={styles.rotationLegHeaderRow}>
+                      <Text style={styles.inputLabel}>{leg.dayLabel}</Text>
+                      <Text style={[styles.statusBadge, leg.isDeadhead ? styles.deadheadBadge : styles.statusBadgeResolved]}>
+                        {leg.isDeadhead ? "DH" : "Operating"}
+                      </Text>
+                    </View>
+                    <FormRow>
+                      <ResultLine label="City pair" value={`${leg.origin}-${leg.destination}`} emphasis />
+                      <ResultLine
+                        label={leg.isDeadhead ? "Flight / carrier" : "Flight"}
+                        value={
+                          leg.isDeadhead
+                            ? `${leg.flightNumber ?? "TBD"} • ${leg.carrier ?? "Deadhead"}`
+                            : `${leg.aircraft ?? "Aircraft"} • ${leg.flightNumber}`
+                        }
+                      />
+                    </FormRow>
+                    <FormRow>
+                      <ResultLine label="Scheduled out / in" value={`${leg.departureTime ?? "TBD"} - ${leg.arrivalTime ?? "TBD"}`} />
+                      <ResultLine label="Scheduled block" value={rotationFormatMinutes(leg.scheduledBlockMinutes)} />
+                    </FormRow>
+                    <FormRow>
+                      <ResultLine label="Actual out / in" value={`${leg.actualOut ?? "—"} - ${leg.actualIn ?? "—"}`} />
+                      <ResultLine label="Actual block" value={rotationFormatMinutes(leg.actualBlockMinutes)} />
+                    </FormRow>
+                    {leg.isDeadhead || leg.status === "placeholder" ? (
+                      <ResultLine
+                        label={leg.isDeadhead ? "Connection time" : "Turn time"}
+                        value={leg.isDeadhead ? "De-emphasized" : rotationFormatMinutes(leg.turnMinutes)}
+                      />
+                    ) : (
+                      <FormRow>
+                        <ResultLine
+                          label={leg.isDeadhead ? "Connection time" : "Turn time"}
+                          value={leg.isDeadhead ? "De-emphasized" : rotationFormatMinutes(leg.turnMinutes)}
+                        />
+                        <ResultLine label="Status" value={leg.status.replace(/_/g, " ")} />
+                      </FormRow>
+                    )}
+                    <FormRow>
+                      <ResultLine
+                        label={leg.isDeadhead ? "Carrier / gate" : "Aircraft / gate"}
+                        value={`${leg.isDeadhead ? leg.carrier ?? leg.aircraft ?? "Deadhead" : leg.aircraft ?? "TBD"} • ${leg.gate ?? "TBD"}`}
+                      />
+                      <ResultLine label="Logbook export" value={leg.excludeFromLogbookExport ? "Exclude" : "Include"} />
+                    </FormRow>
+                    {leg.isDeadhead && leg.confirmationNumber ? (
+                      <View style={styles.sectionStack}>
+                        <ResultLine label="Confirmation" value={leg.confirmationNumber} />
+                        <TouchableOpacity
+                          style={styles.quickLinkButton}
+                          onPress={() => copyRotationConfirmationCode(leg.confirmationNumber)}
+                        >
+                          <Text style={styles.quickLinkButtonText}>
+                            {rotationCopiedConfirmation === leg.confirmationNumber ? "Copied" : "Copy confirmation"}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : null}
+                    {__DEV__ ? (
+                      <Text style={styles.resultSupportMetaText}>
+                        isDeadhead: {leg.isDeadhead ? "true" : "false"} • source: {leg.deadheadSource ?? "unknown"} • confirmation: {leg.confirmationNumber ?? "none"}
+                      </Text>
+                    ) : null}
+                  </View>
+                ))}
+              </View>
+            </SectionCard>
+          ) : (
+            <SectionCard
+              title="Logbook"
+              description="Load a rotation first so we can show the leg-by-leg breakdown."
+            >
+              <TouchableOpacity style={styles.auditButton} onPress={() => setActiveTab("today")}>
+                <Text style={styles.auditButtonText}>Load your rotation</Text>
+              </TouchableOpacity>
+            </SectionCard>
+          )
+        )}
+
+        {activeTab === "tools" && (
+          <SectionCard
+            title="Tools"
+            description="The trip-first companion is the main experience now. Legacy Seniority, AE, Schedule, and Pay tools stay here as the free hook."
+          >
+            <View style={styles.payToolGrid}>
+              {toolDestinationCards.map((tool) => (
+                <TouchableOpacity
+                  key={tool.key}
+                  activeOpacity={0.9}
+                  style={styles.payToolCard}
+                  onPress={() => setActiveTab(tool.key)}
+                >
+                  <View style={styles.payToolHero}>
+                    <Text style={styles.payToolGlyph}>{tool.title.slice(0, 2).toUpperCase()}</Text>
+                    <Text style={styles.payToolBadge}>{tool.badge}</Text>
+                  </View>
+                  <View style={styles.payToolBody}>
+                    <Text style={styles.payToolTitle}>{tool.title}</Text>
+                    <Text style={styles.payToolSubtitle}>{tool.subtitle}</Text>
+                    {tool.key === "schedule" ? (
+                      <Text style={styles.resultSupportMetaText}>
+                        Reuses {rotationCompanionToolRegistry.contractCopilot.ui}
+                      </Text>
+                    ) : tool.key === "pay" ? (
+                      <Text style={styles.resultSupportMetaText}>
+                        Reuses {rotationCompanionToolRegistry.rerouteCalculator.engine} and {rotationCompanionToolRegistry.timecardPayParsing.parser}
+                      </Text>
+                    ) : tool.key === "seniority" || tool.key === "home" ? (
+                      <Text style={styles.resultSupportMetaText}>
+                        Reuses {rotationCompanionToolRegistry.seniority.data}
+                      </Text>
+                    ) : tool.key === "ae" ? (
+                      <Text style={styles.resultSupportMetaText}>
+                        Reuses {rotationCompanionToolRegistry.ae.engine}
+                      </Text>
+                    ) : null}
+                  </View>
+                  <Text style={styles.payToolButton}>Open</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </SectionCard>
+        )}
 
         {activeTab === "home" && (
           <MobileHomeDashboard
@@ -2196,6 +4889,12 @@ export default function App() {
             title="Schedule Analyzer"
             description="Keep the schedule tools nearby for trip quality, fatigue risk, and reroute awareness."
           >
+            {rotationToolBanner ? (
+              <View style={styles.resultPanel}>
+                <Text style={styles.inputLabel}>{rotationToolBanner.title}</Text>
+                <Text style={styles.resultBodyText}>{rotationToolBanner.detail}</Text>
+              </View>
+            ) : null}
             <FormRow>
               <LabeledInput label="Block Hours" value={blockHours} onChangeText={setBlockHours} />
               <LabeledInput label="Duty Hours" value={dutyHours} onChangeText={setDutyHours} />
@@ -2212,7 +4911,10 @@ export default function App() {
             <Text style={styles.insightText}>{tripHealth.recommendation}</Text>
 
             <View style={styles.sectionStack}>
-              <ContractCopilotPanel />
+              <ContractCopilotPanel
+                starterQuestion={contractCopilotStarterQuestion}
+                contextHint={rotationToolBanner?.detail}
+              />
             </View>
           </SectionCard>
         )}
@@ -2222,6 +4924,12 @@ export default function App() {
             title="Pay Audit"
             description="Pilot-first pay tools: open the right calculator, paste the company data, and get a verdict with a contract breadcrumb."
           >
+            {rotationToolBanner ? (
+              <View style={styles.resultPanel}>
+                <Text style={styles.inputLabel}>{rotationToolBanner.title}</Text>
+                <Text style={styles.resultBodyText}>{rotationToolBanner.detail}</Text>
+              </View>
+            ) : null}
             <View style={styles.payToolGrid}>
               {payToolCards.map((tool) => (
                 <TouchableOpacity
@@ -2298,28 +5006,56 @@ export default function App() {
                     </Text>
                     <TouchableOpacity style={styles.auditButton} onPress={() => pickRerouteEvidence("original")}>
                       <Text style={styles.auditButtonText}>
-                        {rerouteOriginalScreenshotNames.length > 0
+                        {rerouteOriginalScreenshots.length > 0
                           ? "Replace original MiCrew screenshot(s)"
                           : "Upload original MiCrew screenshot(s)"}
                       </Text>
                     </TouchableOpacity>
                     <Text style={styles.resultSupportMetaText}>
-                      {rerouteOriginalScreenshotNames.length > 0
-                        ? `Original attached: ${rerouteOriginalScreenshotNames.join(", ")}`
+                      {rerouteOriginalScreenshots.length > 0
+                        ? `Original attached: ${rerouteOriginalScreenshots.length} image${rerouteOriginalScreenshots.length === 1 ? "" : "s"}`
                         : "No original screenshots attached."}
                     </Text>
+                    {rerouteOriginalScreenshots.map((item, index) => (
+                      <View key={`original-shot-${item.name}-${index}`} style={styles.screenshotAttachmentRow}>
+                        {item.previewUri ? <Image source={{ uri: item.previewUri }} style={styles.screenshotAttachmentThumb} /> : null}
+                        <View style={styles.screenshotAttachmentMeta}>
+                          <Text style={styles.resultBodyText}>{item.name}</Text>
+                        </View>
+                        <TouchableOpacity
+                          style={styles.screenshotRemoveButton}
+                          onPress={() => removeRerouteScreenshot("original", index)}
+                        >
+                          <Text style={styles.screenshotRemoveButtonText}>Remove</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ))}
                     <TouchableOpacity style={styles.auditButton} onPress={() => pickRerouteEvidence("rerouted")}>
                       <Text style={styles.auditButtonText}>
-                        {rerouteChangedScreenshotNames.length > 0
+                        {rerouteChangedScreenshots.length > 0
                           ? "Replace changed/rerouted screenshot(s)"
                           : "Upload changed/rerouted screenshot(s)"}
                       </Text>
                     </TouchableOpacity>
                     <Text style={styles.resultSupportMetaText}>
-                      {rerouteChangedScreenshotNames.length > 0
-                        ? `Changed/rerouted attached: ${rerouteChangedScreenshotNames.join(", ")}`
+                      {rerouteChangedScreenshots.length > 0
+                        ? `Changed/rerouted attached: ${rerouteChangedScreenshots.length} image${rerouteChangedScreenshots.length === 1 ? "" : "s"}`
                         : "No changed/rerouted screenshots attached."}
                     </Text>
+                    {rerouteChangedScreenshots.map((item, index) => (
+                      <View key={`changed-shot-${item.name}-${index}`} style={styles.screenshotAttachmentRow}>
+                        {item.previewUri ? <Image source={{ uri: item.previewUri }} style={styles.screenshotAttachmentThumb} /> : null}
+                        <View style={styles.screenshotAttachmentMeta}>
+                          <Text style={styles.resultBodyText}>{item.name}</Text>
+                        </View>
+                        <TouchableOpacity
+                          style={styles.screenshotRemoveButton}
+                          onPress={() => removeRerouteScreenshot("rerouted", index)}
+                        >
+                          <Text style={styles.screenshotRemoveButtonText}>Remove</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ))}
                   </View>
 
                   <TextAreaInput
@@ -2329,6 +5065,10 @@ export default function App() {
                     placeholder="Example: After DH SLC-BUR, Scheduling sent us back to SLC. Next day we DH SLC-IAH then fly IAH-SLC."
                     autoCapitalize="sentences"
                   />
+
+                  <Text style={styles.resultSupportMetaText}>
+                    Optional if screenshots or trip text are attached.
+                  </Text>
 
                   <Text style={styles.resultSupportMetaText}>
                     Best results: include or upload the segment-level block times for the parts Scheduling changed or added. Avoid using only total day block unless the whole duty period was rerouted.
@@ -2386,6 +5126,13 @@ export default function App() {
                     </TouchableOpacity>
                   </View>
 
+                  {rerouteAnalyzeBusy &&
+                  (rerouteOriginalScreenshots.length > 0 || rerouteChangedScreenshots.length > 0) ? (
+                    <Text style={styles.resultSupportMetaText}>
+                      Reading MiCrew screenshots... this can take a few seconds.
+                    </Text>
+                  ) : null}
+
                   {rerouteAnalyzeError ? (
                     <View style={styles.resultPanel}>
                       <Text style={styles.warningBadge}>Warning</Text>
@@ -2442,6 +5189,139 @@ export default function App() {
                         )}
                       </View>
 
+                      {(rerouteOriginalScreenshots.length > 0 ||
+                        rerouteChangedScreenshots.length > 0 ||
+                        rerouteRenderModel.screenshotSummary) ? (
+                        <View style={styles.resultPanel}>
+                          <Text style={styles.inputLabel}>Screenshot parsing</Text>
+                          {rerouteRenderModel.screenshotSummary ? (
+                            <Text style={styles.resultBodyText}>
+                              {rerouteRenderModel.screenshotSummary.screenshotParsingActive ? "Active" : "Inactive"}
+                            </Text>
+                          ) : (
+                            <Text style={styles.resultBodyText}>Parser summary missing from API response.</Text>
+                          )}
+                          <Text style={styles.resultSupportMetaText}>
+                            original screenshots attached in UI:{" "}
+                            {String(rerouteRenderModel.requestImageDiagnostics?.originalScreenshotsAttached ?? rerouteOriginalScreenshots.length)}
+                          </Text>
+                          <Text style={styles.resultSupportMetaText}>
+                            changed screenshots attached in UI:{" "}
+                            {String(rerouteRenderModel.requestImageDiagnostics?.changedScreenshotsAttached ?? rerouteChangedScreenshots.length)}
+                          </Text>
+                          <Text style={styles.resultSupportMetaText}>
+                            first original dataUrl starts data:image/:{" "}
+                            {String(
+                              rerouteRenderModel.requestImageDiagnostics?.firstOriginalStartsWithDataImage ??
+                                (rerouteOriginalScreenshots[0]?.dataUrl.startsWith("data:image/") ?? false),
+                            )}
+                          </Text>
+                          <Text style={styles.resultSupportMetaText}>
+                            first changed dataUrl starts data:image/:{" "}
+                            {String(
+                              rerouteRenderModel.requestImageDiagnostics?.firstChangedStartsWithDataImage ??
+                                (rerouteChangedScreenshots[0]?.dataUrl.startsWith("data:image/") ?? false),
+                            )}
+                          </Text>
+                          {rerouteRenderModel.requestImageDiagnostics?.originalCompressedBytes?.length ? (
+                            <Text style={styles.resultSupportMetaText}>
+                              original compressed bytes: {rerouteRenderModel.requestImageDiagnostics.originalCompressedBytes.join(", ")}
+                            </Text>
+                          ) : null}
+                          {rerouteRenderModel.requestImageDiagnostics?.changedCompressedBytes?.length ? (
+                            <Text style={styles.resultSupportMetaText}>
+                              changed compressed bytes: {rerouteRenderModel.requestImageDiagnostics.changedCompressedBytes.join(", ")}
+                            </Text>
+                          ) : null}
+                          {!rerouteRenderModel.screenshotSummary ? null : (
+                            <>
+                          <Text style={styles.resultSupportMetaText}>
+                            screenshotParsingActive: {String(rerouteRenderModel.screenshotSummary.screenshotParsingActive)}
+                          </Text>
+                          <Text style={styles.resultSupportMetaText}>
+                            original image count received: {String(rerouteRenderModel.screenshotSummary.originalImagesReceived)}
+                          </Text>
+                          <Text style={styles.resultSupportMetaText}>
+                            changed image count received: {String(rerouteRenderModel.screenshotSummary.changedImagesReceived)}
+                          </Text>
+                          <Text style={styles.resultSupportMetaText}>
+                            first original image name: {rerouteRenderModel.screenshotSummary.firstOriginalImageName || "Unknown"}
+                          </Text>
+                          <Text style={styles.resultSupportMetaText}>
+                            first changed image name: {rerouteRenderModel.screenshotSummary.firstChangedImageName || "Unknown"}
+                          </Text>
+                          <Text style={styles.resultSupportMetaText}>
+                            first original starts data:image/: {String(rerouteRenderModel.screenshotSummary.firstOriginalStartsWithDataImage)}
+                          </Text>
+                          <Text style={styles.resultSupportMetaText}>
+                            first changed starts data:image/: {String(rerouteRenderModel.screenshotSummary.firstChangedStartsWithDataImage)}
+                          </Text>
+                          <Text style={styles.resultSupportMetaText}>
+                            vision model called: {rerouteRenderModel.screenshotSummary.visionModelCalled ? "yes" : "no"}
+                          </Text>
+                          {rerouteRenderModel.screenshotSummary.modelSelected ? (
+                            <Text style={styles.resultSupportMetaText}>
+                              model: {rerouteRenderModel.screenshotSummary.modelSelected}
+                            </Text>
+                          ) : null}
+                          <Text style={styles.resultSupportMetaText}>
+                            original screenshots read: {String(rerouteRenderModel.screenshotSummary.originalScreenshotsRead)}
+                          </Text>
+                          <Text style={styles.resultSupportMetaText}>
+                            changed screenshots read: {String(rerouteRenderModel.screenshotSummary.changedScreenshotsRead)}
+                          </Text>
+                          <Text style={styles.resultSupportMetaText}>
+                            Parse confidence: {rerouteRenderModel.screenshotSummary.parseConfidence}
+                          </Text>
+                          <Text style={styles.resultSupportMetaText}>
+                            Rotations parsed: {String(rerouteRenderModel.screenshotSummary.rotationCount)}
+                          </Text>
+                          <Text style={styles.resultSupportMetaText}>
+                            Legs detected: {String(rerouteRenderModel.screenshotSummary.legsDetected)}
+                          </Text>
+                          <Text style={styles.resultSupportMetaText}>
+                            Fallback regex legs parsed: {String(rerouteRenderModel.screenshotSummary.fallbackRegexLegsParsed)}
+                          </Text>
+                          {rerouteRenderModel.screenshotSummary.extractionNotes.map((item) => (
+                            <Text key={item} style={styles.resultSupportMetaText}>{item}</Text>
+                          ))}
+                          {rerouteRenderModel.screenshotSummary.missingParseItems.length > 0 ? (
+                            <View style={styles.sectionStack}>
+                              {rerouteRenderModel.screenshotSummary.missingParseItems.map((item) => (
+                                <Text key={item} style={styles.resultBodyText}>• {item}</Text>
+                              ))}
+                            </View>
+                          ) : null}
+                          {rerouteRenderModel.screenshotSummary.structuredJsonParseError ? (
+                            <Text style={styles.resultBodyText}>
+                              Structured JSON parse error: {rerouteRenderModel.screenshotSummary.structuredJsonParseError}
+                            </Text>
+                          ) : null}
+                          {rerouteRenderModel.screenshotSummary.rawVisionResponsePreview.length > 0 ? (
+                            <View style={styles.sectionStack}>
+                              <Text style={styles.inputLabel}>Raw vision response preview</Text>
+                              {rerouteRenderModel.screenshotSummary.rawVisionResponsePreview.map((item, index) => (
+                                <Text key={`vision-${index}-${item.slice(0, 24)}`} style={styles.resultBodyText}>
+                                  {item}
+                                </Text>
+                              ))}
+                            </View>
+                          ) : null}
+                          {rerouteRenderModel.screenshotSummary.rawTextPreview.length > 0 ? (
+                            <View style={styles.sectionStack}>
+                              <Text style={styles.inputLabel}>Raw text preview</Text>
+                              {rerouteRenderModel.screenshotSummary.rawTextPreview.map((item, index) => (
+                                <Text key={`${index}-${item.slice(0, 24)}`} style={styles.resultBodyText}>
+                                  {item}
+                                </Text>
+                              ))}
+                            </View>
+                          ) : null}
+                            </>
+                          )}
+                        </View>
+                      ) : null}
+
                       <TouchableOpacity
                         style={styles.evidenceAccordion}
                         onPress={() => setRerouteDetectedFactsOpen((current) => !current)}
@@ -2456,6 +5336,32 @@ export default function App() {
                             <Text style={styles.resultSupportMetaText}>
                               analysis {String(rerouteRenderModel.currentAnalysisId)} / result {String(rerouteRenderModel.resultAnalysisId)} / facts {rerouteRenderModel.detectedFactsSource}
                             </Text>
+                          ) : null}
+                          {rerouteRenderModel.screenshotSummary ? (
+                            <View style={styles.sectionStack}>
+                              <Text style={styles.inputLabel}>Screenshot parser diagnostics</Text>
+                              <Text style={styles.resultSupportMetaText}>
+                                screenshotParsingActive: {String(rerouteRenderModel.screenshotSummary.screenshotParsingActive)}
+                              </Text>
+                              <Text style={styles.resultSupportMetaText}>
+                                original screenshot count: {String(rerouteRenderModel.screenshotSummary.originalScreenshotsRead)}
+                              </Text>
+                              <Text style={styles.resultSupportMetaText}>
+                                changed screenshot count: {String(rerouteRenderModel.screenshotSummary.changedScreenshotsRead)}
+                              </Text>
+                              <Text style={styles.resultSupportMetaText}>
+                                parse confidence: {rerouteRenderModel.screenshotSummary.parseConfidence}
+                              </Text>
+                              <Text style={styles.resultSupportMetaText}>
+                                rotations parsed: {String(rerouteRenderModel.screenshotSummary.rotationCount)}
+                              </Text>
+                              <Text style={styles.resultSupportMetaText}>
+                                legs parsed: {String(rerouteRenderModel.screenshotSummary.legsDetected)}
+                              </Text>
+                              <Text style={styles.resultSupportMetaText}>
+                                fallback regex legs parsed: {String(rerouteRenderModel.screenshotSummary.fallbackRegexLegsParsed)}
+                              </Text>
+                            </View>
                           ) : null}
                           <View style={styles.formRow}>
                             <ResultLine
@@ -2537,6 +5443,89 @@ export default function App() {
                               }
                             />
                           </View>
+                          {rerouteRenderModel.screenshotSummary?.parsedLegs.length ? (
+                            <View style={styles.sectionStack}>
+                              <Text style={styles.inputLabel}>Parsed legs</Text>
+                              {rerouteRenderModel.screenshotSummary.parsedLegs.map((leg, index) => {
+                                const origin = typeof leg.origin === "string" ? leg.origin : "";
+                                const destination = typeof leg.destination === "string" ? leg.destination : "";
+                                const route =
+                                  origin && destination
+                                    ? `${origin}-${destination}`
+                                    : typeof leg.flightNumber === "string"
+                                      ? leg.flightNumber
+                                      : "Unknown";
+                                const legType =
+                                  typeof leg.type === "string"
+                                    ? leg.type === "deadhead"
+                                      ? "DH"
+                                      : leg.type === "flight"
+                                        ? "Flight"
+                                        : "Leg"
+                                    : "Leg";
+                                const dep = typeof leg.depTime === "string" ? leg.depTime : "";
+                                const arr = typeof leg.arrTime === "string" ? leg.arrTime : "";
+                                const block =
+                                  typeof leg.blockMinutes === "number"
+                                    ? rerouteFormatMinutes(leg.blockMinutes)
+                                    : "Unknown";
+                                const turn =
+                                  typeof leg.turnMinutes === "number"
+                                    ? rerouteFormatMinutes(leg.turnMinutes)
+                                    : "Unknown";
+                                const sourceType =
+                                  typeof leg.sourceType === "string"
+                                    ? leg.sourceType === "rerouted"
+                                      ? "changed"
+                                      : leg.sourceType
+                                    : "unknown";
+                                const flightNumber =
+                                  typeof leg.flightNumber === "string" ? leg.flightNumber : "";
+                                const imageIndex =
+                                  typeof leg.sourceImageIndex === "number" ? leg.sourceImageIndex : undefined;
+                                const classification =
+                                  typeof leg.classification === "string" ? leg.classification : "";
+                                const classificationReason =
+                                  typeof leg.classificationReason === "string" ? leg.classificationReason : "";
+                                return (
+                                  <Text key={`${route}-${dep}-${arr}-${index}`} style={styles.resultBodyText}>
+                                    • {sourceType} • {legType}
+                                    {flightNumber ? ` ${flightNumber}` : ""} {route}
+                                    {dep || arr ? ` ${dep || "?"}-${arr || "?"}` : ""} • Block {block}
+                                    {imageIndex != null ? ` • image ${imageIndex + 1}` : ""} • Turn {turn}
+                                    {classification ? ` • ${classification}` : ""}
+                                    {classificationReason ? ` • ${classificationReason}` : ""}
+                                  </Text>
+                                );
+                              })}
+                            </View>
+                          ) : rerouteRenderModel.detectedLegs.length > 0 ? (
+                            <View style={styles.sectionStack}>
+                              <Text style={styles.inputLabel}>Parsed legs</Text>
+                              {rerouteRenderModel.detectedLegs.map((leg, index) => {
+                                const origin = typeof leg.origin === "string" ? leg.origin : "";
+                                const destination = typeof leg.destination === "string" ? leg.destination : "";
+                                const route =
+                                  origin && destination
+                                    ? `${origin}-${destination}`
+                                    : typeof leg.flightNumber === "string"
+                                      ? leg.flightNumber
+                                      : "Unknown";
+                                const dep = typeof leg.departureTime === "string" ? leg.departureTime : "";
+                                const arr = typeof leg.arrivalTime === "string" ? leg.arrivalTime : "";
+                                const block =
+                                  typeof leg.blockMinutes === "number"
+                                    ? rerouteFormatMinutes(leg.blockMinutes)
+                                    : "Unknown";
+                                return (
+                                  <Text key={`${route}-${dep}-${arr}-${index}`} style={styles.resultBodyText}>
+                                    • {route}
+                                    {dep || arr ? ` ${dep || "?"}-${arr || "?"}` : ""} • Block {block}
+                                  </Text>
+                                );
+                              })}
+                            </View>
+                          ) : null}
                         </View>
                       ) : null}
 
@@ -3721,8 +6710,14 @@ export default function App() {
             key={tab.key}
             icon={tab.icon}
             label={tab.label}
-            active={activeTab === tab.key}
-            onPress={() => setActiveTab(tab.key)}
+            active={activeBottomTabKey === tab.key}
+            onPress={() => {
+              if (!canOpenRotationSecondaryTabs && (tab.key === "far117" || tab.key === "logbook")) {
+                setRotationAnalyzeError("Load a rotation first to open FAR 117 and Logbook.");
+                return;
+              }
+              setActiveTab(tab.key);
+            }}
           />
         ))}
       </View>
@@ -7443,6 +10438,81 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: appStylePalette.borderStrong,
   },
+  resultPanelSubtle: {
+    backgroundColor: appStylePalette.surfaceRaised,
+    borderRadius: 12,
+    padding: 12,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: appStylePalette.borderSubtle,
+  },
+  deadheadLegPanel: {
+    backgroundColor: appStylePalette.surfaceRaised,
+    borderColor: appStylePalette.textMuted,
+    opacity: 0.92,
+  },
+  rotationLegHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  rotationHeroCard: {
+    backgroundColor: appStylePalette.surface,
+    borderRadius: 18,
+    padding: 18,
+    gap: 14,
+    borderWidth: 1.5,
+    borderColor: appStylePalette.borderStrong,
+  },
+  rotationHeroTextBlock: {
+    gap: 8,
+  },
+  rotationHeroTitle: {
+    fontSize: 28,
+    fontWeight: "900",
+    color: appStylePalette.textPrimary,
+  },
+  rotationHeroBody: {
+    fontSize: 15,
+    lineHeight: 23,
+    color: appStylePalette.textSecondary,
+  },
+  rotationHeroButtonRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    alignItems: "center",
+  },
+  rotationInlineUtilityRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    alignItems: "center",
+  },
+  rotationPasteTextarea: {
+    minHeight: 170,
+  },
+  rotationScreenshotPreviewGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+  },
+  rotationScreenshotPreviewCard: {
+    width: 132,
+    backgroundColor: appStylePalette.surfaceRaised,
+    borderRadius: 12,
+    padding: 10,
+    gap: 8,
+    borderWidth: 1.5,
+    borderColor: appStylePalette.borderStrong,
+  },
+  rotationScreenshotPreviewImage: {
+    width: "100%",
+    height: 110,
+    borderRadius: 8,
+    backgroundColor: appStylePalette.surfaceRecessed,
+  },
   quickLinkButton: {
     alignSelf: "flex-start",
     backgroundColor: appStylePalette.surfaceRaised,
@@ -7456,6 +10526,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "800",
     color: appStylePalette.accent,
+  },
+  quickActionGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  quickActionButton: {
+    backgroundColor: appStylePalette.surfaceRaised,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: appStylePalette.borderStrong,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    minWidth: 138,
+  },
+  quickActionButtonText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: appStylePalette.textPrimary,
   },
   whatIfScenarioPanel: {
     flex: 1,
@@ -7651,6 +10740,10 @@ const styles = StyleSheet.create({
   statusBadgeWarning: {
     backgroundColor: "rgba(166,25,46,0.12)",
     color: appStylePalette.redBorder,
+  },
+  deadheadBadge: {
+    backgroundColor: "rgba(120,130,138,0.18)",
+    color: appStylePalette.textMuted,
   },
   resultSummaryText: {
     fontSize: 15,
@@ -9075,5 +12168,36 @@ const styles = StyleSheet.create({
   seniorityMeta: {
     fontSize: 13,
     color: "#41505C",
+  },
+  screenshotAttachmentRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#5F6B76",
+  },
+  screenshotAttachmentThumb: {
+    width: 52,
+    height: 52,
+    borderRadius: 10,
+    backgroundColor: "#AEB7C0",
+  },
+  screenshotAttachmentMeta: {
+    flex: 1,
+    minWidth: 0,
+  },
+  screenshotRemoveButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#5F6B76",
+    backgroundColor: "#D8DDE2",
+  },
+  screenshotRemoveButtonText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#111820",
   },
 });
