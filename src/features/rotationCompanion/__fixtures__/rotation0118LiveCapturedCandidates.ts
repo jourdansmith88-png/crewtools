@@ -80,16 +80,16 @@ export const rotation0118LiveCapturedBuilderInputCandidates: RotationChainCandid
   {
     sourceScreenshotIndex: 3,
     date: "04MAY",
-    flightNumber: "DL9021",
+    flightNumber: "828",
     carrier: "DL",
     departureAirport: "BUR",
     arrivalAirport: "SLC",
-    scheduledOut: "1755 04MAY",
-    scheduledIn: "2045 04MAY",
-    scheduledBlock: "1:50",
+    scheduledOut: "1240 04MAY",
+    scheduledIn: "1540 04MAY +1hr",
+    scheduledBlock: null,
     turn: null,
-    rawSourceLine: "DL9021 BUR-SLC 1755 04MAY 2045 04MAY Confirmation #JLLX3I",
-    sourceText: "DL9021 : BUR-SLC Dep- 1755 04MAY Arr- 2045 04MAY Confirmation #JLLX3I",
+    rawSourceLine: "D DL828 BUR-SLC 1240 04MAY 1540 04MAY +1hr Confirmation #JLLX3I",
+    sourceText: "D DL828 : BUR-SLC Dep- 1240 04MAY Arr- 1540 04MAY +1hr Confirmation #JLLX3I",
   },
 ];
 

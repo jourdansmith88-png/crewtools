@@ -69,6 +69,7 @@ import {
   buildScreenshotUserFacingChain as buildScreenshotUserFacingChainPure,
   computeSnapshotFromUserFacingChain as computeSnapshotFromUserFacingChainPure,
   diagnoseScreenshotRotationPartialStatus as diagnoseScreenshotRotationPartialStatusPure,
+  extractDeadheadAnnotationsFromScreenshotEvidence as extractDeadheadAnnotationsFromScreenshotEvidencePure,
 } from "./src/features/rotationCompanion/rotationChainBuilder";
 import type { RotationChainCandidate } from "./src/features/rotationCompanion/rotationChainBuilder";
 import { fliegerTypography, getFliegerPalette } from "./src/theme/flieger";
@@ -894,6 +895,26 @@ function buildScreenshotBackedDashboardModel(
       excludeFromLogbookExport: false,
     };
   });
+  const selectedSeedKeys = new Set(rawFinalOrderedChain.map((candidate) => buildBuilderCandidateStableKey(candidate)));
+  const visibleLegKeys = new Set(userFacingLegs.map((candidate) => buildBuilderCandidateStableKey(candidate)));
+  const discardedFragments = rawFinalOrderedChain.filter(
+    (candidate) => !visibleLegKeys.has(buildBuilderCandidateStableKey(candidate)),
+  );
+  const unmatchedCandidates = runtimeBuilderInputCandidates.filter(
+    (candidate) => !selectedSeedKeys.has(buildBuilderCandidateStableKey(candidate)),
+  );
+  const deadheadAnnotations = extractDeadheadAnnotationsFromScreenshotEvidencePure({
+    userFacingLegs,
+    discardedFragments,
+    unmatchedCandidates,
+    builderInputCandidates: runtimeBuilderInputCandidates,
+    rotationBase: header.base ?? userFacingLegs[0]?.departureAirport ?? null,
+  });
+  const deadheadReturnHome = deadheadAnnotations.find(
+    (annotation) =>
+      (annotation.destination ?? "").toUpperCase() ===
+      (header.base ?? userFacingLegs[0]?.departureAirport ?? "").toUpperCase(),
+  );
   const snapshotComputation = computeSnapshotFromUserFacingChainPure({
     userFacingLegs,
     headerScheduledBlockMinutes: screenshotParseResult.ok
@@ -911,6 +932,10 @@ function buildScreenshotBackedDashboardModel(
       endDate: header.endDate,
     },
   });
+  const shouldDowngradePartialToDeadheadReturn =
+    partialDiagnosis.isPartial &&
+    (partialDiagnosis.partialReason ?? "").includes("does not return to base") &&
+    Boolean(deadheadReturnHome);
   const operatingLegs = userFacingLegs;
   const operatingBlockMinutes = snapshotComputation.computedUserFacingScheduledBlock;
   const deadheadBlockMinutes = 0;
@@ -966,11 +991,20 @@ function buildScreenshotBackedDashboardModel(
       }
     : dashboard.nextLeg;
 
-  const partialWhatMattersCard = partialDiagnosis.isPartial
+  const partialWhatMattersCard = partialDiagnosis.isPartial && !shouldDowngradePartialToDeadheadReturn
     ? {
         label: "Partial rotation",
         tone: "watch" as const,
         detail: `This screenshot set does not appear to include the full rotation. The visible chain ends at ${lastOrderedLeg ? `${lastOrderedLeg.departureAirport ?? "?"}-${lastOrderedLeg.arrivalAirport ?? "?"}` : "the current last visible leg"} with final arrival ${snapshotComputation.finalArrival}${partialDiagnosis.rotationBase ? ` instead of returning to ${partialDiagnosis.rotationBase}` : ""}. Add the remaining screenshot(s) or paste the full rotation text.`,
+      }
+    : null;
+  const deadheadWhatMattersCard = deadheadReturnHome
+    ? {
+        label: "DEADHEAD HOME",
+        tone: "watch" as const,
+        detail: `Deadhead ${deadheadReturnHome.cityPair} on ${deadheadReturnHome.carrier ?? "DL"}${deadheadReturnHome.flightNumber ? deadheadReturnHome.flightNumber : ""} departs ${deadheadReturnHome.scheduledOut ?? "TBD"}${deadheadReturnHome.confirmationCode ? `. Confirmation #${deadheadReturnHome.confirmationCode}.` : "."}`,
+        actionLabel: deadheadReturnHome.confirmationCode ? "Copy confirmation code" : undefined,
+        actionCopyValue: deadheadReturnHome.confirmationCode ?? undefined,
       }
     : null;
 
@@ -995,7 +1029,7 @@ function buildScreenshotBackedDashboardModel(
   }
 
   const partialBannerVisible =
-    partialDiagnosis.isPartial ||
+    (!shouldDowngradePartialToDeadheadReturn && partialDiagnosis.isPartial) ||
     (!shouldTreatRotationAsFull &&
       (dashboard.parsedRotation.isPartial || dashboard.parsedRotation.missingSections.length > 0));
   const visibleRotationSourceDebug = {
@@ -1075,9 +1109,13 @@ function buildScreenshotBackedDashboardModel(
     },
     legs: mappedUserFacingLegs,
     nextLeg,
-    whatMatters: partialWhatMattersCard
-      ? [partialWhatMattersCard]
-      : dashboard.whatMatters.filter((card) => card.label !== "FAR 117 watch"),
+    whatMatters: [
+      ...(deadheadWhatMattersCard ? [deadheadWhatMattersCard] : []),
+      ...(partialWhatMattersCard ? [partialWhatMattersCard] : []),
+      ...(!deadheadWhatMattersCard && !partialWhatMattersCard
+        ? dashboard.whatMatters.filter((card) => card.label !== "FAR 117 watch")
+        : []),
+    ],
     dutyDays: screenshotDutyPeriods.map((period) => ({
       label: `Day ${period.dayNumber}`,
       scheduledBlockMinutes: period.scheduledBlock,
@@ -1121,7 +1159,12 @@ function buildScreenshotBackedDashboardModel(
         ? partialDiagnosis.partialReason ?? dashboard.parsedRotation.partialReason
         : null,
       parserWarnings: Array.from(new Set(parserWarnings)),
+      deadheadAnnotations,
     },
+    note:
+      shouldDowngradePartialToDeadheadReturn && deadheadReturnHome
+        ? `${dashboard.note ?? ""}${dashboard.note ? " " : ""}Return to base appears to be by deadhead: ${deadheadReturnHome.cityPair}.`
+        : dashboard.note,
   };
 }
 
@@ -3984,21 +4027,38 @@ export default function App() {
                       }
                     />
                   </FormRow>
-                    <FormRow>
-                      <ResultLine
-                        label="Operating legs"
-                        value={String(rotationDashboard.parsedRotation.legs.filter((leg) => !leg.isDeadhead).length)}
-                      />
-                      <ResultLine
-                        label={rotationDashboard.parsedRotation.legs.filter((leg) => leg.isDeadhead).length > 0 ? "DH legs" : "Final arrival"}
-                        value={
-                          rotationDashboard.parsedRotation.legs.filter((leg) => leg.isDeadhead).length > 0
+                  <FormRow>
+                    <ResultLine
+                      label="Operating legs"
+                      value={String(rotationDashboard.parsedRotation.legs.filter((leg) => !leg.isDeadhead).length)}
+                    />
+                    <ResultLine
+                      label={(rotationDashboard.parsedRotation.deadheadAnnotations?.length ?? 0) > 0 ? "DH legs" : rotationDashboard.parsedRotation.legs.filter((leg) => leg.isDeadhead).length > 0 ? "DH legs" : "Final arrival"}
+                      value={
+                          (rotationDashboard.parsedRotation.deadheadAnnotations?.length ?? 0) > 0
+                            ? String(rotationDashboard.parsedRotation.deadheadAnnotations?.length ?? 0)
+                            : rotationDashboard.parsedRotation.legs.filter((leg) => leg.isDeadhead).length > 0
                             ? String(rotationDashboard.parsedRotation.legs.filter((leg) => leg.isDeadhead).length)
                             : rotationDashboard.snapshot.finalArrival
                         }
                       />
                     </FormRow>
-                  {rotationDashboard.parsedRotation.legs.filter((leg) => leg.isDeadhead).length > 0 ? (
+                  {(rotationDashboard.parsedRotation.deadheadAnnotations?.length ?? 0) > 0 ? (
+                    <>
+                      <ResultLine
+                        label="Final operating arrival"
+                        value={rotationDashboard.snapshot.finalArrival}
+                      />
+                      <ResultLine
+                        label="DH return"
+                        value={rotationDashboard.parsedRotation.deadheadAnnotations?.map((annotation) => annotation.cityPair).join(", ") ?? "TBD"}
+                      />
+                      <ResultLine
+                        label="Final arrival after DH"
+                        value={rotationDashboard.parsedRotation.deadheadAnnotations?.at(-1)?.destination ?? rotationDashboard.snapshot.finalArrival}
+                      />
+                    </>
+                  ) : rotationDashboard.parsedRotation.legs.filter((leg) => leg.isDeadhead).length > 0 ? (
                     <ResultLine
                       label="Final arrival"
                       value={rotationDashboard.snapshot.finalArrival}
@@ -4095,6 +4155,16 @@ export default function App() {
                         {item.label}
                       </Text>
                       <Text style={styles.resultBodyText}>{item.detail}</Text>
+                      {item.actionCopyValue && item.actionLabel ? (
+                        <TouchableOpacity
+                          style={styles.quickLinkButton}
+                          onPress={() => copyRotationConfirmationCode(item.actionCopyValue)}
+                        >
+                          <Text style={styles.quickLinkButtonText}>
+                            {rotationCopiedConfirmation === item.actionCopyValue ? "Copied" : item.actionLabel}
+                          </Text>
+                        </TouchableOpacity>
+                      ) : null}
                     </View>
                   ))}
                   {rotationDashboard.whatMatters.some((item) => item.label === "Tight turn") ? (

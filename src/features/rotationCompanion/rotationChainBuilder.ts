@@ -56,6 +56,22 @@ export type ScreenshotRotationPartialDiagnosis = {
   partialReason: string | null;
 };
 
+export type ScreenshotDeadheadAnnotation = {
+  cityPair: string;
+  origin: string;
+  destination: string;
+  carrier?: string | null;
+  flightNumber?: string | null;
+  scheduledOut?: string | null;
+  scheduledIn?: string | null;
+  confirmationCode?: string | null;
+  source: "discardedFragment" | "unmatchedCandidate" | "candidateEvidence";
+  reason:
+    | "confirmation_code"
+    | "leading_D_marker"
+    | "confirmation_code_and_return_to_base";
+};
+
 function extractNormalizedClockToken(value?: string | null) {
   if (!value) {
     return "";
@@ -614,4 +630,109 @@ export function diagnoseScreenshotRotationPartialStatus(args: {
     isPartial,
     partialReason: isPartial ? partialReason : null,
   } satisfies ScreenshotRotationPartialDiagnosis;
+}
+
+function detectDeadheadReason(args: {
+  sourceText?: string | null;
+  confirmationCode?: string | null;
+  destination?: string | null;
+  rotationBase?: string | null;
+}) {
+  const sourceText = args.sourceText ?? "";
+  const hasLeadingDMarker = /\bD\s*(?:DL)?\d{2,4}\b/i.test(sourceText) || /^\s*D[:\s-]/i.test(sourceText);
+  const returnsToBase =
+    Boolean(args.rotationBase) &&
+    (args.destination ?? "").trim().toUpperCase() === (args.rotationBase ?? "").trim().toUpperCase();
+  if (args.confirmationCode && returnsToBase) {
+    return "confirmation_code_and_return_to_base" as const;
+  }
+  if (args.confirmationCode) {
+    return "confirmation_code" as const;
+  }
+  if (hasLeadingDMarker) {
+    return "leading_D_marker" as const;
+  }
+  return null;
+}
+
+function extractConfirmationCode(value?: string | null) {
+  if (!value) {
+    return undefined;
+  }
+  return value.match(/Confirmation\s*#\s*([A-Z0-9]+)/i)?.[1]?.toUpperCase();
+}
+
+export function extractDeadheadAnnotationsFromScreenshotEvidence(args: {
+  userFacingLegs: RotationChainLeg[];
+  discardedFragments?: Array<RotationChainLeg | RotationChainCandidate>;
+  unmatchedCandidates?: Array<RotationChainLeg | RotationChainCandidate>;
+  builderInputCandidates?: Array<RotationChainLeg | RotationChainCandidate>;
+  rotationBase?: string | null;
+}) {
+  const visibleKeys = new Set(args.userFacingLegs.map((leg) => buildStableLegKey(leg)));
+  const candidateGroups: Array<{
+    source: ScreenshotDeadheadAnnotation["source"];
+    candidates: Array<RotationChainLeg | RotationChainCandidate>;
+  }> = [
+    { source: "discardedFragment", candidates: args.discardedFragments ?? [] },
+    { source: "unmatchedCandidate", candidates: args.unmatchedCandidates ?? [] },
+    { source: "candidateEvidence", candidates: args.builderInputCandidates ?? [] },
+  ];
+
+  const bestByKey = new Map<string, ScreenshotDeadheadAnnotation & { score: number }>();
+
+  for (const group of candidateGroups) {
+    for (const candidate of group.candidates) {
+      const key = buildStableLegKey(candidate);
+      if (visibleKeys.has(key)) {
+        continue;
+      }
+      const confirmationCode = candidate.confirmationCode ?? extractConfirmationCode(candidate.sourceText) ?? extractConfirmationCode("rawSourceLine" in candidate ? candidate.rawSourceLine : undefined);
+      const reason = detectDeadheadReason({
+        sourceText: `${candidate.sourceText ?? ""} ${"rawSourceLine" in candidate ? candidate.rawSourceLine ?? "" : ""}`.trim(),
+        confirmationCode,
+        destination: candidate.arrivalAirport,
+        rotationBase: args.rotationBase,
+      });
+      if (!reason) {
+        continue;
+      }
+      const sourceScore =
+        group.source === "discardedFragment" ? 3 : group.source === "unmatchedCandidate" ? 2 : 1;
+      const qualityScore =
+        sourceScore * 10 +
+        (confirmationCode ? 5 : 0) +
+        (candidate.scheduledIn ? 2 : 0) +
+        (candidate.scheduledBlock ? 2 : 0) +
+        (resolveLegDateToken(candidate) ? 1 : 0);
+      const annotation = {
+        cityPair: `${candidate.departureAirport ?? "?"}-${candidate.arrivalAirport ?? "?"}`,
+        origin: candidate.departureAirport ?? "?",
+        destination: candidate.arrivalAirport ?? "?",
+        carrier: candidate.carrier ?? null,
+        flightNumber: candidate.flightNumber ?? null,
+        scheduledOut: candidate.scheduledOut ?? null,
+        scheduledIn: candidate.scheduledIn ?? null,
+        confirmationCode: confirmationCode ?? null,
+        source: group.source,
+        reason,
+        score: qualityScore,
+      };
+      const existing = bestByKey.get(key);
+      if (!existing || annotation.score > existing.score) {
+        bestByKey.set(key, annotation);
+      }
+    }
+  }
+
+  return Array.from(bestByKey.values())
+    .sort((left, right) => {
+      const leftMoment = buildComparableLegMoment(resolveLegDateToken(left as RotationChainLeg), left.scheduledOut) ?? Number.POSITIVE_INFINITY;
+      const rightMoment = buildComparableLegMoment(resolveLegDateToken(right as RotationChainLeg), right.scheduledOut) ?? Number.POSITIVE_INFINITY;
+      if (leftMoment !== rightMoment) {
+        return leftMoment - rightMoment;
+      }
+      return left.cityPair.localeCompare(right.cityPair);
+    })
+    .map(({ score: _score, ...annotation }) => annotation);
 }

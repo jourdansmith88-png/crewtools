@@ -63,6 +63,7 @@ export type ParsedRotation = {
   rejectedCandidateRows: string[];
   micrewLegsParsed: number;
   icrewRowsParsed: number;
+  deadheadAnnotations?: RotationDeadheadAnnotation[];
 };
 
 export type RotationLeg = {
@@ -104,6 +105,24 @@ export type RotationWhatMattersCard = {
   label: string;
   tone: "good" | "watch" | "risk";
   detail: string;
+  actionLabel?: string;
+  actionCopyValue?: string;
+};
+
+export type RotationDeadheadAnnotation = {
+  cityPair: string;
+  origin: string;
+  destination: string;
+  carrier?: string | null;
+  flightNumber?: string | null;
+  scheduledOut?: string | null;
+  scheduledIn?: string | null;
+  confirmationCode?: string | null;
+  source: "discardedFragment" | "unmatchedCandidate" | "candidateEvidence";
+  reason:
+    | "confirmation_code"
+    | "leading_D_marker"
+    | "confirmation_code_and_return_to_base";
 };
 
 export type RotationDutyDay = {

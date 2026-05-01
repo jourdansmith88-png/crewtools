@@ -2,6 +2,7 @@ import {
   buildScreenshotUserFacingChain,
   computeSnapshotFromUserFacingChain,
   diagnoseScreenshotRotationPartialStatus,
+  extractDeadheadAnnotationsFromScreenshotEvidence,
 } from "./rotationChainBuilder.ts";
 import {
   rotationChainFixtures,
@@ -12,6 +13,29 @@ function assert(condition: unknown, message: string) {
   if (!condition) {
     throw new Error(message);
   }
+}
+
+function buildFixtureCandidateKey(candidate: {
+  date?: string | null;
+  departureAirport?: string | null;
+  arrivalAirport?: string | null;
+  carrier?: string | null;
+  flightNumber?: string | null;
+  scheduledOut?: string | null;
+}) {
+  const normalizedClock = candidate.scheduledOut?.match(/\b(\d{3,4})\b/)?.[1] ?? candidate.scheduledOut ?? "";
+  const normalizedDate =
+    candidate.date?.match(/\b(\d{1,2}[A-Z]{3})\b/i)?.[1]?.toUpperCase() ??
+    candidate.scheduledOut?.match(/\b(\d{1,2}[A-Z]{3})\b/i)?.[1]?.toUpperCase() ??
+    "";
+  return [
+    normalizedDate,
+    (candidate.departureAirport ?? "").toUpperCase(),
+    (candidate.arrivalAirport ?? "").toUpperCase(),
+    (candidate.carrier ?? "").toUpperCase(),
+    String(candidate.flightNumber ?? "").toUpperCase(),
+    normalizedClock,
+  ].join("|");
 }
 
 function runFixture(args: RotationChainFixture) {
@@ -30,6 +54,21 @@ function runFixture(args: RotationChainFixture) {
   const partialDiagnosis = diagnoseScreenshotRotationPartialStatus({
     userFacingLegs: chain.userFacingLegs,
     context: args.context,
+  });
+  const selectedSeedKeys = new Set(args.selectedSeedChain.map((candidate) => buildFixtureCandidateKey(candidate)));
+  const visibleKeys = new Set(chain.userFacingLegs.map((candidate) => buildFixtureCandidateKey(candidate)));
+  const discardedFragments = args.selectedSeedChain.filter(
+    (candidate) => !visibleKeys.has(buildFixtureCandidateKey(candidate)),
+  );
+  const unmatchedCandidates = args.builderInputCandidates.filter(
+    (candidate) => !selectedSeedKeys.has(buildFixtureCandidateKey(candidate)),
+  );
+  const deadheadAnnotations = extractDeadheadAnnotationsFromScreenshotEvidence({
+    userFacingLegs: chain.userFacingLegs,
+    discardedFragments,
+    unmatchedCandidates,
+    builderInputCandidates: args.builderInputCandidates,
+    rotationBase: args.context.base,
   });
 
   const visibleRoutes = chain.userFacingLegs.map(
@@ -97,6 +136,39 @@ function runFixture(args: RotationChainFixture) {
       );
     }
   }
+  if (args.expectedDeadheadAnnotations) {
+    assert(
+      deadheadAnnotations.length === args.expectedDeadheadAnnotations.length,
+      `[${args.name}] Expected ${args.expectedDeadheadAnnotations.length} deadhead annotations, got ${deadheadAnnotations.length}`,
+    );
+    for (const expectedAnnotation of args.expectedDeadheadAnnotations) {
+      const matchingAnnotation = deadheadAnnotations.find(
+        (annotation) => annotation.cityPair === expectedAnnotation.cityPair,
+      );
+      assert(
+        matchingAnnotation,
+        `[${args.name}] Expected deadhead annotation ${expectedAnnotation.cityPair}`,
+      );
+      if (expectedAnnotation.carrier) {
+        assert(
+          matchingAnnotation?.carrier === expectedAnnotation.carrier,
+          `[${args.name}] Expected ${expectedAnnotation.cityPair} carrier ${expectedAnnotation.carrier}, got ${matchingAnnotation?.carrier}`,
+        );
+      }
+      if (expectedAnnotation.flightNumber) {
+        assert(
+          String(matchingAnnotation?.flightNumber ?? "") === expectedAnnotation.flightNumber,
+          `[${args.name}] Expected ${expectedAnnotation.cityPair} flight ${expectedAnnotation.flightNumber}, got ${matchingAnnotation?.flightNumber}`,
+        );
+      }
+      if (expectedAnnotation.confirmationCode) {
+        assert(
+          matchingAnnotation?.confirmationCode === expectedAnnotation.confirmationCode,
+          `[${args.name}] Expected ${expectedAnnotation.cityPair} confirmation ${expectedAnnotation.confirmationCode}, got ${matchingAnnotation?.confirmationCode}`,
+        );
+      }
+    }
+  }
   if (args.expectedScheduledBlockSource) {
     assert(
       snapshot.scheduledBlockSource === args.expectedScheduledBlockSource,
@@ -155,6 +227,7 @@ function runFixture(args: RotationChainFixture) {
         scheduledBlockMinutes: snapshot.scheduledBlockMinutes,
         scheduledBlockSource: snapshot.scheduledBlockSource,
         nextFlightCityPair: snapshot.nextFlightCityPair,
+        deadheadAnnotations,
       },
       null,
       2,

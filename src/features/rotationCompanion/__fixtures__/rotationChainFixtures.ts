@@ -64,6 +64,12 @@ export type RotationChainFixture = {
     sourceTextIncludes?: string;
     mustExistInSelectedSeedChain?: boolean;
   }>;
+  expectedDeadheadAnnotations?: ReadonlyArray<{
+    cityPair: string;
+    carrier?: string;
+    flightNumber?: string;
+    confirmationCode?: string;
+  }>;
 };
 
 export const rotationChainFixtures: RotationChainFixture[] = [
@@ -121,6 +127,14 @@ export const rotationChainFixtures: RotationChainFixture[] = [
         cityPair: "BUR-SLC",
         sourceTextIncludes: "Confirmation #JLLX3I",
         mustExistInSelectedSeedChain: true,
+      },
+    ],
+    expectedDeadheadAnnotations: [
+      {
+        cityPair: "BUR-SLC",
+        carrier: "DL",
+        flightNumber: "828",
+        confirmationCode: "JLLX3I",
       },
     ],
   },
