@@ -68,6 +68,7 @@ import {
 import {
   buildScreenshotUserFacingChain as buildScreenshotUserFacingChainPure,
   computeSnapshotFromUserFacingChain as computeSnapshotFromUserFacingChainPure,
+  diagnoseScreenshotRotationPartialStatus as diagnoseScreenshotRotationPartialStatusPure,
 } from "./src/features/rotationCompanion/rotationChainBuilder";
 import type { RotationChainCandidate } from "./src/features/rotationCompanion/rotationChainBuilder";
 import { fliegerTypography, getFliegerPalette } from "./src/theme/flieger";
@@ -842,16 +843,6 @@ function buildScreenshotBackedDashboardModel(
     (candidate) =>
       `${candidate.departureAirport ?? "?"}-${candidate.arrivalAirport ?? "?"} | ${candidate.scheduledOut ?? "?"} | ${candidate.scheduledIn ?? "?"} | ${candidate.scheduledBlock ?? "?"} | ${candidate.carrier ?? "?"} | ${candidate.flightNumber ?? "?"}`,
   );
-  const containsSlcDtwCandidate = runtimeBuilderInputCandidates.some(
-    (candidate) =>
-      (candidate.departureAirport ?? "").toUpperCase() === "SLC" &&
-      (candidate.arrivalAirport ?? "").toUpperCase() === "DTW",
-  );
-  const containsDtwMspCandidate = runtimeBuilderInputCandidates.some(
-    (candidate) =>
-      (candidate.departureAirport ?? "").toUpperCase() === "DTW" &&
-      (candidate.arrivalAirport ?? "").toUpperCase() === "MSP",
-  );
   const chainBuildResult = buildScreenshotUserFacingChainPure({
     rawFinalOrderedChain,
     legCandidates: runtimeBuilderInputCandidates,
@@ -911,6 +902,15 @@ function buildScreenshotBackedDashboardModel(
     fallbackScheduledBlockMinutes: dashboard.snapshot.scheduledBlockMinutes,
     finalArrivalFallback: dashboard.snapshot.finalArrival,
   });
+  const partialDiagnosis = diagnoseScreenshotRotationPartialStatusPure({
+    userFacingLegs,
+    context: {
+      base: header.base ?? userFacingLegs[0]?.departureAirport ?? null,
+      layoverCities: header.layoverCities ?? [],
+      startDate: header.startDate,
+      endDate: header.endDate,
+    },
+  });
   const operatingLegs = userFacingLegs;
   const operatingBlockMinutes = snapshotComputation.computedUserFacingScheduledBlock;
   const deadheadBlockMinutes = 0;
@@ -966,6 +966,14 @@ function buildScreenshotBackedDashboardModel(
       }
     : dashboard.nextLeg;
 
+  const partialWhatMattersCard = partialDiagnosis.isPartial
+    ? {
+        label: "Partial rotation",
+        tone: "watch" as const,
+        detail: `This screenshot set does not appear to include the full rotation. The visible chain ends at ${lastOrderedLeg ? `${lastOrderedLeg.departureAirport ?? "?"}-${lastOrderedLeg.arrivalAirport ?? "?"}` : "the current last visible leg"} with final arrival ${snapshotComputation.finalArrival}${partialDiagnosis.rotationBase ? ` instead of returning to ${partialDiagnosis.rotationBase}` : ""}. Add the remaining screenshot(s) or paste the full rotation text.`,
+      }
+    : null;
+
   const screenshotDutyPeriods = dashboard.parsedRotation.dutyPeriods.map((period) => ({
     ...period,
     status: "Needs full duty period details" as const,
@@ -979,13 +987,17 @@ function buildScreenshotBackedDashboardModel(
   const shouldTreatRotationAsFull =
     headerLooksComplete &&
     userFacingLegs.length > 0 &&
-    snapshotComputation.finalArrival === (header.base ?? snapshotComputation.finalArrival);
+    partialDiagnosis.hasTerminalReturnToBase &&
+    snapshotComputation.finalArrival === (partialDiagnosis.rotationBase ?? snapshotComputation.finalArrival);
   const parserWarnings = [...(dashboard.parsedRotation.parserWarnings ?? []), ...missingBlockWarnings, ...validationWarnings];
   if (shouldTreatRotationAsFull && chainBuildResult.discardedAfterTerminal > 0) {
     parserWarnings.push("Discarded unmatched screenshot fragments after building complete route chain.");
   }
 
-  const partialBannerVisible = !shouldTreatRotationAsFull && (dashboard.parsedRotation.isPartial || dashboard.parsedRotation.missingSections.length > 0);
+  const partialBannerVisible =
+    partialDiagnosis.isPartial ||
+    (!shouldTreatRotationAsFull &&
+      (dashboard.parsedRotation.isPartial || dashboard.parsedRotation.missingSections.length > 0));
   const visibleRotationSourceDebug = {
     usedExportedBuilder: true,
     runtimeBuilderInputSource: liveChainInputSources.selectedSourceName,
@@ -993,8 +1005,6 @@ function buildScreenshotBackedDashboardModel(
     runtimeRawCandidateCount: screenshotParseResult.debug?.legCandidates?.length ?? 0,
     runtimeBuilderInputCandidateCount: runtimeBuilderInputCandidates.length,
     runtimeBuilderInputCandidates: candidateCityPairs,
-    containsSlcDtwCandidate,
-    containsDtwMspCandidate,
     selectedSeedFirstLegBeforeBuilder: rawFinalOrderedChain[0]
       ? `${rawFinalOrderedChain[0]?.departureAirport ?? "?"}-${rawFinalOrderedChain[0]?.arrivalAirport ?? "?"}`
       : "unknown",
@@ -1024,16 +1034,6 @@ function buildScreenshotBackedDashboardModel(
     logbookLegCount: userFacingLegs.length,
     lastLogbookLeg: lastOrderedLeg ? `${lastOrderedLeg.departureAirport ?? "?"}-${lastOrderedLeg.arrivalAirport ?? "?"}` : "unknown",
   };
-  const is0983RegressionFixture =
-    (header?.rotationNumber ?? dashboard.snapshot.rotationNumber) === "0983" &&
-    (header?.startDate ?? "") === "17MAR" &&
-    (header?.endDate ?? "") === "20MAR";
-  const fixtureExpectedFor0983Matched =
-    userFacingLegs.length === 9 &&
-    visibleRotationSourceDebug.firstUserFacingLeg === "SLC-DTW" &&
-    visibleRotationSourceDebug.lastUserFacingLeg === "SAT-SLC" &&
-    snapshotComputation.finalArrival === "SLC" &&
-    snapshotComputation.nextFlightCityPair === "SLC-DTW";
   if (__DEV__) {
     console.log("LIVE_CHAIN_BUILDER_PARITY_DEBUG", {
       usedExportedBuilder: true,
@@ -1041,8 +1041,6 @@ function buildScreenshotBackedDashboardModel(
       runtimeRawCandidateCount: visibleRotationSourceDebug.runtimeRawCandidateCount,
       runtimeBuilderInputCandidateCount: runtimeBuilderInputCandidates.length,
       runtimeBuilderInputCandidates: candidateCityPairs,
-      containsSlcDtwCandidate,
-      containsDtwMspCandidate,
       selectedSeedFirstLegBeforeBuilder: visibleRotationSourceDebug.selectedSeedFirstLegBeforeBuilder,
       runtimeBuilderUserFacingCount: userFacingLegs.length,
       runtimeUserFacingLegs: userFacingLegs.map(
@@ -1057,44 +1055,7 @@ function buildScreenshotBackedDashboardModel(
       runtimeScheduledBlockSource: snapshotComputation.scheduledBlockSource,
       runtimeNextFlight: snapshotComputation.nextFlightCityPair,
       runtimeLogbookLegCount: userFacingLegs.length,
-      fixtureExpectedFor0983Matched,
     });
-    if (is0983RegressionFixture && !fixtureExpectedFor0983Matched) {
-      console.warn("LIVE_0983_REGRESSION_FAILURE", {
-        runtimeCandidateList: screenshotParseResult.debug?.legCandidates?.map(
-          (leg) =>
-            `${leg.date ?? "?"} ${leg.departureAirport ?? "?"}-${leg.arrivalAirport ?? "?"} ${leg.scheduledOut ?? "?"} ${leg.scheduledIn ?? "?"}`,
-        ) ?? [],
-        builderInputList: rawFinalOrderedChain.map(
-          (leg) =>
-            `${leg.date ?? "?"} ${leg.departureAirport ?? "?"}-${leg.arrivalAirport ?? "?"} ${leg.scheduledOut ?? "?"} ${leg.scheduledIn ?? "?"}`,
-        ),
-        liveChainBuilderParityDebug: {
-          usedExportedBuilder: true,
-          runtimeBuilderInputSource: liveChainInputSources.selectedSourceName,
-          runtimeRawCandidateCount: visibleRotationSourceDebug.runtimeRawCandidateCount,
-          runtimeBuilderInputCandidateCount: runtimeBuilderInputCandidates.length,
-          runtimeBuilderInputCandidates: candidateCityPairs,
-          containsSlcDtwCandidate,
-          containsDtwMspCandidate,
-          selectedSeedFirstLegBeforeBuilder: visibleRotationSourceDebug.selectedSeedFirstLegBeforeBuilder,
-          runtimeBuilderUserFacingCount: userFacingLegs.length,
-          runtimeUserFacingLegs: userFacingLegs.map(
-            (leg) => `${leg.departureAirport ?? "?"}-${leg.arrivalAirport ?? "?"}`,
-          ),
-          builderOutputFirstLeg: visibleRotationSourceDebug.builderOutputFirstLeg,
-          builderOutputLegCount: visibleRotationSourceDebug.builderOutputLegCount,
-          runtimeFirstLeg: visibleRotationSourceDebug.firstUserFacingLeg,
-          runtimeLastLeg: visibleRotationSourceDebug.lastUserFacingLeg,
-          runtimeFinalArrival: snapshotComputation.finalArrival,
-          runtimeScheduledBlock: snapshotComputation.scheduledBlockMinutes,
-          runtimeScheduledBlockSource: snapshotComputation.scheduledBlockSource,
-          runtimeNextFlight: snapshotComputation.nextFlightCityPair,
-          runtimeLogbookLegCount: userFacingLegs.length,
-          fixtureExpectedFor0983Matched,
-        },
-      });
-    }
   }
 
   return {
@@ -1114,7 +1075,9 @@ function buildScreenshotBackedDashboardModel(
     },
     legs: mappedUserFacingLegs,
     nextLeg,
-    whatMatters: dashboard.whatMatters.filter((card) => card.label !== "FAR 117 watch"),
+    whatMatters: partialWhatMattersCard
+      ? [partialWhatMattersCard]
+      : dashboard.whatMatters.filter((card) => card.label !== "FAR 117 watch"),
     dutyDays: screenshotDutyPeriods.map((period) => ({
       label: `Day ${period.dayNumber}`,
       scheduledBlockMinutes: period.scheduledBlock,
@@ -1154,7 +1117,9 @@ function buildScreenshotBackedDashboardModel(
       })),
       visibleLegCount: mappedUserFacingLegs.length,
       isPartial: partialBannerVisible,
-      partialReason: partialBannerVisible ? dashboard.parsedRotation.partialReason : null,
+      partialReason: partialBannerVisible
+        ? partialDiagnosis.partialReason ?? dashboard.parsedRotation.partialReason
+        : null,
       parserWarnings: Array.from(new Set(parserWarnings)),
     },
   };
@@ -1552,7 +1517,6 @@ export default function App() {
   const [rotationParseTraceOpen, setRotationParseTraceOpen] = useState<Record<string, boolean>>({});
   const [rotationCopiedConfirmation, setRotationCopiedConfirmation] = useState<string | null>(null);
   const [rotationCopiedDebugJson, setRotationCopiedDebugJson] = useState(false);
-  const [rotationCopiedHeaderBlockDebugJson, setRotationCopiedHeaderBlockDebugJson] = useState(false);
   const [rotationToolBanner, setRotationToolBanner] = useState<RotationToolBanner | null>(null);
   const [contractCopilotStarterQuestion, setContractCopilotStarterQuestion] = useState("");
   const [quickContacts, setQuickContacts] = useState<QuickContacts>({
@@ -1591,6 +1555,12 @@ export default function App() {
     priority: "upgrade-in-base",
     goalCategories: [],
   });
+  const rotationDebugEnabled = useMemo(() => {
+    if (Platform.OS !== "web" || typeof window === "undefined") {
+      return false;
+    }
+    return new URLSearchParams(window.location.search).get("rotationDebug") === "1";
+  }, []);
   const [mobilePreferencesLoaded, setMobilePreferencesLoaded] = useState(false);
   const [mobilePreferencesEditing, setMobilePreferencesEditing] = useState(true);
   const [mobilePreferencesEditorInitialized, setMobilePreferencesEditorInitialized] = useState(false);
@@ -1663,6 +1633,8 @@ export default function App() {
     setRotationAnalyzeError("");
     setRotationDashboard(null);
     setRotationScreenshotParseResult(null);
+    setRotationCopiedDebugJson(false);
+    setRotationParseTraceOpen({});
     setRotationToolBanner(null);
     setContractCopilotStarterQuestion("");
     setActiveTab("today");
@@ -1759,6 +1731,8 @@ export default function App() {
       );
       Promise.all(readers)
         .then((attachments) => {
+          setRotationScreenshotParseResult(null);
+          setRotationCopiedDebugJson(false);
           setRotationScreenshots((current) => [...current, ...attachments]);
           setRotationAnalyzeError("");
         })
@@ -1770,10 +1744,14 @@ export default function App() {
   };
 
   const removeRotationScreenshot = (index: number) => {
+    setRotationScreenshotParseResult(null);
+    setRotationCopiedDebugJson(false);
     setRotationScreenshots((current) => current.filter((_, currentIndex) => currentIndex !== index));
   };
 
   const clearRotationScreenshots = () => {
+    setRotationScreenshotParseResult(null);
+    setRotationCopiedDebugJson(false);
     setRotationScreenshots([]);
   };
 
@@ -1854,116 +1832,6 @@ export default function App() {
     }
   };
 
-  const copyHeaderBlockDebugJson = async () => {
-    if (Platform.OS !== "web" || typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
-      setRotationAnalyzeError("Copy header/block debug JSON is currently available in the web build only.");
-      return;
-    }
-    try {
-      const payload =
-        rotationDashboard && rotationScreenshotParseResult?.debug
-          ? (() => {
-              const liveChainInputSources = getLiveChainInputSources(
-                rotationScreenshotParseResult as RotationScreenshotParseResponse & {
-                  debug: NonNullable<RotationScreenshotParseResponse["debug"]>;
-                },
-              );
-              const rawHeaderTextCandidates = [
-                ...rotationScreenshotParseResult.debug.perScreenshotTrace.map((trace) => trace.rawExtractedText ?? ""),
-                ...(rotationScreenshotParseResult.debug.rawTextPreview ?? []),
-              ].filter(Boolean);
-              const extractedSummaryText = [
-                rotationScreenshotParseResult.debug.parsedHeader?.rotationNumber
-                  ? `Rotation # ${rotationScreenshotParseResult.debug.parsedHeader.rotationNumber}`
-                  : null,
-                rotationScreenshotParseResult.debug.parsedHeader?.startDate || rotationScreenshotParseResult.debug.parsedHeader?.endDate
-                  ? `Trip dates ${rotationScreenshotParseResult.debug.parsedHeader?.startDate ?? "?"} - ${rotationScreenshotParseResult.debug.parsedHeader?.endDate ?? "?"}`
-                  : null,
-                rotationScreenshotParseResult.debug.parsedHeader?.totalCredit
-                  ? `Credit ${rotationScreenshotParseResult.debug.parsedHeader.totalCredit}`
-                  : null,
-                rotationScreenshotParseResult.debug.parsedHeader?.totalScheduledBlock
-                  ? `Block ${rotationScreenshotParseResult.debug.parsedHeader.totalScheduledBlock}`
-                  : null,
-                rotationScreenshotParseResult.debug.parsedHeader?.tafb
-                  ? `TAFB ${rotationScreenshotParseResult.debug.parsedHeader.tafb}`
-                  : null,
-                rotationScreenshotParseResult.debug.parsedHeader?.reportTime
-                  ? `Report ${rotationScreenshotParseResult.debug.parsedHeader.reportTime}`
-                  : null,
-                rotationScreenshotParseResult.debug.parsedHeader?.releaseTime
-                  ? `Release ${rotationScreenshotParseResult.debug.parsedHeader.releaseTime}`
-                  : null,
-              ].filter(Boolean);
-              const combinedNormalizedText = rotationScreenshotParseResult.ok
-                ? rotationScreenshotParseResult.normalizedText
-                : "No normalized text available.";
-              const allDetectedTimeCreditPairs = extractHeaderBlockTimeCreditPairs([
-                ...rawHeaderTextCandidates,
-                ...extractedSummaryText,
-                combinedNormalizedText,
-              ]);
-              return {
-                rotationNumber: rotationDashboard.snapshot.rotationNumber,
-                tripDates: rotationDashboard.snapshot.tripDates,
-                headerTotals: {
-                  parsedHeader: rotationScreenshotParseResult.debug.parsedHeader,
-                  extractedTotals: rotationScreenshotParseResult.ok ? rotationScreenshotParseResult.extracted?.totals : null,
-                },
-                scheduledBlockDisplayed: rotationDashboard.snapshot.scheduledBlockMinutes,
-                scheduledBlockSource:
-                  typeof (rotationScreenshotParseResult.ok
-                    ? rotationScreenshotParseResult.extracted?.totals?.totalScheduledBlockMinutes
-                    : undefined) === "number" &&
-                  (rotationScreenshotParseResult.ok
-                    ? rotationScreenshotParseResult.extracted?.totals?.totalScheduledBlockMinutes
-                    : undefined)! > 0
-                    ? "header"
-                    : rotationDashboard.snapshot.scheduledBlockMinutes > 0
-                      ? "computedFromUserFacingLegs"
-                      : "fallback",
-                computedUserFacingScheduledBlock: rotationDashboard.parsedRotation.legs.reduce(
-                  (sum, leg) => sum + (leg.scheduledBlock ?? 0),
-                  0,
-                ),
-                rawHeaderTextCandidates,
-                extractedSummaryText,
-                combinedNormalizedText,
-                screenshotExtractionNotes: rotationScreenshotParseResult.debug.extractionNotes,
-                allDetectedTimeCreditPairs,
-                rotationSnapshotSourceFields: {
-                  note: rotationDashboard.note,
-                  snapshot: rotationDashboard.snapshot,
-                  parsedRotationVisibleLegCount: rotationDashboard.parsedRotation.visibleLegCount,
-                  selectedBuilderInputSource: liveChainInputSources.selectedSourceName,
-                },
-                builderOutputUserFacingLegs: rotationDashboard.legs.map((leg) => ({
-                  dayLabel: leg.dayLabel,
-                  origin: leg.origin,
-                  destination: leg.destination,
-                  flightNumber: leg.flightNumber,
-                  departureTime: leg.departureTime,
-                  arrivalTime: leg.arrivalTime,
-                  scheduledBlockMinutes: leg.scheduledBlockMinutes ?? null,
-                })),
-              };
-            })()
-          : {
-              error: "payload missing",
-              availableTopLevelKeys: {
-                hasRotationDashboard: Boolean(rotationDashboard),
-                hasRotationScreenshotParseResult: Boolean(rotationScreenshotParseResult),
-              },
-            };
-      await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
-      setRotationCopiedHeaderBlockDebugJson(true);
-      setRotationAnalyzeError("");
-      setTimeout(() => setRotationCopiedHeaderBlockDebugJson(false), 2000);
-    } catch (error) {
-      setRotationAnalyzeError(error instanceof Error ? error.message : "Unable to copy header/block debug JSON.");
-    }
-  };
-
   const parseRotationScreenshots = async (): Promise<RotationScreenshotParseResponse> => {
     const response = await fetch("/api/ai/rotation-companion/parse-screenshots", {
       method: "POST",
@@ -1992,6 +1860,7 @@ export default function App() {
     setRotationAnalyzeBusy(true);
     setRotationAnalyzeError("");
     setRotationScreenshotParseResult(null);
+    setRotationCopiedDebugJson(false);
     try {
       const hasText = rotationPasteInput.trim().length > 0;
       const hasScreenshots = rotationScreenshots.length > 0;
@@ -2077,6 +1946,7 @@ export default function App() {
     setRotationPasteInput(SAMPLE_ROTATION_TEXT);
     setRotationAnalyzeError("");
     setRotationScreenshotParseResult(null);
+    setRotationCopiedDebugJson(false);
     const sampleDashboard = buildRotationDashboardData(SAMPLE_ROTATION_TEXT);
     setRotationDashboard(sampleDashboard);
     setActiveTab("today");
@@ -3967,19 +3837,6 @@ export default function App() {
           >
               DATA. DECISION. ACTION.
           </Text>
-          {__DEV__ ? (
-            <Text
-              style={[
-                  styles.resultSupportMetaText,
-                  {
-                    color: flieger.label,
-                    textAlign: "center",
-                  },
-                ]}
-            >
-                BUILD 2026-04-30-DEBUG
-            </Text>
-          ) : null}
           </View>
         </View>
 
@@ -4005,7 +3862,7 @@ export default function App() {
                       {liveChainInputSources.sourceSummaries.map((source) => (
                         <View key={source.name} style={styles.resultPanelSubtle}>
                           <Text style={styles.resultSupportMetaText}>
-                            {source.name}: count={source.count} • contains SLC-DTW={source.containsSlcDtw ? "true" : "false"} • contains DTW-MSP={source.containsDtwMsp ? "true" : "false"} • contains MSP-RDU={source.containsMspRdu ? "true" : "false"} • contains SAT-SLC={source.containsSatSlc ? "true" : "false"}
+                            {source.name}: count={source.count}
                           </Text>
                           <Text style={styles.resultSupportMetaText}>
                             {source.count < 25
@@ -4154,31 +4011,12 @@ export default function App() {
                   {rotationDashboard.note ? (
                     <Text style={styles.insightText}>{rotationDashboard.note}</Text>
                   ) : null}
-                  {(rotationScreenshots.length > 0 ||
-                    rotationDashboard.parsedRotation.sourceTypes === "screenshots" ||
-                    rotationDashboard.parsedRotation.sourceTypes === "mixed" ||
-                    Boolean(rotationScreenshotParseResult)) ? (
-                    <>
-                      <Text style={styles.resultSupportMetaText}>DEBUG HEADER BLOCK ACTIVE</Text>
-                      <Text style={styles.resultSupportMetaText}>
-                        scheduledBlockSource: {rotationScreenshotParseResult?.ok &&
-                        typeof rotationScreenshotParseResult.extracted?.totals?.totalScheduledBlockMinutes === "number" &&
-                        rotationScreenshotParseResult.extracted.totals.totalScheduledBlockMinutes > 0
-                          ? "header"
-                          : rotationDashboard.snapshot.scheduledBlockMinutes > 0
-                            ? "computedFromUserFacingLegs"
-                            : "fallback"} • headerScheduledBlockMinutes:{" "}
-                        {rotationScreenshotParseResult?.ok
-                          ? rotationScreenshotParseResult.extracted?.totals?.totalScheduledBlockMinutes ?? "null"
-                          : "null"} • computedUserFacingScheduledBlock:{" "}
-                        {rotationDashboard.parsedRotation.legs.reduce((sum, leg) => sum + (leg.scheduledBlock ?? 0), 0)}
-                      </Text>
-                      <TouchableOpacity style={styles.quickLinkButton} onPress={copyHeaderBlockDebugJson}>
+                  {rotationDebugEnabled && (rotationScreenshots.length > 0 || rotationScreenshotParseResult) ? (
+                    <TouchableOpacity style={styles.quickLinkButton} onPress={copyLiveChainDebugJson}>
                         <Text style={styles.quickLinkButtonText}>
-                          {rotationCopiedHeaderBlockDebugJson ? "Copied header/block debug JSON" : "COPY HEADER/BLOCK DEBUG JSON"}
+                          {rotationCopiedDebugJson ? "Copied live chain debug JSON" : "Copy live chain debug JSON"}
                         </Text>
                       </TouchableOpacity>
-                    </>
                   ) : null}
                 </View>
 
@@ -4577,12 +4415,16 @@ export default function App() {
                     )}
 
                     <Text style={styles.resultBodyText}>Combined normalized text</Text>
-                    <Text style={styles.resultBodyText}>Live chain debug JSON</Text>
-                    <TouchableOpacity style={styles.quickLinkButton} onPress={copyLiveChainDebugJson}>
-                      <Text style={styles.quickLinkButtonText}>
-                        {rotationCopiedDebugJson ? "Copied live chain debug JSON" : "Copy live chain debug JSON"}
-                      </Text>
-                    </TouchableOpacity>
+                    {rotationDebugEnabled ? (
+                      <>
+                        <Text style={styles.resultBodyText}>Live chain debug JSON</Text>
+                        <TouchableOpacity style={styles.quickLinkButton} onPress={copyLiveChainDebugJson}>
+                          <Text style={styles.quickLinkButtonText}>
+                            {rotationCopiedDebugJson ? "Copied live chain debug JSON" : "Copy live chain debug JSON"}
+                          </Text>
+                        </TouchableOpacity>
+                      </>
+                    ) : null}
                     <TouchableOpacity
                       style={styles.quickLinkButton}
                       onPress={() =>
@@ -4774,8 +4616,7 @@ export default function App() {
                           {" "}runtimeScheduledBlock: {rotationDashboard.snapshot.scheduledBlockMinutes},
                           {" "}runtimeScheduledBlockSource: {typeof rotationScreenshotParseResult.extracted?.totals?.totalScheduledBlockMinutes === "number" && rotationScreenshotParseResult.extracted.totals.totalScheduledBlockMinutes > 0 ? "header" : rotationDashboard.snapshot.scheduledBlockMinutes > 0 ? "computedFromUserFacingLegs" : "fallback"},
                           {" "}runtimeNextFlight: {rotationDashboard.nextLeg ? `${rotationDashboard.nextLeg.origin}-${rotationDashboard.nextLeg.destination}` : "unknown"},
-                          {" "}runtimeLogbookLegCount: {rotationDashboard.legs.length},
-                          {" "}fixtureExpectedFor0983Matched: {rotationDashboard.snapshot.rotationNumber === "0983" && rotationDashboard.snapshot.tripDates === "17MAR - 20MAR" ? rotationDashboard.legs.length === 9 && `${rotationDashboard.legs.at(0)?.origin ?? "?"}-${rotationDashboard.legs.at(0)?.destination ?? "?"}` === "SLC-DTW" && `${rotationDashboard.legs.at(-1)?.origin ?? "?"}-${rotationDashboard.legs.at(-1)?.destination ?? "?"}` === "SAT-SLC" && rotationDashboard.snapshot.finalArrival === "SLC" && `${rotationDashboard.nextLeg?.origin ?? "?"}-${rotationDashboard.nextLeg?.destination ?? "?"}` === "SLC-DTW" ? "true" : "false" : "n/a"}
+                          {" "}runtimeLogbookLegCount: {rotationDashboard.legs.length}
                           {" }"}
                         </Text>
                         <Text style={styles.resultSupportMetaText}>

@@ -1,21 +1,12 @@
 import {
   buildScreenshotUserFacingChain,
   computeSnapshotFromUserFacingChain,
+  diagnoseScreenshotRotationPartialStatus,
 } from "./rotationChainBuilder.ts";
 import {
-  rotation0983AllCandidates,
-  rotation0983Context,
-  rotation0983ExpectedUserFacingRoutes,
-  rotation0983Header,
-  rotation0983RawFinalOrderedChain,
-} from "./__fixtures__/rotation0983ScreenshotCandidates.ts";
-import {
-  rotation0983LiveCapturedBuilderInputCandidates,
-  rotation0983LiveCapturedContext,
-  rotation0983LiveCapturedExpectedUserFacingRoutes,
-  rotation0983LiveCapturedHeader,
-  rotation0983LiveCapturedSelectedSeedChain,
-} from "./__fixtures__/rotation0983LiveCapturedCandidates.ts";
+  rotationChainFixtures,
+  type RotationChainFixture,
+} from "./__fixtures__/rotationChainFixtures.ts";
 
 function assert(condition: unknown, message: string) {
   if (!condition) {
@@ -23,17 +14,10 @@ function assert(condition: unknown, message: string) {
   }
 }
 
-function runFixture(args: {
-  name: string;
-  rawFinalOrderedChain: typeof rotation0983RawFinalOrderedChain;
-  legCandidates: typeof rotation0983AllCandidates;
-  context: typeof rotation0983Context;
-  expectedRoutes: readonly string[];
-  headerScheduledBlockMinutes: number;
-}) {
+function runFixture(args: RotationChainFixture) {
   const chain = buildScreenshotUserFacingChain({
-    rawFinalOrderedChain: args.rawFinalOrderedChain,
-    legCandidates: args.legCandidates,
+    rawFinalOrderedChain: args.selectedSeedChain,
+    legCandidates: args.builderInputCandidates,
     context: args.context,
   });
 
@@ -43,39 +27,118 @@ function runFixture(args: {
     fallbackScheduledBlockMinutes: 0,
     finalArrivalFallback: "TBD",
   });
+  const partialDiagnosis = diagnoseScreenshotRotationPartialStatus({
+    userFacingLegs: chain.userFacingLegs,
+    context: args.context,
+  });
 
   const visibleRoutes = chain.userFacingLegs.map(
     (leg) => `${leg.departureAirport ?? "?"}-${leg.arrivalAirport ?? "?"}`,
   );
+  const dedupedVisibleRoutes = Array.from(new Set(visibleRoutes));
 
-  assert(chain.userFacingLegs.length === 9, `[${args.name}] Expected 9 user-facing legs, got ${chain.userFacingLegs.length}`);
-  assert(visibleRoutes[0] === "SLC-DTW", `[${args.name}] Expected first leg SLC-DTW, got ${visibleRoutes[0]}`);
-  assert(visibleRoutes.at(-1) === "SAT-SLC", `[${args.name}] Expected last leg SAT-SLC, got ${visibleRoutes.at(-1)}`);
-  assert(snapshot.finalArrival === "SLC", `[${args.name}] Expected final arrival SLC, got ${snapshot.finalArrival}`);
   assert(
-    JSON.stringify(visibleRoutes) === JSON.stringify(args.expectedRoutes),
-    `[${args.name}] Expected exact visible chain ${args.expectedRoutes.join(" -> ")}, got ${visibleRoutes.join(" -> ")}`,
+    chain.userFacingLegs.length === args.expectedUserFacingCityPairs.length,
+    `[${args.name}] Expected ${args.expectedUserFacingCityPairs.length} user-facing legs, got ${chain.userFacingLegs.length}`,
   );
   assert(
-    !visibleRoutes.slice(args.expectedRoutes.length).length,
-    `[${args.name}] Expected no visible legs after SAT-SLC`,
+    visibleRoutes[0] === args.expectedFirstLeg,
+    `[${args.name}] Expected first leg ${args.expectedFirstLeg}, got ${visibleRoutes[0]}`,
   );
   assert(
-    snapshot.scheduledBlockSource === "header",
-    `[${args.name}] Expected scheduledBlockSource header, got ${snapshot.scheduledBlockSource}`,
+    visibleRoutes.at(-1) === args.expectedLastLeg,
+    `[${args.name}] Expected last leg ${args.expectedLastLeg}, got ${visibleRoutes.at(-1)}`,
   );
   assert(
-    snapshot.scheduledBlockMinutes === args.headerScheduledBlockMinutes,
-    `[${args.name}] Expected header scheduled block ${args.headerScheduledBlockMinutes}, got ${snapshot.scheduledBlockMinutes}`,
+    snapshot.finalArrival === args.expectedFinalArrival,
+    `[${args.name}] Expected final arrival ${args.expectedFinalArrival}, got ${snapshot.finalArrival}`,
   );
   assert(
-    snapshot.nextFlightCityPair === "SLC-DTW",
-    `[${args.name}] Expected next flight SLC-DTW, got ${snapshot.nextFlightCityPair}`,
+    JSON.stringify(visibleRoutes) === JSON.stringify(args.expectedUserFacingCityPairs),
+    `[${args.name}] Expected exact visible chain ${args.expectedUserFacingCityPairs.join(" -> ")}, got ${visibleRoutes.join(" -> ")}`,
+  );
+  assert(
+    !visibleRoutes.slice(args.expectedUserFacingCityPairs.length).length,
+    `[${args.name}] Expected no visible legs after ${args.expectedLastLeg}`,
+  );
+  assert(
+    dedupedVisibleRoutes.length === visibleRoutes.length,
+    `[${args.name}] Expected no duplicate visible legs, got ${visibleRoutes.join(" -> ")}`,
+  );
+  for (const excludedCityPair of args.expectedExcludedCityPairs ?? []) {
+    assert(
+      !visibleRoutes.includes(excludedCityPair),
+      `[${args.name}] Expected ${excludedCityPair} to stay out of visible output, got ${visibleRoutes.join(" -> ")}`,
+    );
+  }
+  for (const evidenceCandidate of args.expectedEvidenceCandidates ?? []) {
+    const matchingCandidate = args.builderInputCandidates.find(
+      (candidate) =>
+        `${candidate.departureAirport ?? "?"}-${candidate.arrivalAirport ?? "?"}` === evidenceCandidate.cityPair,
+    );
+    assert(
+      matchingCandidate,
+      `[${args.name}] Expected evidence candidate ${evidenceCandidate.cityPair} in builder input`,
+    );
+    if (evidenceCandidate.sourceTextIncludes) {
+      assert(
+        (matchingCandidate?.sourceText ?? "").includes(evidenceCandidate.sourceTextIncludes),
+        `[${args.name}] Expected ${evidenceCandidate.cityPair} sourceText to include ${evidenceCandidate.sourceTextIncludes}`,
+      );
+    }
+    if (evidenceCandidate.mustExistInSelectedSeedChain) {
+      const seedMatch = args.selectedSeedChain.find(
+        (candidate) =>
+          `${candidate.departureAirport ?? "?"}-${candidate.arrivalAirport ?? "?"}` === evidenceCandidate.cityPair,
+      );
+      assert(
+        seedMatch,
+        `[${args.name}] Expected ${evidenceCandidate.cityPair} to remain present in selected seed chain as future-DH evidence`,
+      );
+    }
+  }
+  if (args.expectedScheduledBlockSource) {
+    assert(
+      snapshot.scheduledBlockSource === args.expectedScheduledBlockSource,
+      `[${args.name}] Expected scheduledBlockSource ${args.expectedScheduledBlockSource}, got ${snapshot.scheduledBlockSource}`,
+    );
+  }
+  assert(
+    snapshot.scheduledBlockMinutes === args.expectedScheduledBlockMinutes,
+    `[${args.name}] Expected scheduled block ${args.expectedScheduledBlockMinutes}, got ${snapshot.scheduledBlockMinutes}`,
+  );
+  assert(
+    snapshot.nextFlightCityPair === args.expectedFirstLeg,
+    `[${args.name}] Expected next flight ${args.expectedFirstLeg}, got ${snapshot.nextFlightCityPair}`,
   );
   assert(
     chain.discardedAfterTerminal >= 0,
     `[${args.name}] Expected discardedAfterTerminal to be defined`,
   );
+  if (typeof args.expectedDiscardedAfterTerminal === "number") {
+    assert(
+      chain.discardedAfterTerminal === args.expectedDiscardedAfterTerminal,
+      `[${args.name}] Expected discardedAfterTerminal ${args.expectedDiscardedAfterTerminal}, got ${chain.discardedAfterTerminal}`,
+    );
+  }
+  if (typeof args.expectedPartialStatus === "boolean") {
+    assert(
+      partialDiagnosis.isPartial === args.expectedPartialStatus,
+      `[${args.name}] Expected partial status ${args.expectedPartialStatus}, got ${partialDiagnosis.isPartial}`,
+    );
+  }
+  if (args.expectedPartialStatus) {
+    assert(
+      partialDiagnosis.partialReason,
+      `[${args.name}] Expected a partial reason when partial status is true`,
+    );
+  }
+  if (args.expectedPartialReasonIncludes) {
+    assert(
+      (partialDiagnosis.partialReason ?? "").includes(args.expectedPartialReasonIncludes),
+      `[${args.name}] Expected partial reason to include ${args.expectedPartialReasonIncludes}, got ${partialDiagnosis.partialReason ?? "null"}`,
+    );
+  }
 
   console.log(`${args.name} passed`);
   console.log(`${args.name} userFacingLegs:`, visibleRoutes.join(" | "));
@@ -87,6 +150,8 @@ function runFixture(args: {
         firstLeg: visibleRoutes[0],
         lastLeg: visibleRoutes.at(-1),
         finalArrival: snapshot.finalArrival,
+        partialStatus: partialDiagnosis.isPartial,
+        partialReason: partialDiagnosis.partialReason,
         scheduledBlockMinutes: snapshot.scheduledBlockMinutes,
         scheduledBlockSource: snapshot.scheduledBlockSource,
         nextFlightCityPair: snapshot.nextFlightCityPair,
@@ -97,20 +162,6 @@ function runFixture(args: {
   );
 }
 
-runFixture({
-  name: "rotation0983 ideal fixture",
-  rawFinalOrderedChain: rotation0983RawFinalOrderedChain,
-  legCandidates: rotation0983AllCandidates,
-  context: rotation0983Context,
-  expectedRoutes: rotation0983ExpectedUserFacingRoutes,
-  headerScheduledBlockMinutes: rotation0983Header.totalScheduledBlockMinutes,
-});
-
-runFixture({
-  name: "rotation0983 live-captured fixture",
-  rawFinalOrderedChain: rotation0983LiveCapturedSelectedSeedChain,
-  legCandidates: rotation0983LiveCapturedBuilderInputCandidates,
-  context: rotation0983LiveCapturedContext,
-  expectedRoutes: rotation0983LiveCapturedExpectedUserFacingRoutes,
-  headerScheduledBlockMinutes: rotation0983LiveCapturedHeader.totalScheduledBlockMinutes,
-});
+for (const fixture of rotationChainFixtures) {
+  runFixture(fixture);
+}

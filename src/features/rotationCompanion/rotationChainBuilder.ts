@@ -49,6 +49,13 @@ export type RotationSnapshotComputation = {
   nextFlightCityPair: string;
 };
 
+export type ScreenshotRotationPartialDiagnosis = {
+  rotationBase: string | null;
+  hasTerminalReturnToBase: boolean;
+  isPartial: boolean;
+  partialReason: string | null;
+};
+
 function extractNormalizedClockToken(value?: string | null) {
   if (!value) {
     return "";
@@ -201,13 +208,24 @@ function unwrapWrappedSeedChain(
     };
   }
 
+  const firstLegMoment = buildComparableLegMoment(
+    resolveLegDateToken(selectedChain[0]),
+    selectedChain[0]?.scheduledOut,
+  );
   let wrapIndex = -1;
   for (let index = 0; index < selectedChain.length - 1; index += 1) {
     const current = selectedChain[index];
     const next = selectedChain[index + 1];
+    const nextLegMoment = buildComparableLegMoment(
+      resolveLegDateToken(next),
+      next?.scheduledOut,
+    );
     if (
       current?.arrivalAirport?.toUpperCase() === base &&
-      next?.departureAirport?.toUpperCase() === base
+      next?.departureAirport?.toUpperCase() === base &&
+      firstLegMoment != null &&
+      nextLegMoment != null &&
+      nextLegMoment < firstLegMoment
     ) {
       wrapIndex = index;
     }
@@ -454,10 +472,17 @@ export function sanitizeScreenshotFinalChainBeforeDisplay(
   let terminalCutIndex = -1;
   for (let index = rawFinalOrderedChain.length - 1; index >= 0; index -= 1) {
     const leg = rawFinalOrderedChain[index];
-    if (leg?.arrivalAirport?.toUpperCase() === base) {
-      terminalCutIndex = index;
-      break;
+    if (leg?.arrivalAirport?.toUpperCase() !== base) {
+      continue;
     }
+    const hasLaterBaseDeparture = rawFinalOrderedChain
+      .slice(index + 1)
+      .some((laterLeg) => laterLeg?.departureAirport?.toUpperCase() === base);
+    if (hasLaterBaseDeparture) {
+      continue;
+    }
+    terminalCutIndex = index;
+    break;
   }
 
   if (terminalCutIndex < 0) {
@@ -541,4 +566,52 @@ export function computeSnapshotFromUserFacingChain(args: {
     finalArrival: finalLeg?.arrivalAirport ?? args.finalArrivalFallback ?? "TBD",
     nextFlightCityPair: firstLeg ? `${firstLeg.departureAirport ?? "?"}-${firstLeg.arrivalAirport ?? "?"}` : "unknown",
   } satisfies RotationSnapshotComputation;
+}
+
+export function diagnoseScreenshotRotationPartialStatus(args: {
+  userFacingLegs: RotationChainLeg[];
+  context: RotationChainContext;
+}) {
+  const rotationBase =
+    args.context.base?.trim().toUpperCase() ||
+    args.userFacingLegs[0]?.departureAirport?.trim().toUpperCase() ||
+    null;
+  const firstVisibleLeg = args.userFacingLegs[0];
+  const lastVisibleLeg = args.userFacingLegs.at(-1);
+  const hasTerminalReturnToBase = Boolean(
+    rotationBase &&
+      lastVisibleLeg?.arrivalAirport?.trim().toUpperCase() === rotationBase,
+  );
+  const startsAwayFromBase = Boolean(
+    rotationBase &&
+      firstVisibleLeg?.departureAirport?.trim().toUpperCase() !== rotationBase,
+  );
+  const missingTripDates = !args.context.startDate || !args.context.endDate;
+  const isPartial =
+    args.userFacingLegs.length > 0 &&
+    (!hasTerminalReturnToBase || startsAwayFromBase || missingTripDates);
+
+  let partialReason: string | null = null;
+  if (args.userFacingLegs.length > 0) {
+    if (startsAwayFromBase && missingTripDates) {
+      partialReason =
+        "Partial rotation detected. Visible screenshot chain starts mid-rotation and trip dates are unknown, so the header or opening legs may be missing.";
+    } else if (startsAwayFromBase) {
+      partialReason =
+        "Partial rotation detected. Visible screenshot chain starts mid-rotation, so the opening legs may be missing.";
+    } else if (missingTripDates) {
+      partialReason =
+        "Partial rotation detected. Visible screenshot chain is missing header dates, so the full trip boundaries are unknown.";
+    } else if (!hasTerminalReturnToBase) {
+      partialReason =
+        "Partial rotation detected. Visible screenshot chain does not return to base, so the terminal return may be missing.";
+    }
+  }
+
+  return {
+    rotationBase,
+    hasTerminalReturnToBase,
+    isPartial,
+    partialReason: isPartial ? partialReason : null,
+  } satisfies ScreenshotRotationPartialDiagnosis;
 }

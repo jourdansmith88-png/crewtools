@@ -1,0 +1,147 @@
+import type { RotationChainCandidate, RotationChainLeg } from "../rotationChainBuilder";
+
+export const rotation7942PartialLiveCapturedContext = {
+  base: "SLC",
+  layoverCities: ["DEN", "LGA"],
+  startDate: "19APR",
+  endDate: "21APR",
+} as const;
+
+export const rotation7942PartialLiveCapturedHeader = {
+  rotationNumber: "7942",
+  tripDates: "19APR - 21APR",
+  totalCreditMinutes: 16 * 60 + 1,
+  totalScheduledBlockMinutes: 0,
+} as const;
+
+export const rotation7942PartialLiveCapturedExpectedUserFacingRoutes = [
+  "SLC-SMF",
+  "SMF-SLC",
+  "SLC-DEN",
+  "DEN-LGA",
+  "LGA-DFW",
+] as const;
+
+export const rotation7942PartialLiveCapturedBuilderInputCandidates: RotationChainCandidate[] = [
+  {
+    sourceScreenshotIndex: 0,
+    date: "19APR",
+    flightNumber: "DL1176",
+    carrier: "DL",
+    departureAirport: "SLC",
+    arrivalAirport: "SMF",
+    scheduledOut: "1518 19APR",
+    scheduledIn: "1652 19APR",
+    scheduledBlock: "1:34",
+    turn: "0:23",
+    rawSourceLine: "DL1176 SLC-SMF 1518 19APR 1652 19APR Blk 1:34",
+    sourceText: "DL1176 : SLC-SMF Dep- 1518 19APR Arr- 1652 19APR Blk- 1:34",
+  },
+  {
+    sourceScreenshotIndex: 0,
+    date: "19APR",
+    flightNumber: "DL1567",
+    carrier: "DL",
+    departureAirport: "SMF",
+    arrivalAirport: "SLC",
+    scheduledOut: "1715 19APR",
+    scheduledIn: "1852 19APR",
+    scheduledBlock: "1:37",
+    turn: "11:38",
+    rawSourceLine: "DL1567 SMF-SLC 1715 19APR 1852 19APR Blk 1:37",
+    sourceText: "DL1567 : SMF-SLC Dep- 1715 19APR Arr- 1852 19APR Blk- 1:37",
+  },
+  {
+    sourceScreenshotIndex: 1,
+    date: "20APR",
+    flightNumber: "DL1947",
+    carrier: "DL",
+    departureAirport: "SLC",
+    arrivalAirport: "DEN",
+    scheduledOut: "0630 20APR",
+    scheduledIn: "0751 20APR",
+    scheduledBlock: "1:21",
+    turn: "15:44",
+    rawSourceLine: "DL1947 SLC-DEN 0630 20APR 0751 20APR Blk 1:21",
+    sourceText: "DL1947 : SLC-DEN Dep- 0630 20APR Arr- 0751 20APR Blk- 1:21",
+  },
+  {
+    sourceScreenshotIndex: 2,
+    date: "20APR",
+    flightNumber: "DL2502",
+    carrier: "DL",
+    departureAirport: "DEN",
+    arrivalAirport: "LGA",
+    scheduledOut: "2335 20APR",
+    scheduledIn: "0513 21APR",
+    scheduledBlock: "3:38",
+    turn: "2:17",
+    rawSourceLine: "DL2502 DEN-LGA 2335 20APR 0513 21APR Blk 3:38",
+    sourceText: "DL2502 : DEN-LGA Dep- 2335 20APR Arr- 0513 21APR Blk- 3:38",
+  },
+  {
+    sourceScreenshotIndex: 2,
+    date: "20APR",
+    flightNumber: "DL2502",
+    carrier: "DL",
+    departureAirport: "DEN",
+    arrivalAirport: "LGA",
+    scheduledOut: "2335",
+    scheduledIn: null,
+    scheduledBlock: null,
+    turn: null,
+    rawSourceLine: "DL2502 DEN-LGA 2335 partial",
+    sourceText: "DL2502 : DEN-LGA Dep- 2335",
+  },
+  {
+    sourceScreenshotIndex: 3,
+    date: "21APR",
+    flightNumber: "DL1532",
+    carrier: "DL",
+    departureAirport: "LGA",
+    arrivalAirport: "DFW",
+    scheduledOut: "0730 21APR",
+    scheduledIn: "1119 21APR",
+    scheduledBlock: "3:49",
+    turn: null,
+    rawSourceLine: "DL1532 LGA-DFW 0730 21APR 1119 21APR Blk 3:49",
+    sourceText: "DL1532 : LGA-DFW Dep- 0730 21APR Arr- 1119 21APR Blk- 3:49",
+  },
+  {
+    sourceScreenshotIndex: 3,
+    date: null,
+    flightNumber: "DL1532",
+    carrier: "DL",
+    departureAirport: "LGA",
+    arrivalAirport: "DFW",
+    scheduledOut: "0730",
+    scheduledIn: null,
+    scheduledBlock: null,
+    turn: null,
+    rawSourceLine: "DL1532 LGA-DFW 0730 partial",
+    sourceText: "DL1532 : LGA-DFW Dep- 0730",
+  },
+];
+
+export const rotation7942PartialLiveCapturedSelectedSeedChain: RotationChainLeg[] = [
+  {
+    index: 1,
+    ...rotation7942PartialLiveCapturedBuilderInputCandidates[0],
+  },
+  {
+    index: 2,
+    ...rotation7942PartialLiveCapturedBuilderInputCandidates[1],
+  },
+  {
+    index: 3,
+    ...rotation7942PartialLiveCapturedBuilderInputCandidates[2],
+  },
+  {
+    index: 4,
+    ...rotation7942PartialLiveCapturedBuilderInputCandidates[3],
+  },
+  {
+    index: 5,
+    ...rotation7942PartialLiveCapturedBuilderInputCandidates[5],
+  },
+];
