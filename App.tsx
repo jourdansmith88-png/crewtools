@@ -972,19 +972,7 @@ function buildICrewDebugPreviewDashboard(
   const firstLeg = visibleOperatingLegs[0];
   const finalOperatingArrival = parsed.finalOperatingArrival;
   const finalArrivalAfterDh = parsed.finalArrivalAfterDeadhead;
-  const layoverCities = Array.from(
-    new Set(
-      visibleOperatingLegs
-        .slice(0, -1)
-        .map((leg) => leg.arrivalAirport)
-        .filter(
-          (airport): airport is string =>
-            Boolean(airport) &&
-            airport.toUpperCase() !== finalOperatingArrival.toUpperCase() &&
-            airport.toUpperCase() !== base.toUpperCase(),
-        ),
-    ),
-  );
+  const layoverCities = parsed.layoverCities;
   const mappedLegs = visibleOperatingLegs.map((leg, index) => ({
     id: `icrew-debug-leg-${index + 1}-${leg.flightNumber ?? "unk"}-${leg.departureAirport ?? "x"}-${leg.arrivalAirport ?? "x"}-${leg.scheduledOut ?? "na"}`,
     dayLabel: leg.date ?? `Day ${index + 1}`,

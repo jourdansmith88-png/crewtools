@@ -40,6 +40,7 @@ export type ICrewDeadheadAnnotation = {
 
 export type ParsedICrewTextResult = {
   header: ICrewHeader;
+  layoverCities: string[];
   normalizedCandidates: RotationChainCandidate[];
   allTripSegments: RotationChainLeg[];
   visibleOperatingLegs: RotationChainLeg[];
@@ -258,12 +259,12 @@ function extractICrewHeaderParts(rawText: string, parsedSegments: Array<Rotation
     normalizedText.match(/\b([A-Z]{3})\s+PILOT\s+\d{2,3}\b/i) ??
     normalizedText.match(/\bPILOT\s+\d{2,3}\s+([A-Z]{3})\b/i);
   const rotationLine =
-    normalizedLines.find((line) => /\b\d{3,5}\b.*\bPOS-?[A-Z]\b.*\bEFFECTIVE\b/i.test(line)) ??
+    normalizedLines.find((line) => /\b\d{3,5}\b.*\bPOS-?[A-Z]{1,3}\b.*\bEFFECTIVE\b/i.test(line)) ??
     normalizedLines.find((line) => /\bROTATION\b.*\bOPER\b/i.test(line));
   const rotationPositionMatch =
-    normalizedText.match(/\b(\d{3,5})\s+POS-?([A-Z])\s+EFFECTIVE\s+([A-Z]{3}\d{2})\b/i) ??
-    normalizedText.match(/\bPILOT\s+\d{2,3}\s+[A-Z]{3}\s+(\d{3,5})\s+([A-Z])\s+([A-Z]{3}\d{2})\s+CHECK\s*IN\b/i) ??
-    rotationLine?.match(/\b(\d{3,5})\s+POS-?([A-Z])\s+EFFECTIVE\s+([A-Z]{3}\d{2})\b/i) ??
+    normalizedText.match(/\b(\d{3,5})\s+POS-?([A-Z]{1,3})\s+EFFECTIVE\s+([A-Z]{3}\d{2})\b/i) ??
+    normalizedText.match(/\bPILOT\s+\d{2,3}\s+[A-Z]{3}\s+(\d{3,5})\s+([A-Z]{1,3})\s+([A-Z]{3}\d{2})\s+CHECK\s*IN\b/i) ??
+    rotationLine?.match(/\b(\d{3,5})\s+POS-?([A-Z]{1,3})\s+EFFECTIVE\s+([A-Z]{3}\d{2})\b/i) ??
     null;
   const checkInMatch =
     normalizedText.match(/\bCHECK\s*IN(?:\s+AT)?\s+(\d{2})[.:]?(\d{2})\b/i) ??
@@ -377,6 +378,21 @@ function parseDayLevelDhdTotals(rawText: string) {
   return totals;
 }
 
+function parseICrewLayoverCities(rawText: string) {
+  const layovers: string[] = [];
+  for (const line of splitRawLines(rawText)) {
+    const normalizedLine = normalizeICrewLine(line);
+    const match = normalizedLine.match(
+      /^([A-Z]{3})\s+(\d{1,2}[.:]\d{2})\s*\/\s*(?:[A-Z0-9].+)?$/i,
+    );
+    if (!match?.[1] || !match?.[2]) {
+      continue;
+    }
+    layovers.push(match[1].toUpperCase());
+  }
+  return Array.from(new Set(layovers));
+}
+
 function applyRegionalDeadheadInference(args: {
   segments: Array<
     RotationChainCandidate & {
@@ -453,6 +469,7 @@ function parseICrewSegments(rawText: string) {
   const attemptedLegParseResults: ICrewParserDiagnostics["attemptedLegParseResults"] = [];
   let currentDayToken: string | null = null;
   let lastSegment: (typeof segments)[number] | null = null;
+  let lastRawFlightToken: string | null = null;
 
   for (const line of splitRawLines(rawText)) {
     const normalizedLine = normalizeICrewLine(line);
@@ -482,6 +499,13 @@ function parseICrewSegments(rawText: string) {
     let dayToken = currentDayToken;
     let rawFlightToken: string | null = null;
 
+    const startsLikeContinuationRow =
+      tokens[0] &&
+      isAirportToken(tokens[0]) &&
+      /^\d{4}$/.test(tokens[1] ?? "") &&
+      isArrivalToken(tokens[2]) &&
+      lastRawFlightToken;
+
     if (tokens[0] && isDayOnlyToken(tokens[0]) && tokens[1] && isFlightTokenLike(tokens[1])) {
       dayToken = tokens[0].padStart(2, "0");
       currentDayToken = dayToken;
@@ -496,6 +520,9 @@ function parseICrewSegments(rawText: string) {
     } else if (tokens[0] && isFlightTokenLike(tokens[0])) {
       rawFlightToken = tokens[0];
       cursor = 1;
+    } else if (startsLikeContinuationRow) {
+      rawFlightToken = lastRawFlightToken;
+      cursor = 0;
     }
 
     if (!dayToken || !rawFlightToken) {
@@ -580,6 +607,7 @@ function parseICrewSegments(rawText: string) {
     };
     segments.push(parsedSegment);
     lastSegment = parsedSegment;
+    lastRawFlightToken = rawFlightToken;
     attemptedLegParseResults.push({
       line: normalizedLine,
       matched: true,
@@ -609,6 +637,7 @@ function parseICrewTextInternal(rawText: string): ParsedICrewTextResult {
   }
 
   const header = parseICrewHeader(rawText, parsedSegments);
+  const layoverCities = parseICrewLayoverCities(rawText);
   const dayTotals = parseDayLevelDhdTotals(rawText);
   const segmentsWithKinds = parsedSegments.map((segment) => {
     const explicitDeadhead = segment.marker === "D";
@@ -705,6 +734,7 @@ function parseICrewTextInternal(rawText: string): ParsedICrewTextResult {
 
   return {
     header,
+    layoverCities,
     normalizedCandidates: segmentsWithKinds,
     allTripSegments,
     visibleOperatingLegs,
