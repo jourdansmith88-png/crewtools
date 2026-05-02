@@ -69,7 +69,7 @@ import {
   buildScreenshotUserFacingChain as buildScreenshotUserFacingChainPure,
   computeSnapshotFromUserFacingChain as computeSnapshotFromUserFacingChainPure,
   diagnoseScreenshotRotationPartialStatus as diagnoseScreenshotRotationPartialStatusPure,
-  extractDeadheadAnnotationsFromScreenshotEvidence as extractDeadheadAnnotationsFromScreenshotEvidencePure,
+  excludeDeadheadLegsFromVisibleChain as excludeDeadheadLegsFromVisibleChainPure,
 } from "./src/features/rotationCompanion/rotationChainBuilder";
 import type { RotationChainCandidate } from "./src/features/rotationCompanion/rotationChainBuilder";
 import { fliegerTypography, getFliegerPalette } from "./src/theme/flieger";
@@ -97,6 +97,8 @@ type RotationScreenshotAttachment = {
 type RotationScreenshotParseResponse =
   | {
       ok: true;
+      analysisRunId?: number;
+      analysisTimestamp?: string;
       normalizedText: string;
       extracted: {
         legs: Array<{
@@ -236,6 +238,8 @@ type RotationScreenshotParseResponse =
     }
   | {
       ok: false;
+      analysisRunId?: number;
+      analysisTimestamp?: string;
       error: string;
       warnings: string[];
       missingSections: string[];
@@ -513,6 +517,8 @@ function getLiveChainInputSources(
     debug: NonNullable<RotationScreenshotParseResponse["debug"]>;
   },
 ) {
+  const sortCandidatesDeterministically = (candidates: RotationChainCandidate[]) =>
+    [...candidates].sort((left, right) => buildBuilderCandidateStableKey(left).localeCompare(buildBuilderCandidateStableKey(right)));
   const debugLegCandidates: RotationChainCandidate[] = (screenshotParseResult.debug?.legCandidates ?? []).map((candidate) => ({
     sourceScreenshotIndex: candidate.sourceScreenshotIndex,
     flightNumber: candidate.flightNumber ?? null,
@@ -580,13 +586,13 @@ function getLiveChainInputSources(
       merged.set(key, candidate);
     }
   }
-  const mergedCandidates = Array.from(merged.values());
+  const mergedCandidates = sortCandidatesDeterministically(Array.from(merged.values()));
 
   const sourceEntries = [
     { name: "mergedDebugExtractedOrdered", candidates: mergedCandidates },
-    { name: "debugLegCandidates", candidates: debugLegCandidates },
-    { name: "extractedLegs", candidates: extractedLegs },
-    { name: "orderedChain", candidates: orderedChainCandidates },
+    { name: "debugLegCandidates", candidates: sortCandidatesDeterministically(debugLegCandidates) },
+    { name: "extractedLegs", candidates: sortCandidatesDeterministically(extractedLegs) },
+    { name: "orderedChain", candidates: sortCandidatesDeterministically(orderedChainCandidates) },
   ];
   const sourceSummaries = sourceEntries.map(({ name, candidates }) => summarizeLiveChainInputSource(name, candidates));
   const preferredSource =
@@ -607,8 +613,9 @@ function buildLiveChainDebugExport(args: {
   screenshotParseResult: RotationScreenshotParseResponse & {
     debug: NonNullable<RotationScreenshotParseResponse["debug"]>;
   };
+  rotationScreenshots: RotationScreenshotAttachment[];
 }) {
-  const { rotationDashboard, screenshotParseResult } = args;
+  const { rotationDashboard, screenshotParseResult, rotationScreenshots } = args;
   const liveChainInputSources = getLiveChainInputSources(screenshotParseResult);
   const header = screenshotParseResult.debug?.parsedHeader ?? { layoverCities: [] };
   const rawFinalOrderedChain = screenshotParseResult.debug?.orderedChain ?? [];
@@ -622,11 +629,13 @@ function buildLiveChainDebugExport(args: {
       endDate: header.endDate,
     },
   });
+  const visibleOperatingLegs = excludeDeadheadLegsFromVisibleChainPure(
+    chainBuildResult.userFacingLegs,
+    chainBuildResult.deadheadAnnotations,
+  );
   const snapshotComputation = computeSnapshotFromUserFacingChainPure({
-    userFacingLegs: chainBuildResult.userFacingLegs,
-    headerScheduledBlockMinutes: screenshotParseResult.ok
-      ? screenshotParseResult.extracted?.totals?.totalScheduledBlockMinutes
-      : undefined,
+    userFacingLegs: visibleOperatingLegs,
+    headerScheduledBlockMinutes: parseClockishMinutes(header.totalScheduledBlock),
     fallbackScheduledBlockMinutes: rotationDashboard.snapshot.scheduledBlockMinutes,
     finalArrivalFallback: rotationDashboard.snapshot.finalArrival,
   });
@@ -634,7 +643,7 @@ function buildLiveChainDebugExport(args: {
     rawFinalOrderedChain.map((candidate) => buildBuilderCandidateStableKey(candidate)),
   );
   const builderOutputKeys = new Set(
-    chainBuildResult.userFacingLegs.map((candidate) => buildBuilderCandidateStableKey(candidate)),
+    visibleOperatingLegs.map((candidate) => buildBuilderCandidateStableKey(candidate)),
   );
   const unmatchedCandidates = liveChainInputSources.selectedCandidates
     .filter((candidate) => !orderedChainKeys.has(buildBuilderCandidateStableKey(candidate)))
@@ -674,12 +683,15 @@ function buildLiveChainDebugExport(args: {
     }));
 
   return {
+    analysisRunId: screenshotParseResult.analysisRunId ?? null,
+    analysisTimestamp: screenshotParseResult.analysisTimestamp ?? null,
+    screenshotCount: rotationScreenshots.length,
+    screenshotFilenames: rotationScreenshots.map((item) => item.name),
     rotationNumber: rotationDashboard.snapshot.rotationNumber,
     tripDates: rotationDashboard.snapshot.tripDates,
     headerTotals: {
       totalCreditMinutes: rotationDashboard.snapshot.totalCreditMinutes,
-      headerScheduledBlockMinutes:
-        screenshotParseResult.ok ? screenshotParseResult.extracted?.totals?.totalScheduledBlockMinutes ?? null : null,
+      headerScheduledBlockMinutes: parseClockishMinutes(header.totalScheduledBlock) ?? null,
       tafb: screenshotParseResult.debug?.parsedHeader?.tafb ?? null,
       reportTime: screenshotParseResult.debug?.parsedHeader?.reportTime ?? null,
       releaseTime: screenshotParseResult.debug?.parsedHeader?.releaseTime ?? null,
@@ -695,6 +707,7 @@ function buildLiveChainDebugExport(args: {
       containsSatSlc: source.containsSatSlc,
     })),
     builderInputSourceName: liveChainInputSources.selectedSourceName,
+    canonicalCandidateSource: chainBuildResult.canonicalCandidateSource,
     builderInputCandidates: liveChainInputSources.selectedCandidates.map((candidate) => ({
       sourceArrayName: liveChainInputSources.selectedSourceName,
       key: buildBuilderCandidateStableKey(candidate),
@@ -723,7 +736,32 @@ function buildLiveChainDebugExport(args: {
       scheduledBlockMinutes: parseClockishMinutes(candidate.scheduledBlock) ?? null,
       sourceText: candidate.sourceText ?? null,
     })),
-    builderOutputUserFacingLegs: chainBuildResult.userFacingLegs.map((candidate) => ({
+    allTripSegments: chainBuildResult.allTripSegments.map((candidate) => ({
+      key: buildBuilderCandidateStableKey(candidate),
+      date: candidate.date ?? null,
+      origin: candidate.departureAirport ?? null,
+      destination: candidate.arrivalAirport ?? null,
+      carrier: candidate.carrier ?? null,
+      flightNumber: candidate.flightNumber ?? null,
+      scheduledOut: candidate.scheduledOut ?? null,
+      scheduledIn: candidate.scheduledIn ?? null,
+      scheduledBlockMinutes: parseClockishMinutes(candidate.scheduledBlock) ?? null,
+      sourceText: candidate.sourceText ?? null,
+    })),
+    builderOutputUserFacingLegs: visibleOperatingLegs.map((candidate) => ({
+      key: buildBuilderCandidateStableKey(candidate),
+      date: candidate.date ?? null,
+      origin: candidate.departureAirport ?? null,
+      destination: candidate.arrivalAirport ?? null,
+      carrier: candidate.carrier ?? null,
+      flightNumber: candidate.flightNumber ?? null,
+      scheduledOut: candidate.scheduledOut ?? null,
+      scheduledIn: candidate.scheduledIn ?? null,
+      scheduledBlockMinutes: parseClockishMinutes(candidate.scheduledBlock) ?? null,
+      sourceText: candidate.sourceText ?? null,
+    })),
+    deadheadAnnotations: chainBuildResult.deadheadAnnotations,
+    visibleOperatingLegs: visibleOperatingLegs.map((candidate) => ({
       key: buildBuilderCandidateStableKey(candidate),
       date: candidate.date ?? null,
       origin: candidate.departureAirport ?? null,
@@ -740,12 +778,12 @@ function buildLiveChainDebugExport(args: {
     runtimeSummary: {
       rawFinalOrderedChainCount: rawFinalOrderedChain.length,
       runtimeBuilderInputCandidateCount: liveChainInputSources.selectedCandidates.length,
-      builderOutputLegCount: chainBuildResult.userFacingLegs.length,
-      builderOutputFirstLeg: chainBuildResult.userFacingLegs[0]
-        ? `${chainBuildResult.userFacingLegs[0]?.departureAirport ?? "?"}-${chainBuildResult.userFacingLegs[0]?.arrivalAirport ?? "?"}`
+      builderOutputLegCount: visibleOperatingLegs.length,
+      builderOutputFirstLeg: visibleOperatingLegs[0]
+        ? `${visibleOperatingLegs[0]?.departureAirport ?? "?"}-${visibleOperatingLegs[0]?.arrivalAirport ?? "?"}`
         : "unknown",
-      builderOutputLastLeg: chainBuildResult.userFacingLegs.at(-1)
-        ? `${chainBuildResult.userFacingLegs.at(-1)?.departureAirport ?? "?"}-${chainBuildResult.userFacingLegs.at(-1)?.arrivalAirport ?? "?"}`
+      builderOutputLastLeg: visibleOperatingLegs.at(-1)
+        ? `${visibleOperatingLegs.at(-1)?.departureAirport ?? "?"}-${visibleOperatingLegs.at(-1)?.arrivalAirport ?? "?"}`
         : "unknown",
       scheduledBlock: snapshotComputation.scheduledBlockMinutes,
       scheduledBlockSource: snapshotComputation.scheduledBlockSource,
@@ -854,7 +892,11 @@ function buildScreenshotBackedDashboardModel(
       endDate: header.endDate,
     },
   });
-  const sanitizedUserFacingLegs = chainBuildResult.userFacingLegs;
+  const deadheadAnnotations = chainBuildResult.deadheadAnnotations;
+  const sanitizedUserFacingLegs = excludeDeadheadLegsFromVisibleChainPure(
+    chainBuildResult.userFacingLegs,
+    deadheadAnnotations,
+  );
   const userFacingLegs = sanitizedUserFacingLegs;
   if (rawFinalOrderedChain.length === 0) {
     return {
@@ -867,6 +909,31 @@ function buildScreenshotBackedDashboardModel(
         ),
       },
     };
+  }
+  const visibleDeadheadLeak = userFacingLegs.filter((leg) =>
+    deadheadAnnotations.some((annotation) => {
+      const sameRoute =
+        (leg.departureAirport ?? "").toUpperCase() === annotation.origin.toUpperCase() &&
+        (leg.arrivalAirport ?? "").toUpperCase() === annotation.destination.toUpperCase();
+      const sameCarrier =
+        (annotation.carrier ?? "").toUpperCase() === "" ||
+        (leg.carrier ?? "").toUpperCase() === (annotation.carrier ?? "").toUpperCase();
+      const sameFlight =
+        (annotation.flightNumber ?? "").replace(/\D/g, "") === "" ||
+        (leg.flightNumber ?? "").replace(/\D/g, "") === (annotation.flightNumber ?? "").replace(/\D/g, "");
+      return sameRoute && sameCarrier && sameFlight;
+    }),
+  );
+  if (visibleDeadheadLeak.length > 0) {
+    console.error("VISIBLE_DH_LEAK_REGRESSION", {
+      visibleOperatingLegs: userFacingLegs.map(
+        (leg) => `${leg.departureAirport ?? "?"}-${leg.arrivalAirport ?? "?"} ${leg.carrier ?? ""}${leg.flightNumber ?? ""}`.trim(),
+      ),
+      leakedLegs: visibleDeadheadLeak.map(
+        (leg) => `${leg.departureAirport ?? "?"}-${leg.arrivalAirport ?? "?"} ${leg.carrier ?? ""}${leg.flightNumber ?? ""}`.trim(),
+      ),
+      deadheadAnnotations,
+    });
   }
   const mappedUserFacingLegs = userFacingLegs.map((leg, index) => {
     const inferredDayLabel =
@@ -895,21 +962,6 @@ function buildScreenshotBackedDashboardModel(
       excludeFromLogbookExport: false,
     };
   });
-  const selectedSeedKeys = new Set(rawFinalOrderedChain.map((candidate) => buildBuilderCandidateStableKey(candidate)));
-  const visibleLegKeys = new Set(userFacingLegs.map((candidate) => buildBuilderCandidateStableKey(candidate)));
-  const discardedFragments = rawFinalOrderedChain.filter(
-    (candidate) => !visibleLegKeys.has(buildBuilderCandidateStableKey(candidate)),
-  );
-  const unmatchedCandidates = runtimeBuilderInputCandidates.filter(
-    (candidate) => !selectedSeedKeys.has(buildBuilderCandidateStableKey(candidate)),
-  );
-  const deadheadAnnotations = extractDeadheadAnnotationsFromScreenshotEvidencePure({
-    userFacingLegs,
-    discardedFragments,
-    unmatchedCandidates,
-    builderInputCandidates: runtimeBuilderInputCandidates,
-    rotationBase: header.base ?? userFacingLegs[0]?.departureAirport ?? null,
-  });
   const deadheadReturnHome = deadheadAnnotations.find(
     (annotation) =>
       (annotation.destination ?? "").toUpperCase() ===
@@ -917,14 +969,13 @@ function buildScreenshotBackedDashboardModel(
   );
   const snapshotComputation = computeSnapshotFromUserFacingChainPure({
     userFacingLegs,
-    headerScheduledBlockMinutes: screenshotParseResult.ok
-      ? screenshotParseResult.extracted?.totals?.totalScheduledBlockMinutes
-      : undefined,
+    headerScheduledBlockMinutes: parseClockishMinutes(header.totalScheduledBlock),
     fallbackScheduledBlockMinutes: dashboard.snapshot.scheduledBlockMinutes,
     finalArrivalFallback: dashboard.snapshot.finalArrival,
   });
   const partialDiagnosis = diagnoseScreenshotRotationPartialStatusPure({
     userFacingLegs,
+    allTripSegments: chainBuildResult.allTripSegments,
     context: {
       base: header.base ?? userFacingLegs[0]?.departureAirport ?? null,
       layoverCities: header.layoverCities ?? [],
@@ -998,15 +1049,17 @@ function buildScreenshotBackedDashboardModel(
         detail: `This screenshot set does not appear to include the full rotation. The visible chain ends at ${lastOrderedLeg ? `${lastOrderedLeg.departureAirport ?? "?"}-${lastOrderedLeg.arrivalAirport ?? "?"}` : "the current last visible leg"} with final arrival ${snapshotComputation.finalArrival}${partialDiagnosis.rotationBase ? ` instead of returning to ${partialDiagnosis.rotationBase}` : ""}. Add the remaining screenshot(s) or paste the full rotation text.`,
       }
     : null;
-  const deadheadWhatMattersCard = deadheadReturnHome
-    ? {
-        label: "DEADHEAD HOME",
-        tone: "watch" as const,
-        detail: `Deadhead ${deadheadReturnHome.cityPair} on ${deadheadReturnHome.carrier ?? "DL"}${deadheadReturnHome.flightNumber ? deadheadReturnHome.flightNumber : ""} departs ${deadheadReturnHome.scheduledOut ?? "TBD"}${deadheadReturnHome.confirmationCode ? `. Confirmation #${deadheadReturnHome.confirmationCode}.` : "."}`,
-        actionLabel: deadheadReturnHome.confirmationCode ? "Copy confirmation code" : undefined,
-        actionCopyValue: deadheadReturnHome.confirmationCode ?? undefined,
-      }
-    : null;
+  const deadheadWhatMattersCards = deadheadAnnotations.map((annotation) => ({
+    label:
+      (annotation.destination ?? "").toUpperCase() ===
+      (header.base ?? userFacingLegs[0]?.departureAirport ?? "").toUpperCase()
+        ? "DEADHEAD HOME"
+        : "DEADHEAD",
+    tone: "watch" as const,
+    detail: `Deadhead ${annotation.cityPair} on ${annotation.carrier ?? "DL"}${annotation.flightNumber ? annotation.flightNumber : ""} departs ${annotation.scheduledOut ?? "TBD"}${annotation.confirmationCode ? `. Confirmation #${annotation.confirmationCode}.` : "."}`,
+    actionLabel: annotation.confirmationCode ? "Copy confirmation code" : undefined,
+    actionCopyValue: annotation.confirmationCode ?? undefined,
+  }));
 
   const screenshotDutyPeriods = dashboard.parsedRotation.dutyPeriods.map((period) => ({
     ...period,
@@ -1034,6 +1087,7 @@ function buildScreenshotBackedDashboardModel(
       (dashboard.parsedRotation.isPartial || dashboard.parsedRotation.missingSections.length > 0));
   const visibleRotationSourceDebug = {
     usedExportedBuilder: true,
+    canonicalCandidateSource: chainBuildResult.canonicalCandidateSource,
     runtimeBuilderInputSource: liveChainInputSources.selectedSourceName,
     rawFinalOrderedChainCount: rawFinalOrderedChain.length,
     runtimeRawCandidateCount: screenshotParseResult.debug?.legCandidates?.length ?? 0,
@@ -1071,6 +1125,7 @@ function buildScreenshotBackedDashboardModel(
   if (__DEV__) {
     console.log("LIVE_CHAIN_BUILDER_PARITY_DEBUG", {
       usedExportedBuilder: true,
+      canonicalCandidateSource: chainBuildResult.canonicalCandidateSource,
       runtimeBuilderInputSource: liveChainInputSources.selectedSourceName,
       runtimeRawCandidateCount: visibleRotationSourceDebug.runtimeRawCandidateCount,
       runtimeBuilderInputCandidateCount: runtimeBuilderInputCandidates.length,
@@ -1110,9 +1165,9 @@ function buildScreenshotBackedDashboardModel(
     legs: mappedUserFacingLegs,
     nextLeg,
     whatMatters: [
-      ...(deadheadWhatMattersCard ? [deadheadWhatMattersCard] : []),
+      ...deadheadWhatMattersCards,
       ...(partialWhatMattersCard ? [partialWhatMattersCard] : []),
-      ...(!deadheadWhatMattersCard && !partialWhatMattersCard
+      ...(deadheadWhatMattersCards.length === 0 && !partialWhatMattersCard
         ? dashboard.whatMatters.filter((card) => card.label !== "FAR 117 watch")
         : []),
     ],
@@ -1668,6 +1723,8 @@ export default function App() {
   const [whatIfSectionY, setWhatIfSectionY] = useState(0);
   const rerouteAnalysisCounterRef = useRef(0);
   const rerouteActiveRequestIdRef = useRef<number | null>(null);
+  const rotationAnalysisCounterRef = useRef(0);
+  const rotationActiveRunIdRef = useRef<number | null>(null);
 
   const clearRotationCompanion = () => {
     setRotationPasteInput("");
@@ -1774,6 +1831,7 @@ export default function App() {
       );
       Promise.all(readers)
         .then((attachments) => {
+          rotationActiveRunIdRef.current = null;
           setRotationScreenshotParseResult(null);
           setRotationCopiedDebugJson(false);
           setRotationScreenshots((current) => [...current, ...attachments]);
@@ -1787,12 +1845,14 @@ export default function App() {
   };
 
   const removeRotationScreenshot = (index: number) => {
+    rotationActiveRunIdRef.current = null;
     setRotationScreenshotParseResult(null);
     setRotationCopiedDebugJson(false);
     setRotationScreenshots((current) => current.filter((_, currentIndex) => currentIndex !== index));
   };
 
   const clearRotationScreenshots = () => {
+    rotationActiveRunIdRef.current = null;
     setRotationScreenshotParseResult(null);
     setRotationCopiedDebugJson(false);
     setRotationScreenshots([]);
@@ -1852,6 +1912,7 @@ export default function App() {
               screenshotParseResult: rotationScreenshotParseResult as RotationScreenshotParseResponse & {
                 debug: NonNullable<RotationScreenshotParseResponse["debug"]>;
               },
+              rotationScreenshots,
             })
           : {
               error: "payload missing",
@@ -1875,7 +1936,7 @@ export default function App() {
     }
   };
 
-  const parseRotationScreenshots = async (): Promise<RotationScreenshotParseResponse> => {
+  const parseRotationScreenshots = async (analysisRunId: number): Promise<RotationScreenshotParseResponse> => {
     const response = await fetch("/api/ai/rotation-companion/parse-screenshots", {
       method: "POST",
       headers: {
@@ -1893,17 +1954,29 @@ export default function App() {
     const contentType = response.headers.get("content-type") ?? "";
     const rawText = await response.text();
     try {
-      return JSON.parse(rawText) as RotationScreenshotParseResponse;
+      const parsed = JSON.parse(rawText) as RotationScreenshotParseResponse;
+      return {
+        ...parsed,
+        analysisRunId,
+        analysisTimestamp: new Date().toISOString(),
+      };
     } catch {
-      return buildUnreadableScreenshotParserResponse(response.status, contentType, rawText);
+      return {
+        ...buildUnreadableScreenshotParserResponse(response.status, contentType, rawText),
+        analysisRunId,
+        analysisTimestamp: new Date().toISOString(),
+      };
     }
   };
 
   const analyzeRotationCompanion = async () => {
+    const analysisRunId = Date.now() + (rotationAnalysisCounterRef.current += 1);
+    rotationActiveRunIdRef.current = analysisRunId;
     setRotationAnalyzeBusy(true);
     setRotationAnalyzeError("");
     setRotationScreenshotParseResult(null);
     setRotationCopiedDebugJson(false);
+    setRotationDashboard(null);
     try {
       const hasText = rotationPasteInput.trim().length > 0;
       const hasScreenshots = rotationScreenshots.length > 0;
@@ -1915,7 +1988,15 @@ export default function App() {
 
       let screenshotParse: RotationScreenshotParseResponse | null = null;
       if (hasScreenshots) {
-        screenshotParse = await parseRotationScreenshots();
+        screenshotParse = await parseRotationScreenshots(analysisRunId);
+        if (rotationActiveRunIdRef.current !== analysisRunId) {
+          console.warn("STALE_SCREENSHOT_PARSE_RESULT_IGNORED", {
+            attemptedRunId: analysisRunId,
+            activeRunId: rotationActiveRunIdRef.current,
+            screenshots: rotationScreenshots.map((item) => item.name),
+          });
+          return;
+        }
         setRotationScreenshotParseResult(screenshotParse);
       }
 
@@ -1967,6 +2048,15 @@ export default function App() {
           : parsed.dashboard.note,
       };
       const hasRuntimeBuilderInput = Boolean(screenshotParse?.debug?.orderedChain?.length);
+      if (rotationActiveRunIdRef.current !== analysisRunId) {
+        console.warn("STALE_SCREENSHOT_PARSE_RESULT_IGNORED", {
+          attemptedRunId: analysisRunId,
+          activeRunId: rotationActiveRunIdRef.current,
+          phase: "before_dashboard_apply",
+          screenshots: rotationScreenshots.map((item) => item.name),
+        });
+        return;
+      }
       setRotationDashboard(
         hasRuntimeBuilderInput && screenshotParse?.debug
           ? buildScreenshotBackedDashboardModel(
@@ -1979,9 +2069,13 @@ export default function App() {
       );
       setActiveTab("today");
     } catch (error) {
-      setRotationAnalyzeError(error instanceof Error ? error.message : "Unable to load the rotation.");
+      if (rotationActiveRunIdRef.current === analysisRunId) {
+        setRotationAnalyzeError(error instanceof Error ? error.message : "Unable to load the rotation.");
+      }
     } finally {
-      setRotationAnalyzeBusy(false);
+      if (rotationActiveRunIdRef.current === analysisRunId) {
+        setRotationAnalyzeBusy(false);
+      }
     }
   };
 

@@ -3,6 +3,7 @@ import {
   computeSnapshotFromUserFacingChain,
   diagnoseScreenshotRotationPartialStatus,
   extractDeadheadAnnotationsFromScreenshotEvidence,
+  normalizeCarrierFlight,
 } from "./rotationChainBuilder.ts";
 import {
   rotationChainFixtures,
@@ -23,6 +24,7 @@ function buildFixtureCandidateKey(candidate: {
   flightNumber?: string | null;
   scheduledOut?: string | null;
 }) {
+  const normalizedFlight = normalizeCarrierFlight(candidate.carrier, candidate.flightNumber);
   const normalizedClock = candidate.scheduledOut?.match(/\b(\d{3,4})\b/)?.[1] ?? candidate.scheduledOut ?? "";
   const normalizedDate =
     candidate.date?.match(/\b(\d{1,2}[A-Z]{3})\b/i)?.[1]?.toUpperCase() ??
@@ -32,44 +34,88 @@ function buildFixtureCandidateKey(candidate: {
     normalizedDate,
     (candidate.departureAirport ?? "").toUpperCase(),
     (candidate.arrivalAirport ?? "").toUpperCase(),
-    (candidate.carrier ?? "").toUpperCase(),
-    String(candidate.flightNumber ?? "").toUpperCase(),
+    normalizedFlight.carrier,
+    normalizedFlight.flightNumber,
     normalizedClock,
   ].join("|");
 }
 
 function runFixture(args: RotationChainFixture) {
-  const chain = buildScreenshotUserFacingChain({
-    rawFinalOrderedChain: args.selectedSeedChain,
-    legCandidates: args.builderInputCandidates,
-    context: args.context,
-  });
+  const buildModel = () => {
+    const chain = buildScreenshotUserFacingChain({
+      rawFinalOrderedChain: args.selectedSeedChain,
+      legCandidates: args.builderInputCandidates,
+      context: args.context,
+    });
 
-  const snapshot = computeSnapshotFromUserFacingChain({
-    userFacingLegs: chain.userFacingLegs,
-    headerScheduledBlockMinutes: args.headerScheduledBlockMinutes,
-    fallbackScheduledBlockMinutes: 0,
-    finalArrivalFallback: "TBD",
-  });
-  const partialDiagnosis = diagnoseScreenshotRotationPartialStatus({
-    userFacingLegs: chain.userFacingLegs,
-    context: args.context,
-  });
-  const selectedSeedKeys = new Set(args.selectedSeedChain.map((candidate) => buildFixtureCandidateKey(candidate)));
-  const visibleKeys = new Set(chain.userFacingLegs.map((candidate) => buildFixtureCandidateKey(candidate)));
-  const discardedFragments = args.selectedSeedChain.filter(
-    (candidate) => !visibleKeys.has(buildFixtureCandidateKey(candidate)),
+    const snapshot = computeSnapshotFromUserFacingChain({
+      userFacingLegs: chain.userFacingLegs,
+      headerScheduledBlockMinutes: args.headerScheduledBlockMinutes,
+      fallbackScheduledBlockMinutes: 0,
+      finalArrivalFallback: "TBD",
+    });
+    const partialDiagnosis = diagnoseScreenshotRotationPartialStatus({
+      userFacingLegs: chain.userFacingLegs,
+      allTripSegments: chain.allTripSegments,
+      context: args.context,
+    });
+    const selectedSeedKeys = new Set(args.selectedSeedChain.map((candidate) => buildFixtureCandidateKey(candidate)));
+    const visibleKeys = new Set(chain.userFacingLegs.map((candidate) => buildFixtureCandidateKey(candidate)));
+    const discardedFragments = args.selectedSeedChain.filter(
+      (candidate) => !visibleKeys.has(buildFixtureCandidateKey(candidate)),
+    );
+    const unmatchedCandidates = args.builderInputCandidates.filter(
+      (candidate) => !selectedSeedKeys.has(buildFixtureCandidateKey(candidate)),
+    );
+    const deadheadAnnotations = extractDeadheadAnnotationsFromScreenshotEvidence({
+      userFacingLegs: chain.userFacingLegs,
+      discardedFragments,
+      unmatchedCandidates,
+      builderInputCandidates: args.builderInputCandidates,
+      rotationBase: args.context.base,
+    });
+    return {
+      chain,
+      snapshot,
+      partialDiagnosis,
+      discardedFragments,
+      unmatchedCandidates,
+      deadheadAnnotations,
+    };
+  };
+
+  const firstRun = buildModel();
+  const secondRun = buildModel();
+  assert(
+    JSON.stringify({
+      allTripSegments: firstRun.chain.allTripSegments,
+      visibleOperatingLegs: firstRun.chain.userFacingLegs,
+      deadheadAnnotations: firstRun.deadheadAnnotations,
+      scheduledBlock: firstRun.snapshot.scheduledBlockMinutes,
+      scheduledBlockSource: firstRun.snapshot.scheduledBlockSource,
+      partialStatus: firstRun.partialDiagnosis.isPartial,
+      partialReason: firstRun.partialDiagnosis.partialReason,
+    }) ===
+      JSON.stringify({
+        allTripSegments: secondRun.chain.allTripSegments,
+        visibleOperatingLegs: secondRun.chain.userFacingLegs,
+        deadheadAnnotations: secondRun.deadheadAnnotations,
+        scheduledBlock: secondRun.snapshot.scheduledBlockMinutes,
+        scheduledBlockSource: secondRun.snapshot.scheduledBlockSource,
+        partialStatus: secondRun.partialDiagnosis.isPartial,
+        partialReason: secondRun.partialDiagnosis.partialReason,
+      }),
+    `[${args.name}] Expected deterministic repeated output for identical fixture input`,
   );
-  const unmatchedCandidates = args.builderInputCandidates.filter(
-    (candidate) => !selectedSeedKeys.has(buildFixtureCandidateKey(candidate)),
-  );
-  const deadheadAnnotations = extractDeadheadAnnotationsFromScreenshotEvidence({
-    userFacingLegs: chain.userFacingLegs,
+
+  const {
+    chain,
+    snapshot,
+    partialDiagnosis,
     discardedFragments,
     unmatchedCandidates,
-    builderInputCandidates: args.builderInputCandidates,
-    rotationBase: args.context.base,
-  });
+    deadheadAnnotations,
+  } = firstRun;
 
   const visibleRoutes = chain.userFacingLegs.map(
     (leg) => `${leg.departureAirport ?? "?"}-${leg.arrivalAirport ?? "?"}`,
@@ -92,6 +138,13 @@ function runFixture(args: RotationChainFixture) {
     snapshot.finalArrival === args.expectedFinalArrival,
     `[${args.name}] Expected final arrival ${args.expectedFinalArrival}, got ${snapshot.finalArrival}`,
   );
+  if (args.expectedFinalArrivalAfterDeadhead) {
+    const finalArrivalAfterDeadhead = deadheadAnnotations.at(-1)?.destination ?? snapshot.finalArrival;
+    assert(
+      finalArrivalAfterDeadhead === args.expectedFinalArrivalAfterDeadhead,
+      `[${args.name}] Expected final arrival after DH ${args.expectedFinalArrivalAfterDeadhead}, got ${finalArrivalAfterDeadhead}`,
+    );
+  }
   assert(
     JSON.stringify(visibleRoutes) === JSON.stringify(args.expectedUserFacingCityPairs),
     `[${args.name}] Expected exact visible chain ${args.expectedUserFacingCityPairs.join(" -> ")}, got ${visibleRoutes.join(" -> ")}`,
@@ -167,7 +220,25 @@ function runFixture(args: RotationChainFixture) {
           `[${args.name}] Expected ${expectedAnnotation.cityPair} confirmation ${expectedAnnotation.confirmationCode}, got ${matchingAnnotation?.confirmationCode}`,
         );
       }
+      if (expectedAnnotation.scheduledOut) {
+        assert(
+          matchingAnnotation?.scheduledOut === expectedAnnotation.scheduledOut,
+          `[${args.name}] Expected ${expectedAnnotation.cityPair} scheduledOut ${expectedAnnotation.scheduledOut}, got ${matchingAnnotation?.scheduledOut}`,
+        );
+      }
+      if (expectedAnnotation.marker) {
+        assert(
+          matchingAnnotation?.marker === expectedAnnotation.marker,
+          `[${args.name}] Expected ${expectedAnnotation.cityPair} marker ${expectedAnnotation.marker}, got ${matchingAnnotation?.marker}`,
+        );
+      }
     }
+  }
+  if (args.expectedCanonicalCandidateSource) {
+    assert(
+      chain.canonicalCandidateSource === args.expectedCanonicalCandidateSource,
+      `[${args.name}] Expected canonicalCandidateSource ${args.expectedCanonicalCandidateSource}, got ${chain.canonicalCandidateSource}`,
+    );
   }
   if (args.expectedScheduledBlockSource) {
     assert(
@@ -233,8 +304,64 @@ function runFixture(args: RotationChainFixture) {
       2,
     ),
   );
+
+  return {
+    name: args.name,
+    comparisonGroup: args.comparisonGroup,
+    allTripSegments: chain.allTripSegments.map((leg) => `${leg.departureAirport ?? "?"}-${leg.arrivalAirport ?? "?"}`),
+    visibleOperatingLegs: visibleRoutes,
+    deadheadAnnotations: deadheadAnnotations.map((annotation) => ({
+      cityPair: annotation.cityPair,
+      carrier: annotation.carrier ?? null,
+      flightNumber: annotation.flightNumber ?? null,
+      confirmationCode: annotation.confirmationCode ?? null,
+      marker: annotation.marker ?? null,
+    })),
+    scheduledBlockMinutes: snapshot.scheduledBlockMinutes,
+    scheduledBlockSource: snapshot.scheduledBlockSource,
+    finalArrival: snapshot.finalArrival,
+    finalArrivalAfterDeadhead: args.expectedFinalArrivalAfterDeadhead
+      ? deadheadAnnotations.at(-1)?.destination ?? snapshot.finalArrival
+      : snapshot.finalArrival,
+  };
 }
 
+const comparisonGroups = new Map<string, ReturnType<typeof runFixture>[]>();
 for (const fixture of rotationChainFixtures) {
-  runFixture(fixture);
+  const result = runFixture(fixture);
+  if (result.comparisonGroup) {
+    const groupResults = comparisonGroups.get(result.comparisonGroup) ?? [];
+    groupResults.push(result);
+    comparisonGroups.set(result.comparisonGroup, groupResults);
+  }
+}
+
+for (const [group, results] of comparisonGroups) {
+  if (results.length < 2) {
+    continue;
+  }
+  const [first, ...rest] = results;
+  for (const result of rest) {
+    assert(
+      JSON.stringify({
+        allTripSegments: result.allTripSegments,
+        visibleOperatingLegs: result.visibleOperatingLegs,
+        deadheadAnnotations: result.deadheadAnnotations,
+        scheduledBlockMinutes: result.scheduledBlockMinutes,
+        scheduledBlockSource: result.scheduledBlockSource,
+        finalArrival: result.finalArrival,
+        finalArrivalAfterDeadhead: result.finalArrivalAfterDeadhead,
+      }) ===
+        JSON.stringify({
+          allTripSegments: first.allTripSegments,
+          visibleOperatingLegs: first.visibleOperatingLegs,
+          deadheadAnnotations: first.deadheadAnnotations,
+          scheduledBlockMinutes: first.scheduledBlockMinutes,
+          scheduledBlockSource: first.scheduledBlockSource,
+          finalArrival: first.finalArrival,
+          finalArrivalAfterDeadhead: first.finalArrivalAfterDeadhead,
+        }),
+      `[${group}] Expected paired fixtures to produce identical final display model`,
+    );
+  }
 }

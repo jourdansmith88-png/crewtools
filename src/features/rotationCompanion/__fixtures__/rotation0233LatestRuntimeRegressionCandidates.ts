@@ -1,0 +1,146 @@
+import type { RotationChainCandidate, RotationChainLeg } from "../rotationChainBuilder";
+
+export const rotation0233LatestRuntimeRegressionContext = {
+  base: "SLC",
+  layoverCities: ["CLE", "MCI"],
+  startDate: "04APR",
+  endDate: "06APR",
+} as const;
+
+export const rotation0233LatestRuntimeRegressionHeader = {
+  rotationNumber: "0233",
+  tripDates: "04APR - 06APR",
+  totalCreditMinutes: 16 * 60 + 20,
+  totalScheduledBlockMinutes: 0,
+} as const;
+
+export const rotation0233LatestRuntimeRegressionExpectedUserFacingRoutes = [
+  "SLC-SJC",
+  "SJC-SLC",
+  "SLC-CLE",
+  "LGA-MCI",
+] as const;
+
+export const rotation0233LatestRuntimeRegressionBuilderInputCandidates: RotationChainCandidate[] = [
+  {
+    sourceScreenshotIndex: 0,
+    date: "04APR",
+    flightNumber: "DL1272",
+    carrier: "DL",
+    departureAirport: "SLC",
+    arrivalAirport: "SJC",
+    scheduledOut: "2032 04APR",
+    scheduledIn: "2134 04APR",
+    scheduledBlock: "2:02",
+    turn: "15:57",
+    rawSourceLine: "DL1272 SLC-SJC 2032 04APR 2134 04APR Blk 2:02",
+    sourceText: "DL1272 : SLC-SJC Dep- 2032 04APR Arr- 2134 04APR Blk- 2:02",
+  },
+  {
+    sourceScreenshotIndex: 1,
+    date: "05APR",
+    flightNumber: "DL1254",
+    carrier: "DL",
+    departureAirport: "SJC",
+    arrivalAirport: "SLC",
+    scheduledOut: "1331 05APR",
+    scheduledIn: "1619 05APR",
+    scheduledBlock: "1:48",
+    turn: "1:29",
+    rawSourceLine: "DL1254 SJC-SLC 1331 05APR 1619 05APR Blk 1:48",
+    sourceText: "DL1254 : SJC-SLC Dep- 1331 05APR Arr- 1619 05APR Blk- 1:48",
+  },
+  {
+    sourceScreenshotIndex: 1,
+    date: "05APR",
+    flightNumber: "DL2855",
+    carrier: "DL",
+    departureAirport: "SLC",
+    arrivalAirport: "CLE",
+    scheduledOut: "1748 05APR",
+    scheduledIn: "2306 05APR",
+    scheduledBlock: "3:18",
+    turn: "14:43",
+    rawSourceLine: "DL2855 SLC-CLE 1748 05APR 2306 05APR Blk 3:18",
+    sourceText: "DL2855 : SLC-CLE Dep- 1748 05APR Arr- 2306 05APR Blk- 3:18",
+  },
+  {
+    sourceScreenshotIndex: 2,
+    date: "06APR",
+    flightNumber: "9E5045",
+    carrier: "9E",
+    departureAirport: "CLE",
+    arrivalAirport: "LGA",
+    scheduledOut: "1349 06APR",
+    scheduledIn: "1512 06APR",
+    scheduledBlock: "1:23",
+    turn: "1:16",
+    rawSourceLine: "O 9E5045 CLE-LGA 1349 06APR 1512 06APR Confirmation #GSWLN8",
+    sourceText: "O 9E5045 : CLE-LGA Dep- 1349 06APR Arr- 1512 06APR Blk- 1:23 Confirmation #GSWLN8",
+  },
+  {
+    sourceScreenshotIndex: 2,
+    date: "06APR",
+    flightNumber: "DL563",
+    carrier: "DL",
+    departureAirport: "LGA",
+    arrivalAirport: "MCI",
+    scheduledOut: "1628 06APR",
+    scheduledIn: "1922 06APR",
+    scheduledBlock: "3:54",
+    turn: "1:32",
+    rawSourceLine: "DL563 LGA-MCI 1628 06APR 1922 06APR Blk 3:54",
+    sourceText: "DL563 : LGA-MCI Dep- 1628 06APR Arr- 1922 06APR Blk- 3:54",
+  },
+  {
+    sourceScreenshotIndex: 3,
+    date: "06APR",
+    flightNumber: "DL2903",
+    carrier: "DL",
+    departureAirport: "MCI",
+    arrivalAirport: "SLC",
+    scheduledOut: "2054 06APR",
+    scheduledIn: "2224 06APR -1hr",
+    scheduledBlock: "1:30",
+    turn: null,
+    rawSourceLine: "D DL2903 MCI-SLC 2054 06APR 2224 06APR -1hr Confirmation #GSWLN4",
+    sourceText: "D DL2903 : MCI-SLC Dep- 2054 06APR Arr- 2224 06APR -1hr Blk- 1:30 Confirmation #GSWLN4",
+  },
+  {
+    sourceScreenshotIndex: 3,
+    date: null,
+    flightNumber: "2855",
+    carrier: "DL",
+    departureAirport: "SLC",
+    arrivalAirport: "CLE",
+    scheduledOut: "1748",
+    scheduledIn: null,
+    scheduledBlock: null,
+    turn: null,
+    rawSourceLine: "2855 SLC-CLE partial",
+    sourceText: "DL2855 : SLC-CLE Dep- 1748",
+  },
+];
+
+export const rotation0233LatestRuntimeRegressionSelectedSeedChain: RotationChainLeg[] = [
+  {
+    index: 1,
+    ...rotation0233LatestRuntimeRegressionBuilderInputCandidates[2],
+  },
+  {
+    index: 2,
+    ...rotation0233LatestRuntimeRegressionBuilderInputCandidates[3],
+  },
+  {
+    index: 3,
+    ...rotation0233LatestRuntimeRegressionBuilderInputCandidates[4],
+  },
+  {
+    index: 4,
+    ...rotation0233LatestRuntimeRegressionBuilderInputCandidates[5],
+  },
+  {
+    index: 5,
+    ...rotation0233LatestRuntimeRegressionBuilderInputCandidates[6],
+  },
+];

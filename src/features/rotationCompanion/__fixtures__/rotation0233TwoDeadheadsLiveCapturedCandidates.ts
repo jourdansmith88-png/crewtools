@@ -1,0 +1,146 @@
+import type { RotationChainCandidate, RotationChainLeg } from "../rotationChainBuilder";
+
+export const rotation0233TwoDeadheadsLiveCapturedContext = {
+  base: "SLC",
+  layoverCities: ["CLE", "MCI"],
+  startDate: "04APR",
+  endDate: "06APR",
+} as const;
+
+export const rotation0233TwoDeadheadsLiveCapturedHeader = {
+  rotationNumber: "0233",
+  tripDates: "04APR - 06APR",
+  totalCreditMinutes: 16 * 60 + 20,
+  totalScheduledBlockMinutes: 0,
+} as const;
+
+export const rotation0233TwoDeadheadsLiveCapturedExpectedUserFacingRoutes = [
+  "SLC-SJC",
+  "SJC-SLC",
+  "SLC-CLE",
+  "LGA-MCI",
+] as const;
+
+export const rotation0233TwoDeadheadsLiveCapturedBuilderInputCandidates: RotationChainCandidate[] = [
+  {
+    sourceScreenshotIndex: 0,
+    date: "04APR",
+    flightNumber: "DL2614",
+    carrier: "DL",
+    departureAirport: "SLC",
+    arrivalAirport: "SJC",
+    scheduledOut: "0910 04APR",
+    scheduledIn: "1112 04APR",
+    scheduledBlock: "2:02",
+    turn: "0:48",
+    rawSourceLine: "DL2614 SLC-SJC 0910 04APR 1112 04APR Blk 2:02",
+    sourceText: "DL2614 : SLC-SJC Dep- 0910 04APR Arr- 1112 04APR Blk- 2:02",
+  },
+  {
+    sourceScreenshotIndex: 0,
+    date: "04APR",
+    flightNumber: "DL1733",
+    carrier: "DL",
+    departureAirport: "SJC",
+    arrivalAirport: "SLC",
+    scheduledOut: "1200 04APR",
+    scheduledIn: "1448 04APR",
+    scheduledBlock: "1:48",
+    turn: "13:42",
+    rawSourceLine: "DL1733 SJC-SLC 1200 04APR 1448 04APR Blk 1:48",
+    sourceText: "DL1733 : SJC-SLC Dep- 1200 04APR Arr- 1448 04APR Blk- 1:48",
+  },
+  {
+    sourceScreenshotIndex: 1,
+    date: "05APR",
+    flightNumber: "DL2148",
+    carrier: "DL",
+    departureAirport: "SLC",
+    arrivalAirport: "CLE",
+    scheduledOut: "0830 05APR",
+    scheduledIn: "1348 05APR",
+    scheduledBlock: "3:18",
+    turn: "0:01",
+    rawSourceLine: "DL2148 SLC-CLE 0830 05APR 1348 05APR Blk 3:18",
+    sourceText: "DL2148 : SLC-CLE Dep- 0830 05APR Arr- 1348 05APR Blk- 3:18",
+  },
+  {
+    sourceScreenshotIndex: 2,
+    date: "06APR",
+    flightNumber: "5045",
+    carrier: "9E",
+    departureAirport: "CLE",
+    arrivalAirport: "LGA",
+    scheduledOut: "1349 06APR",
+    scheduledIn: "1512 06APR",
+    scheduledBlock: "1:23",
+    turn: "0:41",
+    rawSourceLine: "O 9E5045 CLE-LGA 1349 06APR 1512 06APR Confirmation #GSWLN8",
+    sourceText: "O 9E5045 : CLE-LGA Dep- 1349 06APR Arr- 1512 06APR Blk- 1:23 Confirmation #GSWLN8",
+  },
+  {
+    sourceScreenshotIndex: 2,
+    date: "06APR",
+    flightNumber: "DL716",
+    carrier: "DL",
+    departureAirport: "LGA",
+    arrivalAirport: "MCI",
+    scheduledOut: "1553 06APR",
+    scheduledIn: "1847 06APR",
+    scheduledBlock: "3:54",
+    turn: "2:07",
+    rawSourceLine: "DL716 LGA-MCI 1553 06APR 1847 06APR Blk 3:54",
+    sourceText: "DL716 : LGA-MCI Dep- 1553 06APR Arr- 1847 06APR Blk- 3:54",
+  },
+  {
+    sourceScreenshotIndex: 3,
+    date: "06APR",
+    flightNumber: "2903",
+    carrier: "DL",
+    departureAirport: "MCI",
+    arrivalAirport: "SLC",
+    scheduledOut: "2054 06APR",
+    scheduledIn: "2224 06APR -1hr",
+    scheduledBlock: "1:30",
+    turn: null,
+    rawSourceLine: "D DL2903 MCI-SLC 2054 06APR 2224 06APR -1hr Confirmation #GSWLN4",
+    sourceText: "D DL2903 : MCI-SLC Dep- 2054 06APR Arr- 2224 06APR -1hr Blk- 1:30 Confirmation #GSWLN4",
+  },
+  {
+    sourceScreenshotIndex: 3,
+    date: null,
+    flightNumber: "2148",
+    carrier: "DL",
+    departureAirport: "SLC",
+    arrivalAirport: "CLE",
+    scheduledOut: "0830",
+    scheduledIn: null,
+    scheduledBlock: null,
+    turn: null,
+    rawSourceLine: "2148 SLC-CLE partial",
+    sourceText: "DL2148 : SLC-CLE Dep- 0830",
+  },
+];
+
+export const rotation0233TwoDeadheadsLiveCapturedSelectedSeedChain: RotationChainLeg[] = [
+  {
+    index: 1,
+    ...rotation0233TwoDeadheadsLiveCapturedBuilderInputCandidates[2],
+  },
+  {
+    index: 2,
+    ...rotation0233TwoDeadheadsLiveCapturedBuilderInputCandidates[3],
+  },
+  {
+    index: 3,
+    ...rotation0233TwoDeadheadsLiveCapturedBuilderInputCandidates[4],
+  },
+  {
+    index: 4,
+    ...rotation0233TwoDeadheadsLiveCapturedBuilderInputCandidates[5],
+  },
+  {
+    index: 5,
+    ...rotation0233TwoDeadheadsLiveCapturedBuilderInputCandidates[6],
+  },
+];

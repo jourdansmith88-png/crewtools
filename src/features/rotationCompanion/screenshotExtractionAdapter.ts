@@ -508,7 +508,8 @@ function parseDurationMinutes(value?: string) {
 
 function parseMicrewHeaderSummary(rawText: string): MicrewHeaderSummary {
   const headerLineMatch = rawText.match(/\b(\d{1,2}[A-Z]{3})\s+([A-Z]{3})\s+(\d{3,5})\b/i);
-  const headerSection = rawText.split(/\b(?:D\s+)?DL?\d{2,4}\s*[: ]\s*[A-Z]{3}-[A-Z]{3}\b/i)[0] ?? rawText;
+  const headerSection =
+    rawText.split(/\b(?:[DO]\s+)?(?:[A-Z0-9]{1,3})?\d{2,5}\s*[: ]\s*[A-Z]{3}-[A-Z]{3}\b/i)[0] ?? rawText;
   const reportMatch = headerSection.match(/Rpt-\s*(\d{3,4})(?:\s+(\d{1,2}[A-Z]{3}))?/i);
   const releaseMatch = headerSection.match(/Rls-\s*(\d{3,4})(?:\s+(\d{1,2}[A-Z]{3}))?/i);
   const creditMatch = headerSection.match(/Credit-\s*(\d{1,2}:\d{2})/i);

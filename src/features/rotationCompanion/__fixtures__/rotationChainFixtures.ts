@@ -20,6 +20,20 @@ import {
   rotation0118LiveCapturedSelectedSeedChain,
 } from "./rotation0118LiveCapturedCandidates.ts";
 import {
+  rotation0233TwoDeadheadsLiveCapturedBuilderInputCandidates,
+  rotation0233TwoDeadheadsLiveCapturedContext,
+  rotation0233TwoDeadheadsLiveCapturedExpectedUserFacingRoutes,
+  rotation0233TwoDeadheadsLiveCapturedHeader,
+  rotation0233TwoDeadheadsLiveCapturedSelectedSeedChain,
+} from "./rotation0233TwoDeadheadsLiveCapturedCandidates.ts";
+import {
+  rotation0233LatestRuntimeRegressionBuilderInputCandidates,
+  rotation0233LatestRuntimeRegressionContext,
+  rotation0233LatestRuntimeRegressionExpectedUserFacingRoutes,
+  rotation0233LatestRuntimeRegressionHeader,
+  rotation0233LatestRuntimeRegressionSelectedSeedChain,
+} from "./rotation0233LatestRuntimeRegressionCandidates.ts";
+import {
   rotation7942LiveCapturedBuilderInputCandidates,
   rotation7942LiveCapturedContext,
   rotation7942LiveCapturedExpectedUserFacingRoutes,
@@ -43,12 +57,14 @@ import {
 
 export type RotationChainFixture = {
   name: string;
+  comparisonGroup?: string;
   rotationNumber: string;
   tripDates: string;
   builderInputCandidates: typeof rotation0983AllCandidates;
   selectedSeedChain: typeof rotation0983RawFinalOrderedChain;
   expectedUserFacingCityPairs: readonly string[];
   expectedFinalArrival: string;
+  expectedFinalArrivalAfterDeadhead?: string;
   expectedFirstLeg: string;
   expectedLastLeg: string;
   expectedScheduledBlockMinutes: number;
@@ -69,7 +85,10 @@ export type RotationChainFixture = {
     carrier?: string;
     flightNumber?: string;
     confirmationCode?: string;
+    scheduledOut?: string;
+    marker?: "D" | "O";
   }>;
+  expectedCanonicalCandidateSource?: "builderInputCandidates" | "selectedSeedChainFallback";
 };
 
 export const rotationChainFixtures: RotationChainFixture[] = [
@@ -135,8 +154,110 @@ export const rotationChainFixtures: RotationChainFixture[] = [
         carrier: "DL",
         flightNumber: "828",
         confirmationCode: "JLLX3I",
+        scheduledOut: "1240 04MAY",
+        marker: "D",
       },
     ],
+  },
+  {
+    name: "rotation0233 two-deadheads live-captured fixture",
+    comparisonGroup: "rotation0233-display-parity",
+    rotationNumber: rotation0233TwoDeadheadsLiveCapturedHeader.rotationNumber,
+    tripDates: rotation0233TwoDeadheadsLiveCapturedHeader.tripDates,
+    builderInputCandidates: rotation0233TwoDeadheadsLiveCapturedBuilderInputCandidates,
+    selectedSeedChain: rotation0233TwoDeadheadsLiveCapturedSelectedSeedChain,
+    expectedUserFacingCityPairs: rotation0233TwoDeadheadsLiveCapturedExpectedUserFacingRoutes,
+    expectedFinalArrival: "MCI",
+    expectedFinalArrivalAfterDeadhead: "SLC",
+    expectedFirstLeg: "SLC-SJC",
+    expectedLastLeg: "LGA-MCI",
+    expectedScheduledBlockMinutes: 662,
+    expectedScheduledBlockSource: "computedFromUserFacingLegs",
+    expectedPartialStatus: false,
+    headerScheduledBlockMinutes: rotation0233TwoDeadheadsLiveCapturedHeader.totalScheduledBlockMinutes,
+    context: rotation0233TwoDeadheadsLiveCapturedContext,
+    expectedExcludedCityPairs: ["CLE-LGA", "MCI-SLC"],
+    expectedEvidenceCandidates: [
+      {
+        cityPair: "CLE-LGA",
+        sourceTextIncludes: "GSWLN8",
+        mustExistInSelectedSeedChain: true,
+      },
+      {
+        cityPair: "MCI-SLC",
+        sourceTextIncludes: "GSWLN4",
+        mustExistInSelectedSeedChain: true,
+      },
+    ],
+    expectedDeadheadAnnotations: [
+      {
+        cityPair: "CLE-LGA",
+        carrier: "9E",
+        flightNumber: "5045",
+        confirmationCode: "GSWLN8",
+        scheduledOut: "1349 06APR",
+        marker: "O",
+      },
+      {
+        cityPair: "MCI-SLC",
+        carrier: "DL",
+        flightNumber: "2903",
+        confirmationCode: "GSWLN4",
+        scheduledOut: "2054 06APR",
+        marker: "D",
+      },
+    ],
+    expectedCanonicalCandidateSource: "builderInputCandidates",
+  },
+  {
+    name: "rotation0233 latest runtime regression fixture",
+    comparisonGroup: "rotation0233-display-parity",
+    rotationNumber: rotation0233LatestRuntimeRegressionHeader.rotationNumber,
+    tripDates: rotation0233LatestRuntimeRegressionHeader.tripDates,
+    builderInputCandidates: rotation0233LatestRuntimeRegressionBuilderInputCandidates,
+    selectedSeedChain: rotation0233LatestRuntimeRegressionSelectedSeedChain,
+    expectedUserFacingCityPairs: rotation0233LatestRuntimeRegressionExpectedUserFacingRoutes,
+    expectedFinalArrival: "MCI",
+    expectedFinalArrivalAfterDeadhead: "SLC",
+    expectedFirstLeg: "SLC-SJC",
+    expectedLastLeg: "LGA-MCI",
+    expectedScheduledBlockMinutes: 662,
+    expectedScheduledBlockSource: "computedFromUserFacingLegs",
+    expectedPartialStatus: false,
+    headerScheduledBlockMinutes: rotation0233LatestRuntimeRegressionHeader.totalScheduledBlockMinutes,
+    context: rotation0233LatestRuntimeRegressionContext,
+    expectedExcludedCityPairs: ["CLE-LGA", "MCI-SLC"],
+    expectedEvidenceCandidates: [
+      {
+        cityPair: "CLE-LGA",
+        sourceTextIncludes: "GSWLN8",
+        mustExistInSelectedSeedChain: true,
+      },
+      {
+        cityPair: "MCI-SLC",
+        sourceTextIncludes: "GSWLN4",
+        mustExistInSelectedSeedChain: true,
+      },
+    ],
+    expectedDeadheadAnnotations: [
+      {
+        cityPair: "CLE-LGA",
+        carrier: "9E",
+        flightNumber: "5045",
+        confirmationCode: "GSWLN8",
+        scheduledOut: "1349 06APR",
+        marker: "O",
+      },
+      {
+        cityPair: "MCI-SLC",
+        carrier: "DL",
+        flightNumber: "2903",
+        confirmationCode: "GSWLN4",
+        scheduledOut: "2054 06APR",
+        marker: "D",
+      },
+    ],
+    expectedCanonicalCandidateSource: "builderInputCandidates",
   },
   {
     name: "rotation7942 live-captured fixture",
