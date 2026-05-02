@@ -46,6 +46,7 @@ export type ParsedRotation = {
   totalCredit?: number;
   totalScheduledBlock?: number;
   deadheadBlock?: number;
+  finalArrivalAfterDh?: string;
   excludedDeadheadLegs: number;
   layoverCities: string[];
   dutyPeriods: ParsedRotationDutyPeriod[];
