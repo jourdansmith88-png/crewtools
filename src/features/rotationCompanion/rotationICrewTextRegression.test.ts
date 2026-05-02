@@ -264,6 +264,50 @@ assert(
   `Expected 12OO3895 => OO/3895, got ${JSON.stringify(ooTwoDigitDayFlight)}`,
 );
 
+const yxRegionalFlight = parseICrewFlightToken("06", "6YX1234");
+assert(
+  yxRegionalFlight.carrier === "YX" &&
+    yxRegionalFlight.flightNumber === "1234" &&
+    yxRegionalFlight.marker === null,
+  `Expected 6YX1234 => YX/1234, got ${JSON.stringify(yxRegionalFlight)}`,
+);
+
+const yxCarrierNameFixture = `
+SLC   PILOT 220         *** ROTATION OPER
+0999     POS-A        EFFECTIVE APR06         CHECK IN AT 10.00
+ACTUAL REPORT TIME 1000
+TRIP DATES                    06APR - 07APR
+REGULAR- 5.00TL                      1.00TBL  0.00TBMU  1.23TDHD  0.00TDMU
+RESERVE- 5.00TL                      1.00TBL  0.00TBMU  1.23TDHD  0.00TDMU
+TAFB  12.00CR
+TAFB  11.30EX
+06YX1234 SLC 1200 BOI.1323 1.23
+BOI 10.00/HOTEL TEST
+07  1DL9999   BOI0800   SLC.0900   1.00BL
+06 TOTAL 0.00BL 1.23DHD
+`.trim();
+
+const yxCarrierNameParsed = parseICrewText(yxCarrierNameFixture);
+assert(
+  yxCarrierNameParsed.deadheadAnnotations[0]?.carrier === "YX" &&
+    yxCarrierNameParsed.deadheadAnnotations[0]?.carrierName === "Republic Airways" &&
+    yxCarrierNameParsed.deadheadAnnotations[0]?.reason ===
+      "inferred_from_dhd_totals_and_regional_carrier",
+  `Expected YX regional carrier mapping to Republic Airways with DHD-supported classification, got ${JSON.stringify(
+    yxCarrierNameParsed.deadheadAnnotations[0],
+  )}`,
+);
+assert(
+  JSON.stringify(
+    yxCarrierNameParsed.visibleOperatingLegs.map(
+      (leg) => `${leg.departureAirport}-${leg.arrivalAirport}`,
+    ),
+  ) === JSON.stringify(["BOI-SLC"]),
+  `Expected YX fixture to keep only BOI-SLC as operating, got ${yxCarrierNameParsed.visibleOperatingLegs
+    .map((leg) => `${leg.departureAirport}-${leg.arrivalAirport}`)
+    .join(" | ")}`,
+);
+
 runICrewAssertions("rotation0233 iCrew raw-text fixture", rotation0233ICrewRawText);
 runICrewAssertions("rotation0233 iCrew live-paste fixture", rotation0233ICrewLivePasteText);
 
@@ -328,6 +372,14 @@ runICrewAssertions("rotation0233 iCrew live-paste fixture", rotation0233ICrewLiv
       parsed.deadheadAnnotations[0]?.scheduledBlockMinutes === 51 &&
       parsed.deadheadAnnotations[0]?.reason === "inferred_from_dhd_totals_and_regional_carrier",
     `[${label}] Expected OO3895 SkyWest deadhead annotation, got ${JSON.stringify(parsed.deadheadAnnotations[0])}`,
+  );
+
+  const yxNonDeadheadToken = parseICrewFlightToken("06", "6YX1234");
+  assert(
+    yxNonDeadheadToken.carrier === "YX" &&
+      yxNonDeadheadToken.flightNumber === "1234" &&
+      yxNonDeadheadToken.marker === null,
+    `[${label}] Expected YX token support to parse without implicit deadhead classification, got ${JSON.stringify(yxNonDeadheadToken)}`,
   );
   assert(parsed.operatingScheduledBlockMinutes === 59, `[${label}] Expected operatingScheduledBlockMinutes 59, got ${parsed.operatingScheduledBlockMinutes}`);
   assert(parsed.deadheadScheduledBlockMinutes === 51, `[${label}] Expected deadheadScheduledBlockMinutes 51, got ${parsed.deadheadScheduledBlockMinutes}`);

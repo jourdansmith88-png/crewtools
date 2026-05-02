@@ -93,6 +93,7 @@ export type ICrewParseDebugResult = {
 const REGIONAL_CARRIER_NAMES: Record<string, string> = {
   "9E": "Endeavor Air",
   OO: "SkyWest Airlines",
+  YX: "Republic Airways",
 };
 
 function normalizeICrewLine(line: string) {
@@ -170,15 +171,18 @@ function isDayOnlyToken(token?: string | null) {
 }
 
 function isFlightTokenLike(token?: string | null) {
-  return /^(?:\d{3,5}|D\d{2,5}|DL\d{2,5}|9E\d{2,5}|OO\d{2,5}|\d{1,2}(?:D\d{2,5}|DL\d{2,5}|9E\d{2,5}|OO\d{2,5}))$/i.test(
+  return /^(?:\d{3,5}|D\d{2,5}|DL\d{2,5}|9E\d{2,5}|OO\d{2,5}|YX\d{2,5}|\d{1,2}(?:D\d{2,5}|DL\d{2,5}|9E\d{2,5}|OO\d{2,5}|YX\d{2,5}))$/i.test(
     token ?? "",
   );
 }
 
 export function parseICrewFlightToken(dayToken: string, rawToken: string) {
   const normalizedDay = String(Number(dayToken));
-  const withoutDayPrefix =
-    rawToken.startsWith(normalizedDay) ? rawToken.slice(normalizedDay.length) : rawToken;
+  const withoutDayPrefix = rawToken.startsWith(dayToken)
+    ? rawToken.slice(dayToken.length)
+    : rawToken.startsWith(normalizedDay)
+      ? rawToken.slice(normalizedDay.length)
+      : rawToken;
   if (/^\d{2,5}$/i.test(withoutDayPrefix)) {
     return {
       marker: null,
@@ -420,7 +424,7 @@ function applyRegionalDeadheadInference(args: {
   const unresolvedRegional = segments.filter(
     (segment) =>
       !segment.isDeadhead &&
-      ["9E", "OO"].includes((segment.carrier ?? "").toUpperCase()),
+      ["9E", "OO", "YX"].includes((segment.carrier ?? "").toUpperCase()),
   );
   if (unresolvedRegional.length === 0) {
     return;
@@ -511,8 +515,8 @@ function parseICrewSegments(rawText: string) {
       currentDayToken = dayToken;
       rawFlightToken = tokens[1];
       cursor = 2;
-    } else if (tokens[0] && /^(\d{1,2})(D\d{2,5}|DL\d{2,5}|9E\d{2,5}|OO\d{2,5})$/i.test(tokens[0])) {
-      const match = tokens[0].match(/^(\d{1,2})(D\d{2,5}|DL\d{2,5}|9E\d{2,5}|OO\d{2,5})$/i);
+    } else if (tokens[0] && /^(\d{1,2})(D\d{2,5}|DL\d{2,5}|9E\d{2,5}|OO\d{2,5}|YX\d{2,5})$/i.test(tokens[0])) {
+      const match = tokens[0].match(/^(\d{1,2})(D\d{2,5}|DL\d{2,5}|9E\d{2,5}|OO\d{2,5}|YX\d{2,5})$/i);
       dayToken = match?.[1]?.padStart(2, "0") ?? currentDayToken;
       currentDayToken = dayToken;
       rawFlightToken = tokens[0];

@@ -1522,8 +1522,8 @@ function buildScreenshotBackedDashboardModel(
     },
     note:
       shouldDowngradePartialToDeadheadReturn && deadheadReturnHome
-        ? `${dashboard.note ?? ""}${dashboard.note ? " " : ""}Return to base appears to be by deadhead: ${deadheadReturnHome.cityPair}.`
-        : dashboard.note,
+      ? `${dashboard.note ?? ""}${dashboard.note ? " " : ""}Deadhead segment detected: ${deadheadReturnHome.cityPair}.`
+      : dashboard.note,
   };
 }
 
@@ -4511,7 +4511,7 @@ export default function App() {
                         value={rotationDashboard.snapshot.finalArrival}
                       />
                       <ResultLine
-                        label="DH return"
+                        label="DH legs"
                         value={rotationDashboard.parsedRotation.deadheadAnnotations?.map((annotation) => annotation.cityPair).join(", ") ?? "TBD"}
                       />
                       <ResultLine
