@@ -71,6 +71,10 @@ import {
   diagnoseScreenshotRotationPartialStatus as diagnoseScreenshotRotationPartialStatusPure,
   excludeDeadheadLegsFromVisibleChain as excludeDeadheadLegsFromVisibleChainPure,
 } from "./src/features/rotationCompanion/rotationChainBuilder";
+import {
+  parseICrewTextWithDiagnostics,
+  type ICrewParserDiagnostics,
+} from "./src/features/rotationCompanion/parseICrewText";
 import type { RotationChainCandidate } from "./src/features/rotationCompanion/rotationChainBuilder";
 import { fliegerTypography, getFliegerPalette } from "./src/theme/flieger";
 import type {
@@ -794,6 +798,167 @@ function buildLiveChainDebugExport(args: {
       partialBannerVisible: rotationDashboard.parsedRotation.isPartial,
       partialSourceUsed: "displayModel.partialDiagnosis.isPartial",
     },
+  };
+}
+
+function buildICrewDebugExport(args: {
+  rawText: string;
+  parsed: ReturnType<typeof parseICrewTextWithDiagnostics>["parsed"];
+  diagnostics: ICrewParserDiagnostics | null;
+  parserError?: string | null;
+}) {
+  const { rawText, parsed, diagnostics, parserError } = args;
+  const rawTextLength = rawText.length;
+  const rawTextFirst500 = rawText.slice(0, 500);
+  const rawTextLast500 = rawText.slice(Math.max(0, rawText.length - 500));
+  if (!parsed) {
+    return {
+      sourceType: "iCrewText" as const,
+      rawTextLength,
+      rawLineCount: diagnostics?.rawLineCount ?? rawText.split(/\r?\n/).filter((line) => line.trim().length > 0).length,
+      rawTextFirst500,
+      rawTextLast500,
+      parserSucceeded: false,
+      parserError: parserError ?? "Unknown iCrew parser error.",
+      first50RawLines: diagnostics?.first50RawLines ?? [],
+      last50RawLines: diagnostics?.last50RawLines ?? [],
+      first50NormalizedLines: diagnostics?.first50NormalizedLines ?? [],
+      last50NormalizedLines: diagnostics?.last50NormalizedLines ?? [],
+      parserStageFailed: diagnostics?.parserStageFailed ?? null,
+      headerCandidateLines: diagnostics?.headerCandidateLines ?? [],
+      totalsCandidateLines: diagnostics?.totalsCandidateLines ?? [],
+      legCandidateLines: diagnostics?.legCandidateLines ?? [],
+      parsedHeader: diagnostics?.parsedHeader ?? null,
+      parsedTotals: diagnostics?.parsedTotals ?? null,
+      parsedSegments: [],
+      allTripSegments: [],
+      visibleOperatingLegs: [],
+      deadheadAnnotations: [],
+      logbookLegs: [],
+      scheduledBlock: 0,
+      scheduledBlockSource: null,
+      totalDeadheadBlock: 0,
+      partialStatus: null,
+      finalOperatingArrival: null,
+      finalArrivalAfterDh: null,
+      reconciliation: {
+        tblFromSummary: null,
+        summedOperatingBlock: null,
+        tdhdFromSummary: null,
+        summedDeadheadBlock: null,
+        tblMatches: false,
+        tdhdMatches: false,
+      },
+      attemptedLegParseResults: diagnostics?.attemptedLegParseResults ?? [],
+      parserNotes: [
+        "Debug-only iCrew parse path bypassed the legacy MiCrew text analyzer.",
+        "Parser failed before normalized display-model output could be built.",
+      ],
+    };
+  }
+  return {
+    sourceType: "iCrewText" as const,
+    rawTextLength,
+    rawLineCount: diagnostics?.rawLineCount ?? rawText.split(/\r?\n/).filter((line) => line.trim().length > 0).length,
+    rawTextFirst500,
+    rawTextLast500,
+    parserSucceeded: true,
+    parserError: null,
+    first50RawLines: diagnostics?.first50RawLines ?? [],
+    last50RawLines: diagnostics?.last50RawLines ?? [],
+    first50NormalizedLines: diagnostics?.first50NormalizedLines ?? [],
+    last50NormalizedLines: diagnostics?.last50NormalizedLines ?? [],
+    parserStageFailed: diagnostics?.parserStageFailed ?? null,
+    headerCandidateLines: diagnostics?.headerCandidateLines ?? [],
+    totalsCandidateLines: diagnostics?.totalsCandidateLines ?? [],
+    legCandidateLines: diagnostics?.legCandidateLines ?? [],
+    attemptedLegParseResults: diagnostics?.attemptedLegParseResults ?? [],
+    parsedHeader: {
+      base: parsed.header.base,
+      fleetCategory: parsed.header.fleetCategory,
+      rotationNumber: parsed.header.rotationNumber,
+      position: parsed.header.position,
+      effectiveDate: parsed.header.effectiveDate,
+      reportTime: parsed.header.reportTime,
+      tripDates: parsed.header.tripDates,
+    },
+    parsedTotals: {
+      totalCreditMinutes: parsed.header.totalCreditMinutes,
+      scheduledBlockMinutes: parsed.header.scheduledBlockMinutes,
+      totalDeadheadBlockMinutes: parsed.header.totalDeadheadBlockMinutes,
+      tafbCredit: parsed.header.tafbCredit,
+      tafbElapsed: parsed.header.tafbElapsed,
+    },
+    parsedSegments: parsed.normalizedCandidates.map((candidate) => ({
+      date: candidate.date ?? null,
+      origin: candidate.departureAirport ?? null,
+      destination: candidate.arrivalAirport ?? null,
+      carrier: candidate.carrier ?? null,
+      flightNumber: candidate.flightNumber ?? null,
+      scheduledOut: candidate.scheduledOut ?? null,
+      scheduledIn: candidate.scheduledIn ?? null,
+      scheduledBlock: candidate.scheduledBlock ?? null,
+      sourceText: candidate.sourceText ?? null,
+      confirmationCode: candidate.confirmationCode ?? null,
+      isDeadhead: candidate.isDeadhead ?? false,
+      segmentType: candidate.segmentType ?? null,
+    })),
+    allTripSegments: parsed.allTripSegments.map((leg) => ({
+      date: leg.date ?? null,
+      origin: leg.departureAirport ?? null,
+      destination: leg.arrivalAirport ?? null,
+      carrier: leg.carrier ?? null,
+      flightNumber: leg.flightNumber ?? null,
+      scheduledOut: leg.scheduledOut ?? null,
+      scheduledIn: leg.scheduledIn ?? null,
+      scheduledBlock: leg.scheduledBlock ?? null,
+      isDeadhead: leg.isDeadhead ?? false,
+      segmentType: leg.segmentType ?? null,
+      confirmationCode: leg.confirmationCode ?? null,
+      sourceText: leg.sourceText ?? null,
+    })),
+    visibleOperatingLegs: parsed.visibleOperatingLegs.map((leg) => ({
+      date: leg.date ?? null,
+      origin: leg.departureAirport ?? null,
+      destination: leg.arrivalAirport ?? null,
+      carrier: leg.carrier ?? null,
+      flightNumber: leg.flightNumber ?? null,
+      scheduledOut: leg.scheduledOut ?? null,
+      scheduledIn: leg.scheduledIn ?? null,
+      scheduledBlock: leg.scheduledBlock ?? null,
+      sourceText: leg.sourceText ?? null,
+    })),
+    deadheadAnnotations: parsed.deadheadAnnotations,
+    logbookLegs: parsed.logbookLegs.map((leg) => ({
+      date: leg.date ?? null,
+      origin: leg.departureAirport ?? null,
+      destination: leg.arrivalAirport ?? null,
+      carrier: leg.carrier ?? null,
+      flightNumber: leg.flightNumber ?? null,
+      scheduledOut: leg.scheduledOut ?? null,
+      scheduledIn: leg.scheduledIn ?? null,
+      scheduledBlock: leg.scheduledBlock ?? null,
+      sourceText: leg.sourceText ?? null,
+    })),
+    scheduledBlock: parsed.operatingScheduledBlockMinutes,
+    scheduledBlockSource: "iCrewSummaryTotals",
+    totalDeadheadBlock: parsed.deadheadScheduledBlockMinutes,
+    partialStatus: parsed.partialStatus,
+    partialReason: parsed.partialReason,
+    finalOperatingArrival: parsed.finalOperatingArrival,
+    finalArrivalAfterDh: parsed.finalArrivalAfterDeadhead,
+    reconciliation: {
+      tblFromSummary: parsed.header.scheduledBlockMinutes,
+      summedOperatingBlock: parsed.operatingScheduledBlockMinutes,
+      tdhdFromSummary: parsed.header.totalDeadheadBlockMinutes,
+      summedDeadheadBlock: parsed.deadheadScheduledBlockMinutes,
+      tblMatches: parsed.header.scheduledBlockMinutes === parsed.operatingScheduledBlockMinutes,
+      tdhdMatches: parsed.header.totalDeadheadBlockMinutes === parsed.deadheadScheduledBlockMinutes,
+    },
+    parserNotes: [
+      "Debug-only iCrew parse path bypassed the legacy MiCrew text analyzer.",
+      "Parsed output was built through shared display-model helpers inside parseICrewText.",
+    ],
   };
 }
 
@@ -1618,6 +1783,12 @@ export default function App() {
   const [rotationParseTraceOpen, setRotationParseTraceOpen] = useState<Record<string, boolean>>({});
   const [rotationCopiedConfirmation, setRotationCopiedConfirmation] = useState<string | null>(null);
   const [rotationCopiedDebugJson, setRotationCopiedDebugJson] = useState(false);
+  const [rotationICrewDebugResult, setRotationICrewDebugResult] =
+    useState<ReturnType<typeof parseICrewTextWithDiagnostics>["parsed"]>(null);
+  const [rotationICrewDebugDiagnostics, setRotationICrewDebugDiagnostics] =
+    useState<ICrewParserDiagnostics | null>(null);
+  const [rotationICrewDebugError, setRotationICrewDebugError] = useState("");
+  const [rotationCopiedICrewDebugJson, setRotationCopiedICrewDebugJson] = useState(false);
   const [rotationToolBanner, setRotationToolBanner] = useState<RotationToolBanner | null>(null);
   const [contractCopilotStarterQuestion, setContractCopilotStarterQuestion] = useState("");
   const [quickContacts, setQuickContacts] = useState<QuickContacts>({
@@ -1936,6 +2107,50 @@ export default function App() {
       setTimeout(() => setRotationCopiedDebugJson(false), 2000);
     } catch (error) {
       setRotationAnalyzeError(error instanceof Error ? error.message : "Unable to copy live chain debug JSON.");
+    }
+  };
+
+  const parseRotationICrewDebugText = () => {
+    try {
+      const trimmed = rotationPasteInput.trim();
+      if (!trimmed) {
+        setRotationICrewDebugError("Paste iCrew raw text first.");
+        setRotationICrewDebugResult(null);
+        setRotationICrewDebugDiagnostics(null);
+        return;
+      }
+      const debugResult = parseICrewTextWithDiagnostics(trimmed);
+      setRotationICrewDebugResult(debugResult.parsed);
+      setRotationICrewDebugDiagnostics(debugResult.diagnostics);
+      setRotationICrewDebugError(debugResult.parserSucceeded ? "" : debugResult.diagnostics.parserError ?? "Unable to parse iCrew raw text.");
+      setRotationCopiedICrewDebugJson(false);
+    } catch (error) {
+      setRotationICrewDebugResult(null);
+      setRotationICrewDebugDiagnostics(null);
+      setRotationICrewDebugError(error instanceof Error ? error.message : "Unable to parse iCrew raw text.");
+      setRotationCopiedICrewDebugJson(false);
+    }
+  };
+
+  const copyICrewDebugJson = async () => {
+    if (Platform.OS !== "web" || typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
+      setRotationAnalyzeError("Copy iCrew debug JSON is currently available in the web build only.");
+      return;
+    }
+    try {
+      const payload = buildICrewDebugExport({
+        rawText: rotationPasteInput.trim(),
+        parsed: rotationICrewDebugResult,
+        diagnostics: rotationICrewDebugDiagnostics,
+        parserError: rotationICrewDebugError || null,
+      });
+      console.log("ICREW_DEBUG_JSON_COPIED", payload);
+      await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+      setRotationCopiedICrewDebugJson(true);
+      setRotationICrewDebugError("");
+      setTimeout(() => setRotationCopiedICrewDebugJson(false), 2000);
+    } catch (error) {
+      setRotationICrewDebugError(error instanceof Error ? error.message : "Unable to copy iCrew debug JSON.");
     }
   };
 
@@ -4357,7 +4572,12 @@ export default function App() {
                 <TextInput
                   multiline
                   value={rotationPasteInput}
-                  onChangeText={setRotationPasteInput}
+                  onChangeText={(value) => {
+                    setRotationPasteInput(value);
+                    setRotationICrewDebugError("");
+                    setRotationCopiedICrewDebugJson(false);
+                    setRotationICrewDebugDiagnostics(null);
+                  }}
                   placeholder="Paste MiCrew / iCrew rotation rows, block lines, layovers, report / release times, and credit."
                   placeholderTextColor={flieger.label}
                   style={[styles.auditTextarea, styles.rotationPasteTextarea]}
@@ -4366,6 +4586,37 @@ export default function App() {
                 <Text style={styles.resultSupportMetaText}>
                   Paste trip text, upload screenshots, or combine both. If screenshots only show part of the trip, the dashboard will stay partial on purpose.
                 </Text>
+                {rotationDebugEnabled ? (
+                  <View style={styles.sectionStack}>
+                    <Text style={styles.resultSupportMetaText}>iCrew debug parser</Text>
+                    <Text style={styles.resultSupportMetaText}>
+                      These buttons use the same Paste rotation textarea above. They bypass the legacy Analyze Rotation text path.
+                    </Text>
+                    <View style={styles.quickActionGrid}>
+                      <TouchableOpacity style={styles.quickLinkButton} onPress={parseRotationICrewDebugText}>
+                        <Text style={styles.quickLinkButtonText}>Parse pasted text as iCrew</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.quickLinkButton} onPress={copyICrewDebugJson}>
+                        <Text style={styles.quickLinkButtonText}>
+                          {rotationCopiedICrewDebugJson ? "Copied iCrew debug JSON" : "Copy iCrew debug JSON"}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                    {rotationICrewDebugError ? (
+                      <Text style={styles.inlineValidationText}>{rotationICrewDebugError}</Text>
+                    ) : null}
+                    {rotationICrewDebugDiagnostics && !rotationICrewDebugResult ? (
+                      <Text style={styles.resultSupportMetaText}>
+                        iCrew debug failure: raw lines {rotationICrewDebugDiagnostics.rawLineCount} • header candidates {rotationICrewDebugDiagnostics.headerCandidateLines.length} • totals candidates {rotationICrewDebugDiagnostics.totalsCandidateLines.length} • leg candidates {rotationICrewDebugDiagnostics.legCandidateLines.length} • failed stage {rotationICrewDebugDiagnostics.parserStageFailed ?? "unknown"}
+                      </Text>
+                    ) : null}
+                    {rotationICrewDebugResult ? (
+                      <Text style={styles.resultSupportMetaText}>
+                        iCrew parsed: Rotation #{rotationICrewDebugResult.header.rotationNumber} • Dates {rotationICrewDebugResult.header.tripDates} • Operating legs {rotationICrewDebugResult.visibleOperatingLegs.length} • DH legs {rotationICrewDebugResult.deadheadAnnotations.length} • Scheduled block {rotationFormatMinutes(rotationICrewDebugResult.operatingScheduledBlockMinutes)}
+                      </Text>
+                    ) : null}
+                  </View>
+                ) : null}
               </View>
 
               <View style={styles.rotationInlineUtilityRow}>
