@@ -791,6 +791,8 @@ function buildLiveChainDebugExport(args: {
       finalArrival: snapshotComputation.finalArrival,
       discardedAfterTerminal: chainBuildResult.discardedAfterTerminal,
       unmatchedCandidateCount: unmatchedCandidates.length,
+      partialBannerVisible: rotationDashboard.parsedRotation.isPartial,
+      partialSourceUsed: "displayModel.partialDiagnosis.isPartial",
     },
   };
 }
@@ -1081,10 +1083,8 @@ function buildScreenshotBackedDashboardModel(
     parserWarnings.push("Discarded unmatched screenshot fragments after building complete route chain.");
   }
 
-  const partialBannerVisible =
-    (!shouldDowngradePartialToDeadheadReturn && partialDiagnosis.isPartial) ||
-    (!shouldTreatRotationAsFull &&
-      (dashboard.parsedRotation.isPartial || dashboard.parsedRotation.missingSections.length > 0));
+  const partialBannerVisible = !shouldDowngradePartialToDeadheadReturn && partialDiagnosis.isPartial;
+  const partialSourceUsed = "displayModel.partialDiagnosis.isPartial";
   const visibleRotationSourceDebug = {
     usedExportedBuilder: true,
     canonicalCandidateSource: chainBuildResult.canonicalCandidateSource,
@@ -1109,6 +1109,7 @@ function buildScreenshotBackedDashboardModel(
     terminalCutIndex: chainBuildResult.terminalCutIndex,
     discardedAfterTerminal: chainBuildResult.discardedAfterTerminal,
     partialBannerVisible,
+    partialSourceUsed,
     partialVisibleLegsCount: userFacingLegs.length,
     operatingLegsCount: userFacingLegs.length,
     builderOutputFirstLeg: firstOrderedLeg ? `${firstOrderedLeg.departureAirport ?? "?"}-${firstOrderedLeg.arrivalAirport ?? "?"}` : "unknown",
@@ -1144,6 +1145,8 @@ function buildScreenshotBackedDashboardModel(
       runtimeScheduledBlockSource: snapshotComputation.scheduledBlockSource,
       runtimeNextFlight: snapshotComputation.nextFlightCityPair,
       runtimeLogbookLegCount: userFacingLegs.length,
+      partialBannerVisible,
+      partialSourceUsed,
     });
   }
 
