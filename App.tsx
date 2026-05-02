@@ -838,6 +838,7 @@ function buildICrewDebugExport(args: {
       scheduledBlock: 0,
       scheduledBlockSource: null,
       totalDeadheadBlock: 0,
+      dashboardPreviewSource: null,
       partialStatus: null,
       finalOperatingArrival: null,
       finalArrivalAfterDh: null,
@@ -943,6 +944,7 @@ function buildICrewDebugExport(args: {
     scheduledBlock: parsed.operatingScheduledBlockMinutes,
     scheduledBlockSource: "iCrewSummaryTotals",
     totalDeadheadBlock: parsed.deadheadScheduledBlockMinutes,
+    dashboardPreviewSource: "iCrewDebugParse",
     partialStatus: parsed.partialStatus,
     partialReason: parsed.partialReason,
     finalOperatingArrival: parsed.finalOperatingArrival,
@@ -959,6 +961,151 @@ function buildICrewDebugExport(args: {
       "Debug-only iCrew parse path bypassed the legacy MiCrew text analyzer.",
       "Parsed output was built through shared display-model helpers inside parseICrewText.",
     ],
+  };
+}
+
+function buildICrewDebugPreviewDashboard(
+  parsed: NonNullable<ReturnType<typeof parseICrewTextWithDiagnostics>["parsed"]>,
+): RotationDashboardData {
+  const base = parsed.header.base;
+  const visibleOperatingLegs = parsed.visibleOperatingLegs;
+  const firstLeg = visibleOperatingLegs[0];
+  const finalOperatingArrival = parsed.finalOperatingArrival;
+  const finalArrivalAfterDh = parsed.finalArrivalAfterDeadhead;
+  const layoverCities = Array.from(
+    new Set(
+      visibleOperatingLegs
+        .slice(0, -1)
+        .map((leg) => leg.arrivalAirport)
+        .filter(
+          (airport): airport is string =>
+            Boolean(airport) &&
+            airport.toUpperCase() !== finalOperatingArrival.toUpperCase() &&
+            airport.toUpperCase() !== base.toUpperCase(),
+        ),
+    ),
+  );
+  const mappedLegs = visibleOperatingLegs.map((leg, index) => ({
+    id: `icrew-debug-leg-${index + 1}-${leg.flightNumber ?? "unk"}-${leg.departureAirport ?? "x"}-${leg.arrivalAirport ?? "x"}-${leg.scheduledOut ?? "na"}`,
+    dayLabel: leg.date ?? `Day ${index + 1}`,
+    flightNumber: leg.flightNumber ?? "TBD",
+    origin: leg.departureAirport ?? "TBD",
+    destination: leg.arrivalAirport ?? "TBD",
+    departureTime: extractCompactClock(leg.scheduledOut),
+    arrivalTime: extractCompactClock(leg.scheduledIn),
+    scheduledBlockMinutes: parseClockishMinutes(leg.scheduledBlock),
+    turnMinutes: parseClockishMinutes(leg.turn),
+    status: "placeholder" as const,
+    aircraft: undefined,
+    gate: undefined,
+    isDeadhead: false,
+    legKind: "operating" as const,
+    deadheadSource: undefined,
+    confirmationNumber: undefined,
+    carrier: leg.carrier ?? undefined,
+    sourceText: leg.sourceText ?? undefined,
+    excludeFromLogbookExport: false,
+  }));
+  const parsedRotationLegs = mappedLegs.map((leg, index) => ({
+    id: leg.id,
+    legNumber: index + 1,
+    dayNumber: index + 1,
+    departureAirport: leg.origin,
+    arrivalAirport: leg.destination,
+    flightNumber: leg.flightNumber,
+    scheduledOut: extractCompactClockDigits(leg.departureTime),
+    scheduledIn: extractCompactClockDigits(leg.arrivalTime),
+    scheduledBlock: leg.scheduledBlockMinutes,
+    turnAfterPreviousLeg: leg.turnMinutes,
+    status: "placeholder" as const,
+    isDeadhead: false,
+    legKind: "operating" as const,
+    confirmationNumber: undefined,
+    carrier: leg.carrier,
+    sourceText: leg.sourceText,
+    deadheadSource: undefined,
+  }));
+  const nextLeg = firstLeg
+    ? {
+        id: "icrew-debug-next-leg",
+        dayLabel: firstLeg.date ?? "Day 1",
+        flightNumber: firstLeg.flightNumber ?? "TBD",
+        origin: firstLeg.departureAirport ?? "TBD",
+        destination: firstLeg.arrivalAirport ?? "TBD",
+        departureTime: extractCompactClock(firstLeg.scheduledOut),
+        arrivalTime: extractCompactClock(firstLeg.scheduledIn),
+        scheduledBlockMinutes: parseClockishMinutes(firstLeg.scheduledBlock),
+        turnMinutes: parseClockishMinutes(firstLeg.turn),
+        status: "placeholder" as const,
+        aircraft: undefined,
+        gate: undefined,
+        isDeadhead: false,
+        legKind: "operating" as const,
+        deadheadSource: undefined,
+        confirmationNumber: undefined,
+        carrier: firstLeg.carrier ?? undefined,
+        sourceText: firstLeg.sourceText ?? undefined,
+        excludeFromLogbookExport: false,
+      }
+    : undefined;
+  const whatMatters = parsed.deadheadAnnotations.map((annotation) => ({
+    label:
+      (annotation.destination ?? "").toUpperCase() === base.toUpperCase()
+        ? "DEADHEAD HOME"
+        : "DEADHEAD",
+    tone: "watch" as const,
+    detail: `Deadhead ${annotation.cityPair} on ${annotation.carrier ?? "DL"}${annotation.flightNumber ? annotation.flightNumber : ""} departs ${annotation.scheduledOut ?? "TBD"}${annotation.confirmationCode ? `. Confirmation #${annotation.confirmationCode}.` : "."}`,
+    actionLabel: annotation.confirmationCode ? "Copy confirmation code" : undefined,
+    actionCopyValue: annotation.confirmationCode ?? undefined,
+  }));
+
+  return {
+    snapshot: {
+      tripDates: parsed.header.tripDates,
+      rotationNumber: parsed.header.rotationNumber,
+      totalCreditMinutes: parsed.header.totalCreditMinutes,
+      scheduledBlockMinutes: parsed.operatingScheduledBlockMinutes,
+      legCount: mappedLegs.length,
+      layoverCities,
+      finalArrival: finalOperatingArrival,
+    },
+    legs: mappedLegs,
+    nextLeg,
+    whatMatters,
+    dutyDays: [],
+    tonightLayoverCity: layoverCities[0] ?? "TBD",
+    tomorrowReportTime: undefined,
+    scheduledRestMinutes: undefined,
+    note: "Previewing iCrew debug parse through the shared rotation display model.",
+    source: "parsed",
+    parsedRotation: {
+      rotationNumber: parsed.header.rotationNumber,
+      startDate: parsed.header.tripDates.split("-")[0]?.trim(),
+      endDate: parsed.header.tripDates.split("-")[1]?.trim(),
+      reportTime: parsed.header.reportTime,
+      releaseTime: undefined,
+      totalCredit: parsed.header.totalCreditMinutes,
+      totalScheduledBlock: parsed.operatingScheduledBlockMinutes,
+      deadheadBlock: parsed.deadheadScheduledBlockMinutes,
+      excludedDeadheadLegs: parsed.deadheadAnnotations.length,
+      layoverCities,
+      dutyPeriods: [],
+      legs: parsedRotationLegs,
+      isPartial: parsed.partialStatus,
+      sourceTypes: "text",
+      visibleLegCount: mappedLegs.length,
+      missingSections: [],
+      partialReason: parsed.partialReason,
+      parseConfidence: "high",
+      sourceFormat: "icrew_printout",
+      parserPath: "icrew_printout_parser",
+      rowFormat: "icrew_without_mu",
+      parserWarnings: [],
+      rejectedCandidateRows: [],
+      micrewLegsParsed: 0,
+      icrewRowsParsed: parsed.normalizedCandidates.length,
+      deadheadAnnotations: parsed.deadheadAnnotations,
+    },
   };
 }
 
@@ -1833,6 +1980,17 @@ export default function App() {
     }
     return new URLSearchParams(window.location.search).get("rotationDebug") === "1";
   }, []);
+  const rotationDebugPreviewDashboard = useMemo(
+    () =>
+      rotationDebugEnabled && rotationICrewDebugResult
+        ? buildICrewDebugPreviewDashboard(rotationICrewDebugResult)
+        : null,
+    [rotationDebugEnabled, rotationICrewDebugResult],
+  );
+  const displayedRotationDashboard = rotationDebugPreviewDashboard ?? rotationDashboard;
+  const hasICrewDebugParseAttempt =
+    rotationDebugEnabled &&
+    Boolean(rotationICrewDebugResult || rotationICrewDebugDiagnostics || rotationICrewDebugError);
   const [mobilePreferencesLoaded, setMobilePreferencesLoaded] = useState(false);
   const [mobilePreferencesEditing, setMobilePreferencesEditing] = useState(true);
   const [mobilePreferencesEditorInitialized, setMobilePreferencesEditorInitialized] = useState(false);
@@ -2824,7 +2982,7 @@ export default function App() {
       ? activeTab
       : "tools";
 
-  const canOpenRotationSecondaryTabs = Boolean(rotationDashboard);
+  const canOpenRotationSecondaryTabs = Boolean(displayedRotationDashboard);
 
   const handleQuickContactPress = (key: QuickContactKey) => {
     const currentValue = quickContacts[key];
@@ -4196,7 +4354,9 @@ export default function App() {
         </View>
 
         {activeTab === "today" && (
-          rotationDashboard ? (
+          displayedRotationDashboard ? (() => {
+            const rotationDashboard = displayedRotationDashboard;
+            return (
             <SectionCard
               title="Rotation Dashboard"
               description="Trip-first view with the live pieces that matter most right now."
@@ -4390,6 +4550,41 @@ export default function App() {
                         </Text>
                       </TouchableOpacity>
                   ) : null}
+                  {rotationDebugEnabled ? (
+                    <View style={styles.sectionStack}>
+                      <Text style={styles.resultSupportMetaText}>iCrew debug parser</Text>
+                      <View style={styles.quickActionGrid}>
+                        <TouchableOpacity style={styles.quickLinkButton} onPress={parseRotationICrewDebugText}>
+                          <Text style={styles.quickLinkButtonText}>Parse pasted text as iCrew</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[
+                            styles.quickLinkButton,
+                            !hasICrewDebugParseAttempt ? styles.auditButtonDisabled : null,
+                          ]}
+                          onPress={copyICrewDebugJson}
+                          disabled={!hasICrewDebugParseAttempt}
+                        >
+                          <Text style={styles.quickLinkButtonText}>
+                            {rotationCopiedICrewDebugJson ? "Copied iCrew debug JSON" : "Copy iCrew debug JSON"}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                      {rotationICrewDebugError ? (
+                        <Text style={styles.inlineValidationText}>{rotationICrewDebugError}</Text>
+                      ) : null}
+                      {rotationICrewDebugDiagnostics && !rotationICrewDebugResult ? (
+                        <Text style={styles.resultSupportMetaText}>
+                          iCrew debug failure: raw lines {rotationICrewDebugDiagnostics.rawLineCount} • header candidates {rotationICrewDebugDiagnostics.headerCandidateLines.length} • totals candidates {rotationICrewDebugDiagnostics.totalsCandidateLines.length} • leg candidates {rotationICrewDebugDiagnostics.legCandidateLines.length} • failed stage {rotationICrewDebugDiagnostics.parserStageFailed ?? "unknown"}
+                        </Text>
+                      ) : null}
+                      {rotationICrewDebugResult ? (
+                        <Text style={styles.resultSupportMetaText}>
+                          iCrew parsed: Rotation #{rotationICrewDebugResult.header.rotationNumber} · Dates {rotationICrewDebugResult.header.tripDates} · Operating legs {rotationICrewDebugResult.visibleOperatingLegs.length} · DH legs {rotationICrewDebugResult.deadheadAnnotations.length} · Scheduled block {rotationFormatMinutes(rotationICrewDebugResult.operatingScheduledBlockMinutes)}
+                        </Text>
+                      ) : null}
+                    </View>
+                  ) : null}
                 </View>
 
                 <View style={styles.resultPanel}>
@@ -4535,7 +4730,8 @@ export default function App() {
                 </View>
               </View>
             </SectionCard>
-          ) : (
+            );
+          })() : (
             <SectionCard
               title="Rotation Companion"
               description="Mobile-first trip intake that turns pasted MiCrew / iCrew details into a live rotation dashboard."
@@ -5052,7 +5248,9 @@ export default function App() {
         )}
 
         {activeTab === "far117" && (
-          rotationDashboard ? (
+          displayedRotationDashboard ? (() => {
+            const rotationDashboard = displayedRotationDashboard;
+            return (
             <SectionCard
               title="FAR 117"
               description="Planning-reference legality view for each duty day in the loaded rotation."
@@ -5095,7 +5293,8 @@ export default function App() {
                 </Text>
               </View>
             </SectionCard>
-          ) : (
+            );
+          })() : (
             <SectionCard
               title="FAR 117"
               description="Load a rotation first so we can build duty-day cards and FDP watch items."
@@ -5108,7 +5307,9 @@ export default function App() {
         )}
 
         {activeTab === "logbook" && (
-          rotationDashboard ? (
+          displayedRotationDashboard ? (() => {
+            const rotationDashboard = displayedRotationDashboard;
+            return (
             <SectionCard
               title="Logbook"
               description="Leg-by-leg trip view with placeholders ready for actual out/in and block deltas."
@@ -5184,7 +5385,8 @@ export default function App() {
                 ))}
               </View>
             </SectionCard>
-          ) : (
+            );
+          })() : (
             <SectionCard
               title="Logbook"
               description="Load a rotation first so we can show the leg-by-leg breakdown."
