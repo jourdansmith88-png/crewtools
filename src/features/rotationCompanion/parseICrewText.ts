@@ -170,7 +170,7 @@ function isDayOnlyToken(token?: string | null) {
 }
 
 function isFlightTokenLike(token?: string | null) {
-  return /^(?:\d{3,5}|D\d{2,5}|DL\d{2,5}|9E\d{2,5}|OO\d{2,5}|\d(?:D\d{2,5}|DL\d{2,5}|9E\d{2,5}|OO\d{2,5}))$/i.test(
+  return /^(?:\d{3,5}|D\d{2,5}|DL\d{2,5}|9E\d{2,5}|OO\d{2,5}|\d{1,2}(?:D\d{2,5}|DL\d{2,5}|9E\d{2,5}|OO\d{2,5}))$/i.test(
     token ?? "",
   );
 }
@@ -511,8 +511,8 @@ function parseICrewSegments(rawText: string) {
       currentDayToken = dayToken;
       rawFlightToken = tokens[1];
       cursor = 2;
-    } else if (tokens[0] && /^(\d)(D\d{2,5}|DL\d{2,5}|9E\d{2,5}|OO\d{2,5})$/i.test(tokens[0])) {
-      const match = tokens[0].match(/^(\d)(D\d{2,5}|DL\d{2,5}|9E\d{2,5}|OO\d{2,5})$/i);
+    } else if (tokens[0] && /^(\d{1,2})(D\d{2,5}|DL\d{2,5}|9E\d{2,5}|OO\d{2,5})$/i.test(tokens[0])) {
+      const match = tokens[0].match(/^(\d{1,2})(D\d{2,5}|DL\d{2,5}|9E\d{2,5}|OO\d{2,5})$/i);
       dayToken = match?.[1]?.padStart(2, "0") ?? currentDayToken;
       currentDayToken = dayToken;
       rawFlightToken = tokens[0];
@@ -743,7 +743,7 @@ function parseICrewTextInternal(rawText: string): ParsedICrewTextResult {
     partialStatus: partialDiagnosis.isPartial,
     partialReason: partialDiagnosis.partialReason,
     finalOperatingArrival: snapshot.finalArrival,
-    finalArrivalAfterDeadhead: deadheadAnnotations.at(-1)?.destination ?? snapshot.finalArrival,
+    finalArrivalAfterDeadhead: allTripSegments.at(-1)?.arrivalAirport ?? snapshot.finalArrival,
     operatingScheduledBlockMinutes: snapshot.scheduledBlockMinutes,
     deadheadScheduledBlockMinutes: deadheadAnnotations.reduce((sum, annotation) => sum + annotation.scheduledBlockMinutes, 0),
     scheduledBlockSource: "iCrewSummaryTotals",

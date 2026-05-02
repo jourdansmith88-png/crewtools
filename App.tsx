@@ -1075,6 +1075,7 @@ function buildICrewDebugPreviewDashboard(
       totalCredit: parsed.header.totalCreditMinutes,
       totalScheduledBlock: parsed.operatingScheduledBlockMinutes,
       deadheadBlock: parsed.deadheadScheduledBlockMinutes,
+      finalArrivalAfterDh,
       excludedDeadheadLegs: parsed.deadheadAnnotations.length,
       layoverCities,
       dutyPeriods: [],
@@ -4515,7 +4516,10 @@ export default function App() {
                       />
                       <ResultLine
                         label="Final arrival after DH"
-                        value={rotationDashboard.parsedRotation.deadheadAnnotations?.at(-1)?.destination ?? rotationDashboard.snapshot.finalArrival}
+                        value={
+                          rotationDashboard.parsedRotation.finalArrivalAfterDh ??
+                          rotationDashboard.snapshot.finalArrival
+                        }
                       />
                     </>
                   ) : rotationDashboard.parsedRotation.legs.filter((leg) => leg.isDeadhead).length > 0 ? (

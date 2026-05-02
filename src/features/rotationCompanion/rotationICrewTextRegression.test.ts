@@ -12,6 +12,7 @@ import {
   rotation0233ICrewLivePasteText,
   rotation0233ICrewRawText,
 } from "./fixtures/rotation0233ICrewText.ts";
+import { rotation0613ICrewRawText } from "./fixtures/rotation0613ICrewText.ts";
 import { rotation7942ICrewRawText } from "./fixtures/rotation7942ICrewText.ts";
 
 function assert(condition: unknown, message: string) {
@@ -255,8 +256,106 @@ assert(
   `Expected 6OO1234 => OO/1234, got ${JSON.stringify(ooRegionalFlight)}`,
 );
 
+const ooTwoDigitDayFlight = parseICrewFlightToken("12", "12OO3895");
+assert(
+  ooTwoDigitDayFlight.carrier === "OO" &&
+    ooTwoDigitDayFlight.flightNumber === "3895" &&
+    ooTwoDigitDayFlight.marker === null,
+  `Expected 12OO3895 => OO/3895, got ${JSON.stringify(ooTwoDigitDayFlight)}`,
+);
+
 runICrewAssertions("rotation0233 iCrew raw-text fixture", rotation0233ICrewRawText);
 runICrewAssertions("rotation0233 iCrew live-paste fixture", rotation0233ICrewLivePasteText);
+
+{
+  const label = "rotation0613 iCrew raw-text fixture";
+  const debugResult = parseICrewTextWithDiagnostics(rotation0613ICrewRawText);
+  assert(debugResult.parserSucceeded === true, `[${label}] Expected parserSucceeded true, got ${JSON.stringify(debugResult.diagnostics)}`);
+  const parsed = parseICrewText(rotation0613ICrewRawText);
+
+  assert(parsed.header.base === "SLC", `[${label}] Expected base SLC, got ${parsed.header.base}`);
+  assert(parsed.header.fleetCategory === "PILOT 220", `[${label}] Expected fleetCategory PILOT 220, got ${parsed.header.fleetCategory}`);
+  assert(parsed.header.rotationNumber === "0613", `[${label}] Expected rotationNumber 0613, got ${parsed.header.rotationNumber}`);
+  assert(parsed.header.position === "A", `[${label}] Expected position A, got ${parsed.header.position}`);
+  assert(parsed.header.effectiveDate === "APR12", `[${label}] Expected effectiveDate APR12, got ${parsed.header.effectiveDate}`);
+  assert(parsed.header.reportTime === "1615", `[${label}] Expected reportTime 1615, got ${parsed.header.reportTime}`);
+  assert(parsed.header.tripDates === "12APR - 13APR", `[${label}] Expected tripDates 12APR - 13APR, got ${parsed.header.tripDates}`);
+  assert(parsed.header.totalCreditMinutes === 630, `[${label}] Expected totalCreditMinutes 630, got ${parsed.header.totalCreditMinutes}`);
+  assert(parsed.header.scheduledBlockMinutes === 59, `[${label}] Expected scheduledBlockMinutes 59, got ${parsed.header.scheduledBlockMinutes}`);
+  assert(parsed.header.totalDeadheadBlockMinutes === 51, `[${label}] Expected totalDeadheadBlockMinutes 51, got ${parsed.header.totalDeadheadBlockMinutes}`);
+  assert(parsed.header.tafbCredit === "15:10", `[${label}] Expected tafbCredit 15:10, got ${parsed.header.tafbCredit}`);
+  assert(parsed.header.tafbElapsed === "14:51", `[${label}] Expected tafbElapsed 14:51, got ${parsed.header.tafbElapsed}`);
+  assert(
+    JSON.stringify(parsed.layoverCities) === JSON.stringify(["IDA"]),
+    `[${label}] Expected layoverCities IDA, got ${parsed.layoverCities.join(" | ")}`,
+  );
+
+  const ooRowResult = debugResult.diagnostics.attemptedLegParseResults.find((item) =>
+    item.line.includes("12OO3895 SLC 1726 IDA.1817 0.51 0.07"),
+  );
+  assert(ooRowResult?.matched === true, `[${label}] Expected 12OO3895 row to parse, got ${JSON.stringify(ooRowResult)}`);
+  assert(
+    ooRowResult?.parsedTokens?.carrier === "OO" &&
+      ooRowResult?.parsedTokens?.flightNumber === "3895" &&
+      ooRowResult?.parsedTokens?.dayToken === "12",
+    `[${label}] Expected 12OO3895 => OO/3895 day 12, got ${JSON.stringify(ooRowResult?.parsedTokens)}`,
+  );
+
+  const allTripSegments = parsed.allTripSegments.map(
+    (leg) => `${leg.departureAirport}-${leg.arrivalAirport} ${leg.isDeadhead ? "DH" : "OP"} ${leg.scheduledBlock}`,
+  );
+  assert(
+    JSON.stringify(allTripSegments) ===
+      JSON.stringify([
+        "SLC-IDA DH 0:51",
+        "IDA-SLC OP 0:59",
+      ]),
+    `[${label}] Expected allTripSegments SLC-IDA DH | IDA-SLC OP, got ${allTripSegments.join(" | ")}`,
+  );
+
+  const visibleOperatingLegs = parsed.visibleOperatingLegs.map((leg) => `${leg.departureAirport}-${leg.arrivalAirport}`);
+  assert(
+    JSON.stringify(visibleOperatingLegs) === JSON.stringify(["IDA-SLC"]),
+    `[${label}] Expected visibleOperatingLegs IDA-SLC, got ${visibleOperatingLegs.join(" | ")}`,
+  );
+  assert(parsed.visibleOperatingLegs.length === 1, `[${label}] Expected visibleOperatingLegs length 1, got ${parsed.visibleOperatingLegs.length}`);
+  assert(parsed.deadheadAnnotations.length === 1, `[${label}] Expected deadheadAnnotations length 1, got ${parsed.deadheadAnnotations.length}`);
+  assert(
+    parsed.deadheadAnnotations[0]?.cityPair === "SLC-IDA" &&
+      parsed.deadheadAnnotations[0]?.carrier === "OO" &&
+      parsed.deadheadAnnotations[0]?.carrierName === "SkyWest Airlines" &&
+      parsed.deadheadAnnotations[0]?.flightNumber === "3895" &&
+      parsed.deadheadAnnotations[0]?.scheduledBlockMinutes === 51 &&
+      parsed.deadheadAnnotations[0]?.reason === "inferred_from_dhd_totals_and_regional_carrier",
+    `[${label}] Expected OO3895 SkyWest deadhead annotation, got ${JSON.stringify(parsed.deadheadAnnotations[0])}`,
+  );
+  assert(parsed.operatingScheduledBlockMinutes === 59, `[${label}] Expected operatingScheduledBlockMinutes 59, got ${parsed.operatingScheduledBlockMinutes}`);
+  assert(parsed.deadheadScheduledBlockMinutes === 51, `[${label}] Expected deadheadScheduledBlockMinutes 51, got ${parsed.deadheadScheduledBlockMinutes}`);
+  assert(parsed.scheduledBlockSource === "iCrewSummaryTotals", `[${label}] Expected scheduledBlockSource iCrewSummaryTotals, got ${parsed.scheduledBlockSource}`);
+  assert(parsed.partialStatus === false, `[${label}] Expected partialStatus false, got ${parsed.partialStatus}`);
+  assert(parsed.finalOperatingArrival === "SLC", `[${label}] Expected finalOperatingArrival SLC, got ${parsed.finalOperatingArrival}`);
+  assert(parsed.finalArrivalAfterDeadhead === "SLC", `[${label}] Expected finalArrivalAfterDeadhead SLC, got ${parsed.finalArrivalAfterDeadhead}`);
+  assert(parsed.header.scheduledBlockMinutes === parsed.operatingScheduledBlockMinutes, `[${label}] Expected TBL to reconcile, got ${parsed.header.scheduledBlockMinutes} vs ${parsed.operatingScheduledBlockMinutes}`);
+  assert(parsed.header.totalDeadheadBlockMinutes === parsed.deadheadScheduledBlockMinutes, `[${label}] Expected TDHD to reconcile, got ${parsed.header.totalDeadheadBlockMinutes} vs ${parsed.deadheadScheduledBlockMinutes}`);
+
+  console.log(`${label} passed`);
+  console.log(
+    `${label} parsed:`,
+    JSON.stringify(
+      {
+        header: parsed.header,
+        layoverCities: parsed.layoverCities,
+        visibleOperatingLegs,
+        deadheadAnnotations: parsed.deadheadAnnotations,
+        operatingScheduledBlockMinutes: parsed.operatingScheduledBlockMinutes,
+        deadheadScheduledBlockMinutes: parsed.deadheadScheduledBlockMinutes,
+        diagnostics: debugResult.diagnostics,
+      },
+      null,
+      2,
+    ),
+  );
+}
 
 {
   const label = "rotation7942 iCrew raw-text fixture";
