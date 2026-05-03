@@ -12,6 +12,7 @@ import {
   rotation0233ICrewLivePasteText,
   rotation0233ICrewRawText,
 } from "./fixtures/rotation0233ICrewText.ts";
+import { rotation0233ICrewPartialText } from "./fixtures/rotation0233ICrewPartialText.ts";
 import { rotation0613ICrewRawText } from "./fixtures/rotation0613ICrewText.ts";
 import { rotation7942ICrewRawText } from "./fixtures/rotation7942ICrewText.ts";
 
@@ -310,6 +311,105 @@ assert(
 
 runICrewAssertions("rotation0233 iCrew raw-text fixture", rotation0233ICrewRawText);
 runICrewAssertions("rotation0233 iCrew live-paste fixture", rotation0233ICrewLivePasteText);
+
+{
+  const label = "rotation0233 iCrew partial-text fixture";
+  const debugResult = parseICrewTextWithDiagnostics(rotation0233ICrewPartialText);
+  assert(
+    debugResult.parserSucceeded === true,
+    `[${label}] Expected parserSucceeded true, got ${JSON.stringify(debugResult.diagnostics)}`,
+  );
+  const parsed = parseICrewText(rotation0233ICrewPartialText);
+
+  assert(parsed.header.rotationNumber === "0233", `[${label}] Expected rotationNumber 0233, got ${parsed.header.rotationNumber}`);
+  assert(parsed.header.base === "SLC", `[${label}] Expected base SLC, got ${parsed.header.base}`);
+  assert(parsed.header.tripDates === "04APR - 06APR", `[${label}] Expected tripDates 04APR - 06APR, got ${parsed.header.tripDates}`);
+  assert(parsed.header.totalCreditMinutes == null, `[${label}] Expected totalCreditMinutes null, got ${parsed.header.totalCreditMinutes}`);
+  assert(parsed.header.scheduledBlockMinutes == null, `[${label}] Expected scheduledBlockMinutes null, got ${parsed.header.scheduledBlockMinutes}`);
+  assert(parsed.header.totalDeadheadBlockMinutes == null, `[${label}] Expected totalDeadheadBlockMinutes null, got ${parsed.header.totalDeadheadBlockMinutes}`);
+  assert(parsed.header.tafbCredit == null, `[${label}] Expected tafbCredit null, got ${parsed.header.tafbCredit}`);
+  assert(parsed.header.tafbElapsed == null, `[${label}] Expected tafbElapsed null, got ${parsed.header.tafbElapsed}`);
+
+  const parsedSegments = parsed.normalizedCandidates.map(
+    (segment) => `${segment.departureAirport}-${segment.arrivalAirport} ${segment.carrier}${segment.flightNumber} ${segment.scheduledBlock}`,
+  );
+  assert(
+    JSON.stringify(parsedSegments) ===
+      JSON.stringify([
+        "SLC-SJC DL1272 2:02",
+        "SJC-SLC DL1254 1:48",
+        "SLC-CLE DL2855 3:18",
+        "CLE-LGA 9E5045 1:23",
+      ]),
+    `[${label}] Expected complete parsed segments through CLE-LGA, got ${parsedSegments.join(" | ")}`,
+  );
+
+  assert(
+    JSON.stringify(parsed.incompleteFragments) ===
+      JSON.stringify(["06 563 LGA 1628 MCI.1922 * 3.5"]),
+    `[${label}] Expected truncated 563 row in incompleteFragments, got ${parsed.incompleteFragments.join(" | ")}`,
+  );
+
+  assert(
+    parsed.deadheadAnnotations.length === 0,
+    `[${label}] Expected no confirmed deadheadAnnotations without DHD totals, got ${JSON.stringify(parsed.deadheadAnnotations)}`,
+  );
+  assert(parsed.partialStatus === true, `[${label}] Expected partialStatus true, got ${parsed.partialStatus}`);
+  assert(
+    parsed.partialReason === "Partial iCrew text detected. Please paste the full rotation text.",
+    `[${label}] Expected exact partialReason copy, got ${parsed.partialReason}`,
+  );
+  assert(
+    parsed.scheduledBlockSource === "computedFromPartialICrewLegs",
+    `[${label}] Expected scheduledBlockSource computedFromPartialICrewLegs, got ${parsed.scheduledBlockSource}`,
+  );
+  assert(
+    parsed.operatingScheduledBlockMinutes === 511,
+    `[${label}] Expected computed operatingScheduledBlockMinutes 511, got ${parsed.operatingScheduledBlockMinutes}`,
+  );
+  assert(
+    parsed.deadheadScheduledBlockMinutes === 0,
+    `[${label}] Expected deadheadScheduledBlockMinutes 0, got ${parsed.deadheadScheduledBlockMinutes}`,
+  );
+  assert(
+    parsed.parserNotes.some((note) => /did not include summary totals/i.test(note)),
+    `[${label}] Expected parserNotes to mention missing totals, got ${JSON.stringify(parsed.parserNotes)}`,
+  );
+  assert(
+    parsed.parserNotes.some((note) => /incomplete leg row/i.test(note)),
+    `[${label}] Expected parserNotes to mention incomplete leg rows, got ${JSON.stringify(parsed.parserNotes)}`,
+  );
+  assert(
+    parsed.parserNotes.some((note) => /Regional\/offline carrier segments were preserved/i.test(note)),
+    `[${label}] Expected parserNotes to mention unresolved regional carrier evidence, got ${JSON.stringify(parsed.parserNotes)}`,
+  );
+
+  const truncatedAttempt = debugResult.diagnostics.attemptedLegParseResults.find((item) =>
+    item.line.includes("06 563 LGA 1628 MCI.1922 * 3.5"),
+  );
+  assert(
+    truncatedAttempt?.matched === false && truncatedAttempt?.failureReason === "missing_block_token",
+    `[${label}] Expected truncated 563 row to fail with missing_block_token, got ${JSON.stringify(truncatedAttempt)}`,
+  );
+
+  console.log(`${label} passed`);
+  console.log(
+    `${label} parsed:`,
+    JSON.stringify(
+      {
+        header: parsed.header,
+        parsedSegments,
+        incompleteFragments: parsed.incompleteFragments,
+        partialStatus: parsed.partialStatus,
+        partialReason: parsed.partialReason,
+        parserNotes: parsed.parserNotes,
+        diagnostics: debugResult.diagnostics,
+      },
+      null,
+      2,
+    ),
+  );
+}
 
 {
   const label = "rotation0613 iCrew raw-text fixture";

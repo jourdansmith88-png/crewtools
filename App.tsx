@@ -835,6 +835,7 @@ function buildICrewDebugExport(args: {
       visibleOperatingLegs: [],
       deadheadAnnotations: [],
       logbookLegs: [],
+      incompleteFragments: [],
       scheduledBlock: 0,
       scheduledBlockSource: null,
       totalDeadheadBlock: 0,
@@ -930,6 +931,7 @@ function buildICrewDebugExport(args: {
       sourceText: leg.sourceText ?? null,
     })),
     deadheadAnnotations: parsed.deadheadAnnotations,
+    incompleteFragments: parsed.incompleteFragments,
     logbookLegs: parsed.logbookLegs.map((leg) => ({
       date: leg.date ?? null,
       origin: leg.departureAirport ?? null,
@@ -942,7 +944,7 @@ function buildICrewDebugExport(args: {
       sourceText: leg.sourceText ?? null,
     })),
     scheduledBlock: parsed.operatingScheduledBlockMinutes,
-    scheduledBlockSource: "iCrewSummaryTotals",
+    scheduledBlockSource: parsed.scheduledBlockSource,
     totalDeadheadBlock: parsed.deadheadScheduledBlockMinutes,
     dashboardPreviewSource: "iCrewDebugParse",
     partialStatus: parsed.partialStatus,
@@ -954,12 +956,19 @@ function buildICrewDebugExport(args: {
       summedOperatingBlock: parsed.operatingScheduledBlockMinutes,
       tdhdFromSummary: parsed.header.totalDeadheadBlockMinutes,
       summedDeadheadBlock: parsed.deadheadScheduledBlockMinutes,
-      tblMatches: parsed.header.scheduledBlockMinutes === parsed.operatingScheduledBlockMinutes,
-      tdhdMatches: parsed.header.totalDeadheadBlockMinutes === parsed.deadheadScheduledBlockMinutes,
+      tblMatches:
+        typeof parsed.header.scheduledBlockMinutes === "number"
+          ? parsed.header.scheduledBlockMinutes === parsed.operatingScheduledBlockMinutes
+          : null,
+      tdhdMatches:
+        typeof parsed.header.totalDeadheadBlockMinutes === "number"
+          ? parsed.header.totalDeadheadBlockMinutes === parsed.deadheadScheduledBlockMinutes
+          : null,
     },
     parserNotes: [
       "Debug-only iCrew parse path bypassed the legacy MiCrew text analyzer.",
       "Parsed output was built through shared display-model helpers inside parseICrewText.",
+      ...parsed.parserNotes,
     ],
   };
 }
@@ -1051,7 +1060,7 @@ function buildICrewDebugPreviewDashboard(
     snapshot: {
       tripDates: parsed.header.tripDates,
       rotationNumber: parsed.header.rotationNumber,
-      totalCreditMinutes: parsed.header.totalCreditMinutes,
+      totalCreditMinutes: parsed.header.totalCreditMinutes ?? 0,
       scheduledBlockMinutes: parsed.operatingScheduledBlockMinutes,
       legCount: mappedLegs.length,
       layoverCities,
@@ -1072,7 +1081,7 @@ function buildICrewDebugPreviewDashboard(
       endDate: parsed.header.tripDates.split("-")[1]?.trim(),
       reportTime: parsed.header.reportTime,
       releaseTime: undefined,
-      totalCredit: parsed.header.totalCreditMinutes,
+      totalCredit: parsed.header.totalCreditMinutes ?? undefined,
       totalScheduledBlock: parsed.operatingScheduledBlockMinutes,
       deadheadBlock: parsed.deadheadScheduledBlockMinutes,
       finalArrivalAfterDh,

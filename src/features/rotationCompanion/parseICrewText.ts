@@ -15,11 +15,11 @@ export type ICrewHeader = {
   effectiveDate: string;
   reportTime: string;
   tripDates: string;
-  totalCreditMinutes: number;
-  scheduledBlockMinutes: number;
-  totalDeadheadBlockMinutes: number;
-  tafbCredit: string;
-  tafbElapsed: string;
+  totalCreditMinutes: number | null;
+  scheduledBlockMinutes: number | null;
+  totalDeadheadBlockMinutes: number | null;
+  tafbCredit: string | null;
+  tafbElapsed: string | null;
 };
 
 export type ICrewDeadheadAnnotation = {
@@ -46,13 +46,15 @@ export type ParsedICrewTextResult = {
   visibleOperatingLegs: RotationChainLeg[];
   logbookLegs: RotationChainLeg[];
   deadheadAnnotations: ICrewDeadheadAnnotation[];
+  incompleteFragments: string[];
+  parserNotes: string[];
   partialStatus: boolean;
   partialReason: string | null;
   finalOperatingArrival: string;
   finalArrivalAfterDeadhead: string;
   operatingScheduledBlockMinutes: number;
   deadheadScheduledBlockMinutes: number;
-  scheduledBlockSource: "iCrewSummaryTotals";
+  scheduledBlockSource: "iCrewSummaryTotals" | "computedFromPartialICrewLegs" | null;
 };
 
 export type ICrewParserDiagnostics = {
@@ -337,17 +339,8 @@ function parseICrewHeader(rawText: string, parsedSegments: Array<RotationChainCa
   if (missingHeaderFields.length > 0) {
     throw new Error(`Unable to parse iCrew header fields: ${missingHeaderFields.join(", ")}`);
   }
-
-  const missingTotals = [
-    !parts.tripDates ? "tripDates" : null,
-    !parts.totalCreditToken ? "totalCredit" : null,
-    !parts.scheduledBlockToken ? "scheduledBlock" : null,
-    !parts.totalDeadheadToken ? "totalDeadheadBlock" : null,
-    !parts.tafbCreditToken ? "tafbCredit" : null,
-    !parts.tafbElapsedToken ? "tafbElapsed" : null,
-  ].filter((value): value is string => Boolean(value));
-  if (missingTotals.length > 0) {
-    throw new Error(`Unable to parse iCrew totals fields: ${missingTotals.join(", ")}`);
+  if (!parts.tripDates) {
+    throw new Error("Unable to parse iCrew header fields: tripDates");
   }
 
   return {
@@ -358,11 +351,11 @@ function parseICrewHeader(rawText: string, parsedSegments: Array<RotationChainCa
     effectiveDate: parts.effectiveDate!,
     reportTime: parts.reportTime!,
     tripDates: parts.tripDates!,
-    totalCreditMinutes: parseDotDurationToMinutes(parts.totalCreditToken),
-    scheduledBlockMinutes: parseDotDurationToMinutes(parts.scheduledBlockToken),
-    totalDeadheadBlockMinutes: parseDotDurationToMinutes(parts.totalDeadheadToken),
-    tafbCredit: parts.tafbCreditToken!.replace(".", ":"),
-    tafbElapsed: parts.tafbElapsedToken!.replace(".", ":"),
+    totalCreditMinutes: parts.totalCreditToken ? parseDotDurationToMinutes(parts.totalCreditToken) : null,
+    scheduledBlockMinutes: parts.scheduledBlockToken ? parseDotDurationToMinutes(parts.scheduledBlockToken) : null,
+    totalDeadheadBlockMinutes: parts.totalDeadheadToken ? parseDotDurationToMinutes(parts.totalDeadheadToken) : null,
+    tafbCredit: parts.tafbCreditToken ? parts.tafbCreditToken.replace(".", ":") : null,
+    tafbElapsed: parts.tafbElapsedToken ? parts.tafbElapsedToken.replace(".", ":") : null,
   };
 }
 
@@ -634,8 +627,32 @@ function parseICrewSegments(rawText: string) {
   return { segments, attemptedLegParseResults };
 }
 
+function collectICrewIncompleteFragments(
+  attemptedLegParseResults: ICrewParserDiagnostics["attemptedLegParseResults"],
+) {
+  return attemptedLegParseResults
+    .filter((result) => {
+      if (result.matched) {
+        return false;
+      }
+      if (!result.line || result.failureReason == null) {
+        return false;
+      }
+      if (!/(?:\*?[A-Z]{3}\s+\d{4}\s+\*?[A-Z]{3}\.\d{4}|\*?[A-Z]{3}\d{4}\s+\*?[A-Z]{3}\.\d{4})/i.test(result.line)) {
+        return false;
+      }
+      return [
+        "missing_block_token",
+        "missing_airport_or_time_tokens",
+        "missing_flight_token",
+      ].includes(result.failureReason);
+    })
+    .map((result) => result.line);
+}
+
 function parseICrewTextInternal(rawText: string): ParsedICrewTextResult {
-  const parsedSegments = parseICrewSegments(rawText).segments;
+  const parsedSegmentAttempt = parseICrewSegments(rawText);
+  const parsedSegments = parsedSegmentAttempt.segments;
   if (parsedSegments.length === 0) {
     throw new Error("Unable to parse iCrew leg rows from the provided text.");
   }
@@ -643,6 +660,27 @@ function parseICrewTextInternal(rawText: string): ParsedICrewTextResult {
   const header = parseICrewHeader(rawText, parsedSegments);
   const layoverCities = parseICrewLayoverCities(rawText);
   const dayTotals = parseDayLevelDhdTotals(rawText);
+  const incompleteFragments = collectICrewIncompleteFragments(
+    parsedSegmentAttempt.attemptedLegParseResults,
+  );
+  const parserNotes: string[] = [];
+  const missingTotals = [
+    header.totalCreditMinutes == null ? "totalCredit" : null,
+    header.scheduledBlockMinutes == null ? "scheduledBlock" : null,
+    header.totalDeadheadBlockMinutes == null ? "totalDeadheadBlock" : null,
+    header.tafbCredit == null ? "tafbCredit" : null,
+    header.tafbElapsed == null ? "tafbElapsed" : null,
+  ].filter((value): value is string => Boolean(value));
+  if (missingTotals.length > 0) {
+    parserNotes.push(
+      `iCrew partial text did not include summary totals for: ${missingTotals.join(", ")}.`,
+    );
+  }
+  if (incompleteFragments.length > 0) {
+    parserNotes.push(
+      `iCrew partial text ended with ${incompleteFragments.length} incomplete leg row${incompleteFragments.length === 1 ? "" : "s"}.`,
+    );
+  }
   const segmentsWithKinds = parsedSegments.map((segment) => {
     const explicitDeadhead = segment.marker === "D";
     return {
@@ -673,11 +711,25 @@ function parseICrewTextInternal(rawText: string): ParsedICrewTextResult {
   const currentDeadheadMinutes = segmentsWithKinds
     .filter((segment) => segment.isDeadhead)
     .reduce((sum, segment) => sum + parseDotDurationToMinutes(segment.scheduledBlock), 0);
-  if (currentDeadheadMinutes !== header.totalDeadheadBlockMinutes) {
+  if (
+    typeof header.totalDeadheadBlockMinutes === "number" &&
+    currentDeadheadMinutes !== header.totalDeadheadBlockMinutes
+  ) {
     applyRegionalDeadheadInference({
       segments: segmentsWithKinds,
       targetDeadheadMinutes: header.totalDeadheadBlockMinutes,
     });
+  } else if (typeof header.totalDeadheadBlockMinutes !== "number") {
+    const unresolvedRegionalCandidates = segmentsWithKinds.filter(
+      (segment) =>
+        !segment.isDeadhead &&
+        ["9E", "OO", "YX"].includes((segment.carrier ?? "").toUpperCase()),
+    );
+    if (unresolvedRegionalCandidates.length > 0) {
+      parserNotes.push(
+        "Regional/offline carrier segments were preserved without confirmed deadhead classification because DHD/TDHD totals were not available.",
+      );
+    }
   }
 
   const allTripSegments: RotationChainLeg[] = segmentsWithKinds.map((segment, index) => ({
@@ -735,6 +787,26 @@ function parseICrewTextInternal(rawText: string): ParsedICrewTextResult {
       endDate: header.tripDates.split("-")[1]?.trim(),
     },
   });
+  const operatingScheduledBlockMinutes =
+    typeof header.scheduledBlockMinutes === "number"
+      ? header.scheduledBlockMinutes
+      : snapshot.scheduledBlockMinutes;
+  const deadheadScheduledBlockMinutes = deadheadAnnotations.reduce(
+    (sum, annotation) => sum + annotation.scheduledBlockMinutes,
+    0,
+  );
+  const scheduledBlockSource: ParsedICrewTextResult["scheduledBlockSource"] =
+    typeof header.scheduledBlockMinutes === "number"
+      ? "iCrewSummaryTotals"
+      : visibleOperatingLegs.length > 0
+        ? "computedFromPartialICrewLegs"
+        : null;
+  const partialStatus =
+    partialDiagnosis.isPartial || missingTotals.length > 0 || incompleteFragments.length > 0;
+  const partialReason =
+    missingTotals.length > 0 || incompleteFragments.length > 0
+      ? "Partial iCrew text detected. Please paste the full rotation text."
+      : partialDiagnosis.partialReason;
 
   return {
     header,
@@ -744,13 +816,15 @@ function parseICrewTextInternal(rawText: string): ParsedICrewTextResult {
     visibleOperatingLegs,
     logbookLegs: visibleOperatingLegs,
     deadheadAnnotations,
-    partialStatus: partialDiagnosis.isPartial,
-    partialReason: partialDiagnosis.partialReason,
+    incompleteFragments,
+    parserNotes,
+    partialStatus,
+    partialReason,
     finalOperatingArrival: snapshot.finalArrival,
     finalArrivalAfterDeadhead: allTripSegments.at(-1)?.arrivalAirport ?? snapshot.finalArrival,
-    operatingScheduledBlockMinutes: snapshot.scheduledBlockMinutes,
-    deadheadScheduledBlockMinutes: deadheadAnnotations.reduce((sum, annotation) => sum + annotation.scheduledBlockMinutes, 0),
-    scheduledBlockSource: "iCrewSummaryTotals",
+    operatingScheduledBlockMinutes,
+    deadheadScheduledBlockMinutes,
+    scheduledBlockSource,
   };
 }
 
