@@ -172,6 +172,17 @@ function isDayOnlyToken(token?: string | null) {
   return /^\d{1,2}$/i.test(token ?? "");
 }
 
+function extractEffectiveMonth(rawText: string) {
+  const normalizedText = splitRawLines(rawText).map(normalizeICrewLine).join("\n");
+  return normalizedText.match(/\bEFFECTIVE\s+([A-Z]{3})\d{2}\b/i)?.[1]?.toUpperCase() ?? null;
+}
+
+function buildICrewDateLabel(dayToken: string, effectiveMonth?: string | null) {
+  const normalizedDay = dayToken.padStart(2, "0");
+  const month = (effectiveMonth ?? "APR").toUpperCase();
+  return `${normalizedDay}${month}`;
+}
+
 function isFlightTokenLike(token?: string | null) {
   return /^(?:\d{3,5}|D\d{2,5}|DL\d{2,5}|9E\d{2,5}|OO\d{2,5}|YX\d{2,5}|\d{1,2}(?:D\d{2,5}|DL\d{2,5}|9E\d{2,5}|OO\d{2,5}|YX\d{2,5}))$/i.test(
     token ?? "",
@@ -461,12 +472,14 @@ function parseICrewSegments(rawText: string) {
       dayToken: string;
       marker?: "D" | "O" | null;
       confirmationCode?: string | null;
+      segmentType?: "operating" | "deadhead" | "return_to_gate";
     }
   > = [];
   const attemptedLegParseResults: ICrewParserDiagnostics["attemptedLegParseResults"] = [];
   let currentDayToken: string | null = null;
   let lastSegment: (typeof segments)[number] | null = null;
   let lastRawFlightToken: string | null = null;
+  const effectiveMonth = extractEffectiveMonth(rawText);
 
   for (const line of splitRawLines(rawText)) {
     const normalizedLine = normalizeICrewLine(line);
@@ -536,7 +549,7 @@ function parseICrewSegments(rawText: string) {
     let arrivalToken = tokens[cursor + 2] ?? null;
     let trailingTokens = tokens.slice(cursor + 3);
 
-    const gluedDepartureMatch = departureAirportToken?.match(/^(\*?[A-Z]{3})(\d{4})$/i);
+    const gluedDepartureMatch = departureAirportToken?.match(/^(\*?[A-Z]{3})\*?(\d{4})$/i);
     if (gluedDepartureMatch?.[1] && gluedDepartureMatch?.[2]) {
       departureAirportToken = gluedDepartureMatch[1];
       departureTimeToken = gluedDepartureMatch[2];
@@ -561,11 +574,18 @@ function parseICrewSegments(rawText: string) {
     }
 
     let blockToken: string | null = null;
+    let turnToken: string | null = null;
     for (const trailingToken of trailingTokens) {
       const stripped = trailingToken.replace(/^\*+/, "");
       if (/^\d{1,2}[.:]\d{2}(?:BL)?$/i.test(stripped)) {
-        blockToken = stripped.replace(/BL$/i, "");
-        break;
+        if (!blockToken) {
+          blockToken = stripped.replace(/BL$/i, "");
+          continue;
+        }
+        if (!turnToken) {
+          turnToken = stripped.replace(/BL$/i, "");
+          break;
+        }
       }
     }
     if (!blockToken) {
@@ -587,20 +607,29 @@ function parseICrewSegments(rawText: string) {
     const arrivalMatch = arrivalToken.match(/^\*?([A-Z]{3})\.(\d{4})$/i);
     const token = parseFlightToken(dayToken, rawFlightToken.toUpperCase());
     const confirmationCode = normalizedLine.match(/CONFIRMATION\s+#?([A-Z0-9]+)/i)?.[1]?.toUpperCase() ?? null;
+    const dateLabel = buildICrewDateLabel(dayToken, effectiveMonth);
+    const departureAirport = stripLeadingMarkerAirport(departureAirportToken);
+    const arrivalAirport = arrivalMatch?.[1]?.toUpperCase() ?? null;
+    const segmentType =
+      departureAirport && arrivalAirport && departureAirport === arrivalAirport
+        ? ("return_to_gate" as const)
+        : ("operating" as const);
     const parsedSegment = {
       dayToken,
-      date: `${dayToken}APR`,
+      date: dateLabel,
       flightNumber: token.flightNumber,
       carrier: token.carrier,
-      departureAirport: stripLeadingMarkerAirport(departureAirportToken),
-      arrivalAirport: arrivalMatch?.[1]?.toUpperCase() ?? null,
-      scheduledOut: `${formatClockDigits(departureTimeToken)} ${dayToken}APR`,
-      scheduledIn: `${formatClockDigits(arrivalMatch?.[2])} ${dayToken}APR`,
+      departureAirport,
+      arrivalAirport,
+      scheduledOut: `${formatClockDigits(departureTimeToken)} ${dateLabel}`,
+      scheduledIn: `${formatClockDigits(arrivalMatch?.[2])} ${dateLabel}`,
       scheduledBlock: formatDurationString(blockToken),
+      turn: turnToken ? formatDurationString(turnToken) : null,
       sourceText: normalizedLine,
       rawSourceLine: line.trim(),
       confirmationCode,
       marker: token.marker,
+      segmentType,
     };
     segments.push(parsedSegment);
     lastSegment = parsedSegment;
@@ -619,7 +648,9 @@ function parseICrewSegments(rawText: string) {
         arrivalAirport: parsedSegment.arrivalAirport,
         arrivalTime: arrivalMatch?.[2] ?? null,
         blockToken,
+        turnToken,
         confirmationCode,
+        segmentType,
       },
     });
   }
@@ -686,7 +717,9 @@ function parseICrewTextInternal(rawText: string): ParsedICrewTextResult {
     return {
       ...segment,
       isDeadhead: explicitDeadhead,
-      segmentType: explicitDeadhead ? ("deadhead" as const) : ("operating" as const),
+      segmentType: explicitDeadhead
+        ? ("deadhead" as const)
+        : segment.segmentType ?? ("operating" as const),
     };
   });
 
@@ -740,12 +773,13 @@ function parseICrewTextInternal(rawText: string): ParsedICrewTextResult {
     scheduledOut: segment.scheduledOut,
     scheduledIn: segment.scheduledIn,
     scheduledBlock: segment.scheduledBlock,
+    turn: segment.turn,
     date: segment.date,
     isDeadhead: segment.isDeadhead,
     carrier: segment.carrier,
     confirmationCode: segment.confirmationCode,
     sourceText: segment.sourceText,
-    segmentType: segment.isDeadhead ? "deadhead" : "operating",
+    segmentType: segment.isDeadhead ? "deadhead" : segment.segmentType ?? "operating",
   }));
 
   const deadheadAnnotations: ICrewDeadheadAnnotation[] = segmentsWithKinds
@@ -770,7 +804,12 @@ function parseICrewTextInternal(rawText: string): ParsedICrewTextResult {
     }));
 
   const visibleOperatingLegs = excludeDeadheadLegsFromVisibleChain(allTripSegments, deadheadAnnotations)
-    .map((leg, index) => ({ ...leg, index: index + 1, isDeadhead: false, segmentType: "operating" as const }));
+    .map((leg, index) => ({
+      ...leg,
+      index: index + 1,
+      isDeadhead: false,
+      segmentType: leg.segmentType === "return_to_gate" ? "return_to_gate" : ("operating" as const),
+    }));
 
   const snapshot = computeSnapshotFromUserFacingChain({
     userFacingLegs: visibleOperatingLegs,
