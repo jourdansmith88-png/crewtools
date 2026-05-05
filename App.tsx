@@ -4551,7 +4551,16 @@ export default function App() {
             const rotationDashboard = displayedRotationDashboard;
             const timelineItems = buildTodayTimelineItems(rotationDashboard);
             const mobileTimelineItems = timelineItems.slice(0, isCompactMobile ? 5 : 7);
-            const compactWhatMatters = rotationDashboard.whatMatters.filter((item) => item.label !== "FAR 117 watch");
+            const compactWhatMatters = [
+              ...rotationDashboard.whatMatters.filter((item) => item.label !== "FAR 117 watch"),
+              ...rotationDashboard.legs
+                .filter((leg) => isReturnToGateLeg(leg))
+                .map((leg) => ({
+                  label: "RTG",
+                  tone: "watch" as const,
+                  detail: `Return-to-gate segment: ${leg.origin}-${leg.destination} on ${formatLegFlightDisplay(leg)} from ${leg.departureTime ?? "TBD"} to ${leg.arrivalTime ?? "TBD"}.`,
+                })),
+            ];
             const actionableWhatMatters = compactWhatMatters.filter(
               (item) => item.detail || item.actionCopyValue || item.secondaryActionUrl,
             );
@@ -5061,14 +5070,15 @@ export default function App() {
                               tone={
                                 item.leg.isDeadhead
                                   ? "cyan"
-                                  : item.leg.origin === item.leg.destination
-                                    ? "red"
+                                  : isReturnToGateLeg(item.leg)
+                                    ? "green"
                                     : "green"
                               }
                               style={[
                                 styles.tripBoardTimelineCard,
                                 isCompactMobile && styles.tripBoardTimelineCardCompact,
                                 item.isHighlighted && styles.tripBoardTimelineCardHighlighted,
+                                isReturnToGateLeg(item.leg) && styles.tripBoardTimelineCardRtg,
                               ]}
                             >
                               <View style={[styles.tripBoardTimelineHeader, isCompactMobile && styles.tripBoardTimelineHeaderCompact]}>
@@ -5084,12 +5094,12 @@ export default function App() {
                                       isCompactMobile && styles.statusBadgeCompact,
                                       item.leg.isDeadhead
                                         ? styles.deadheadBadge
-                                        : item.leg.origin === item.leg.destination
-                                          ? styles.statusBadgeWarning
+                                        : isReturnToGateLeg(item.leg)
+                                          ? styles.statusBadgeRtg
                                           : styles.statusBadgeResolved,
                                     ]}
                                   >
-                                    {item.leg.isDeadhead ? "DH" : item.leg.origin === item.leg.destination ? "RTG" : "OP"}
+                                    {item.leg.isDeadhead ? "DH" : isReturnToGateLeg(item.leg) ? "RTG" : "OP"}
                                   </Text>
                                 </View>
                                 <Text style={[styles.tripBoardTimelineTime, isCompactMobile && styles.tripBoardTimelineTimeCompact]}>
@@ -5108,15 +5118,15 @@ export default function App() {
                                 </Text>
                               </View>
                               <View style={[styles.tripBoardTimelineMetaRow, isCompactMobile && styles.tripBoardTimelineMetaRowCompact]}>
-                                {!item.leg.isDeadhead ? (
+                                {!item.leg.isDeadhead && item.leg.turnMinutes != null ? (
                                   <Text style={[styles.tripBoardTimelineMeta, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
-                                    Turn {item.leg.turnMinutes != null ? rotationFormatMinutes(item.leg.turnMinutes) : "TBD"}
+                                    Turn {rotationFormatMinutes(item.leg.turnMinutes)}
                                   </Text>
-                                ) : (
+                                ) : item.leg.isDeadhead ? (
                                   <Text style={[styles.tripBoardTimelineMeta, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
                                     Excluded from export
                                   </Text>
-                                )}
+                                ) : null}
                                 {!item.leg.isDeadhead && item.leg.aircraft ? (
                                   <Text style={[styles.tripBoardTimelineMeta, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
                                     Ship/equip {item.leg.aircraft}
@@ -5127,6 +5137,11 @@ export default function App() {
                                   </Text>
                                 ) : null}
                               </View>
+                              {!item.leg.isDeadhead && item.leg.gate && item.leg.gate !== "TBD" ? (
+                                <Text style={[styles.tripBoardTimelineMeta, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+                                  Gate {item.leg.gate}
+                                </Text>
+                              ) : null}
                               {item.leg.isDeadhead && !item.leg.confirmationNumber ? (
                                 <View style={styles.tripBoardTimelineHintStack}>
                                   <Text style={[styles.tripBoardTimelineMeta, styles.tripBoardTimelineMetaMuted, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
@@ -5165,6 +5180,11 @@ export default function App() {
                                 </Text>
                               ) : !item.leg.isDeadhead && !isCompactMobile ? (
                                 <Text style={styles.tripBoardTimelineMeta}>Counts toward logbook/export.</Text>
+                              ) : null}
+                              {item.leg.isDeadhead ? (
+                                <Text style={[styles.tripBoardTimelineMeta, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+                                  Excluded from logbook/export
+                                </Text>
                               ) : null}
                             </InstrumentPanel>
                           )}
@@ -5908,11 +5928,20 @@ export default function App() {
             >
               <View style={styles.sectionStack}>
                     {rotationDashboard.legs.map((leg) => (
-                  <View key={leg.id} style={[styles.resultPanel, leg.isDeadhead ? styles.deadheadLegPanel : null]}>
+                <View key={leg.id} style={[styles.resultPanel, leg.isDeadhead ? styles.deadheadLegPanel : null]}>
                     <View style={styles.rotationLegHeaderRow}>
                       <Text style={styles.inputLabel}>{leg.dayLabel}</Text>
-                      <Text style={[styles.statusBadge, leg.isDeadhead ? styles.deadheadBadge : styles.statusBadgeResolved]}>
-                        {leg.isDeadhead ? "DH" : "Operating"}
+                      <Text
+                        style={[
+                          styles.statusBadge,
+                          leg.isDeadhead
+                            ? styles.deadheadBadge
+                            : isReturnToGateLeg(leg)
+                              ? styles.statusBadgeRtg
+                              : styles.statusBadgeResolved,
+                        ]}
+                      >
+                        {leg.isDeadhead ? "DH" : isReturnToGateLeg(leg) ? "RTG" : "Operating"}
                       </Text>
                     </View>
                     <FormRow>
@@ -5930,34 +5959,45 @@ export default function App() {
                       <ResultLine label="Actual out / in" value={`${leg.actualOut ?? "—"} - ${leg.actualIn ?? "—"}`} />
                       <ResultLine label="Actual block" value={rotationFormatMinutes(leg.actualBlockMinutes)} />
                     </FormRow>
-                    {leg.isDeadhead || !shouldShowLegStatus(leg) ? (
-                      <ResultLine
-                        label={leg.isDeadhead ? "Connection time" : "Turn time"}
-                        value={leg.isDeadhead ? "De-emphasized" : rotationFormatMinutes(leg.turnMinutes)}
-                      />
+                    {leg.isDeadhead ? (
+                      <ResultLine label="Connection time" value="De-emphasized" />
+                    ) : !shouldShowLegStatus(leg) ? (
+                      leg.turnMinutes != null ? (
+                        <ResultLine label="Turn time" value={rotationFormatMinutes(leg.turnMinutes)} />
+                      ) : null
                     ) : (
                       <FormRow>
-                        <ResultLine
-                          label={leg.isDeadhead ? "Connection time" : "Turn time"}
-                          value={leg.isDeadhead ? "De-emphasized" : rotationFormatMinutes(leg.turnMinutes)}
-                        />
+                        {leg.turnMinutes != null ? (
+                          <ResultLine label="Turn time" value={rotationFormatMinutes(leg.turnMinutes)} />
+                        ) : (
+                          <ResultLine label="Turn time" value="Not shown" />
+                        )}
                         <ResultLine label="Status" value={leg.status.replace(/_/g, " ")} />
                       </FormRow>
                     )}
                     <FormRow>
                       <ResultLine
                         label={leg.isDeadhead ? "Carrier" : "Ship / eqp"}
-                        value={leg.isDeadhead ? leg.carrier ?? "Deadhead" : formatLegEquipmentDisplay(leg)}
+                        value={leg.isDeadhead ? leg.carrier ?? "Deadhead" : leg.aircraft ? formatLegEquipmentDisplay(leg) : "Not shown"}
                       />
-                      <ResultLine label="Gate" value={formatLegGateDisplay(leg)} />
+                      <ResultLine label="Gate" value={leg.gate && leg.gate !== "TBD" ? formatLegGateDisplay(leg) : "Not shown"} />
                     </FormRow>
                     <FormRow>
                       <ResultLine label="Logbook export" value={leg.excludeFromLogbookExport ? "Exclude" : "Include"} />
                       <ResultLine
                         label={leg.isDeadhead ? "Timeline" : "Status"}
-                        value={leg.isDeadhead ? "DH / visible" : leg.status.replace(/_/g, " ")}
+                        value={
+                          leg.isDeadhead
+                            ? "DH / visible"
+                            : isReturnToGateLeg(leg)
+                              ? "Return-to-gate"
+                              : leg.status.replace(/_/g, " ")
+                        }
                       />
                     </FormRow>
+                    {isReturnToGateLeg(leg) ? (
+                      <Text style={styles.resultSupportMetaText}>Return-to-gate segment</Text>
+                    ) : null}
                     {leg.isDeadhead && leg.confirmationNumber ? (
                       <View style={styles.sectionStack}>
                         <ResultLine label="PNR" value={leg.confirmationNumber} />
@@ -5982,6 +6022,9 @@ export default function App() {
                           </TouchableOpacity>
                         </View>
                       </View>
+                    ) : null}
+                    {leg.isDeadhead && !leg.confirmationNumber ? (
+                      <Text style={styles.resultSupportMetaText}>Confirmation not found</Text>
                     ) : null}
                     {rotationDebugEnabled ? (
                       <Text style={styles.resultSupportMetaText}>
@@ -9579,6 +9622,10 @@ function getLayoverActionableTransportPhone(detail: RotationLayoverDetail | null
   return transportPhone;
 }
 
+function isReturnToGateLeg(leg: RotationDashboardData["legs"][number]) {
+  return !leg.isDeadhead && leg.origin === leg.destination;
+}
+
 function CompactAlertChip({
   label,
   tone,
@@ -12594,6 +12641,10 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(166,25,46,0.12)",
     color: appStylePalette.redBorder,
   },
+  statusBadgeRtg: {
+    backgroundColor: "rgba(216,154,43,0.14)",
+    color: "#F2C76B",
+  },
   deadheadBadge: {
     backgroundColor: "rgba(120,130,138,0.18)",
     color: appStylePalette.textMuted,
@@ -12731,6 +12782,10 @@ const styles = StyleSheet.create({
   },
   tripBoardTimelineCardHighlighted: {
     borderColor: appStylePalette.accent,
+  },
+  tripBoardTimelineCardRtg: {
+    borderColor: "#D89A2B",
+    backgroundColor: "rgba(216,154,43,0.08)",
   },
   tripBoardLayoverCard: {
     flex: 1,
