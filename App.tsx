@@ -69,7 +69,6 @@ import {
   buildScreenshotUserFacingChain as buildScreenshotUserFacingChainPure,
   computeSnapshotFromUserFacingChain as computeSnapshotFromUserFacingChainPure,
   diagnoseScreenshotRotationPartialStatus as diagnoseScreenshotRotationPartialStatusPure,
-  excludeDeadheadLegsFromVisibleChain as excludeDeadheadLegsFromVisibleChainPure,
 } from "./src/features/rotationCompanion/rotationChainBuilder";
 import {
   parseICrewTextWithDiagnostics,
@@ -631,15 +630,14 @@ function buildLiveChainDebugExport(args: {
       layoverCities: header.layoverCities ?? [],
       startDate: header.startDate,
       endDate: header.endDate,
+      reportTime: header.reportTime ?? null,
     },
   });
-  const visibleOperatingLegs = excludeDeadheadLegsFromVisibleChainPure(
-    chainBuildResult.userFacingLegs,
-    chainBuildResult.deadheadAnnotations,
-  );
+  const visibleOperatingLegs = chainBuildResult.userFacingLegs.filter((leg) => !leg.isDeadhead);
+  const dhTimelineLegs = chainBuildResult.userFacingLegs.filter((leg) => leg.isDeadhead);
   const snapshotComputation = computeSnapshotFromUserFacingChainPure({
-    userFacingLegs: visibleOperatingLegs,
-    headerScheduledBlockMinutes: parseClockishMinutes(header.totalScheduledBlock),
+    userFacingLegs: chainBuildResult.userFacingLegs,
+    headerScheduledBlockMinutes: undefined,
     fallbackScheduledBlockMinutes: rotationDashboard.snapshot.scheduledBlockMinutes,
     finalArrivalFallback: rotationDashboard.snapshot.finalArrival,
   });
@@ -647,7 +645,7 @@ function buildLiveChainDebugExport(args: {
     rawFinalOrderedChain.map((candidate) => buildBuilderCandidateStableKey(candidate)),
   );
   const builderOutputKeys = new Set(
-    visibleOperatingLegs.map((candidate) => buildBuilderCandidateStableKey(candidate)),
+    chainBuildResult.userFacingLegs.map((candidate) => buildBuilderCandidateStableKey(candidate)),
   );
   const unmatchedCandidates = liveChainInputSources.selectedCandidates
     .filter((candidate) => !orderedChainKeys.has(buildBuilderCandidateStableKey(candidate)))
@@ -752,7 +750,7 @@ function buildLiveChainDebugExport(args: {
       scheduledBlockMinutes: parseClockishMinutes(candidate.scheduledBlock) ?? null,
       sourceText: candidate.sourceText ?? null,
     })),
-    builderOutputUserFacingLegs: visibleOperatingLegs.map((candidate) => ({
+    builderOutputUserFacingLegs: chainBuildResult.userFacingLegs.map((candidate) => ({
       key: buildBuilderCandidateStableKey(candidate),
       date: candidate.date ?? null,
       origin: candidate.departureAirport ?? null,
@@ -763,6 +761,7 @@ function buildLiveChainDebugExport(args: {
       scheduledIn: candidate.scheduledIn ?? null,
       scheduledBlockMinutes: parseClockishMinutes(candidate.scheduledBlock) ?? null,
       sourceText: candidate.sourceText ?? null,
+      isDeadhead: Boolean(candidate.isDeadhead),
     })),
     deadheadAnnotations: chainBuildResult.deadheadAnnotations,
     visibleOperatingLegs: visibleOperatingLegs.map((candidate) => ({
@@ -777,18 +776,38 @@ function buildLiveChainDebugExport(args: {
       scheduledBlockMinutes: parseClockishMinutes(candidate.scheduledBlock) ?? null,
       sourceText: candidate.sourceText ?? null,
     })),
+    tripTimelineLegs: chainBuildResult.userFacingLegs.map((candidate) => ({
+      key: buildBuilderCandidateStableKey(candidate),
+      date: candidate.date ?? null,
+      origin: candidate.departureAirport ?? null,
+      destination: candidate.arrivalAirport ?? null,
+      carrier: candidate.carrier ?? null,
+      flightNumber: candidate.flightNumber ?? null,
+      scheduledOut: candidate.scheduledOut ?? null,
+      scheduledIn: candidate.scheduledIn ?? null,
+      scheduledBlockMinutes: parseClockishMinutes(candidate.scheduledBlock) ?? null,
+      sourceText: candidate.sourceText ?? null,
+      isDeadhead: Boolean(candidate.isDeadhead),
+    })),
     discardedFragments,
     unmatchedCandidates,
     runtimeSummary: {
       rawFinalOrderedChainCount: rawFinalOrderedChain.length,
       runtimeBuilderInputCandidateCount: liveChainInputSources.selectedCandidates.length,
-      builderOutputLegCount: visibleOperatingLegs.length,
-      builderOutputFirstLeg: visibleOperatingLegs[0]
-        ? `${visibleOperatingLegs[0]?.departureAirport ?? "?"}-${visibleOperatingLegs[0]?.arrivalAirport ?? "?"}`
+      chainAnchorReason: chainBuildResult.chainAnchorReason,
+      anchoredFirstLeg: chainBuildResult.anchoredFirstLeg,
+      wasChainRotated: chainBuildResult.wasChainRotated,
+      builderOutputLegCount: chainBuildResult.userFacingLegs.length,
+      builderOutputFirstLeg: chainBuildResult.userFacingLegs[0]
+        ? `${chainBuildResult.userFacingLegs[0]?.departureAirport ?? "?"}-${chainBuildResult.userFacingLegs[0]?.arrivalAirport ?? "?"}`
         : "unknown",
-      builderOutputLastLeg: visibleOperatingLegs.at(-1)
-        ? `${visibleOperatingLegs.at(-1)?.departureAirport ?? "?"}-${visibleOperatingLegs.at(-1)?.arrivalAirport ?? "?"}`
+      builderOutputLastLeg: chainBuildResult.userFacingLegs.at(-1)
+        ? `${chainBuildResult.userFacingLegs.at(-1)?.departureAirport ?? "?"}-${chainBuildResult.userFacingLegs.at(-1)?.arrivalAirport ?? "?"}`
         : "unknown",
+      tripTimelineLegCount: chainBuildResult.userFacingLegs.length,
+      operatingLegCount: visibleOperatingLegs.length,
+      dhLegCount: dhTimelineLegs.length,
+      logbookExportLegCount: visibleOperatingLegs.length,
       scheduledBlock: snapshotComputation.scheduledBlockMinutes,
       scheduledBlockSource: snapshotComputation.scheduledBlockSource,
       nextFlight: snapshotComputation.nextFlightCityPair,
@@ -973,16 +992,44 @@ function buildICrewDebugExport(args: {
   };
 }
 
-function buildICrewDebugPreviewDashboard(
+function looksLikeICrewRotationText(rawText: string) {
+  const normalized = rawText.replace(/\s+/g, " ").toUpperCase();
+  const strongMarkers = [
+    "*** ROTATION OPER",
+    "REGULAR-",
+    "TDHD",
+    "TAFB",
+    "PWA FDP/SKD MAX/ACT MAX",
+    "ROT GUAR",
+  ];
+  const matchedMarkerCount = strongMarkers.filter((marker) => normalized.includes(marker)).length;
+  const hasDayFlightHeader = /DAY\s+FLT\s+T\s+DEPARTS\s+ARRIVES/i.test(normalized);
+  const hasRotationHeader = /POS-[A-Z0-9]{1,3}.*EFFECTIVE\s+[A-Z]{3}\d{2}/i.test(normalized);
+  return matchedMarkerCount >= 2 || (matchedMarkerCount >= 1 && hasDayFlightHeader) || (matchedMarkerCount >= 2 && hasRotationHeader);
+}
+
+function buildICrewParsedDashboard(
   parsed: NonNullable<ReturnType<typeof parseICrewTextWithDiagnostics>["parsed"]>,
+  options?: {
+    previewNote?: string;
+  },
 ): RotationDashboardData {
   const base = parsed.header.base;
-  const visibleOperatingLegs = parsed.visibleOperatingLegs;
-  const firstLeg = visibleOperatingLegs[0];
+  const tripTimelineLegs = parsed.allTripSegments;
+  const firstLeg = tripTimelineLegs[0];
   const finalOperatingArrival = parsed.finalOperatingArrival;
   const finalArrivalAfterDh = parsed.finalArrivalAfterDeadhead;
   const layoverCities = parsed.layoverCities;
-  const mappedLegs = visibleOperatingLegs.map((leg, index) => ({
+  const findSegmentEquipment = (leg: RotationChainLeg) =>
+    parsed.normalizedCandidates.find(
+      (candidate) =>
+        candidate.flightNumber === leg.flightNumber &&
+        candidate.departureAirport === leg.departureAirport &&
+        candidate.arrivalAirport === leg.arrivalAirport &&
+        candidate.scheduledOut === leg.scheduledOut &&
+        candidate.scheduledIn === leg.scheduledIn,
+    )?.equipmentShip;
+  const mappedLegs = tripTimelineLegs.map((leg, index) => ({
     id: `icrew-debug-leg-${index + 1}-${leg.flightNumber ?? "unk"}-${leg.departureAirport ?? "x"}-${leg.arrivalAirport ?? "x"}-${leg.scheduledOut ?? "na"}`,
     dayLabel: leg.date ?? `Day ${index + 1}`,
     flightNumber: leg.flightNumber ?? "TBD",
@@ -993,15 +1040,15 @@ function buildICrewDebugPreviewDashboard(
     scheduledBlockMinutes: parseClockishMinutes(leg.scheduledBlock),
     turnMinutes: parseClockishMinutes(leg.turn),
     status: "placeholder" as const,
-    aircraft: undefined,
+    aircraft: findSegmentEquipment(leg) ?? undefined,
     gate: undefined,
-    isDeadhead: false,
-    legKind: "operating" as const,
-    deadheadSource: undefined,
-    confirmationNumber: undefined,
+    isDeadhead: Boolean(leg.isDeadhead),
+    legKind: leg.isDeadhead ? ("deadhead" as const) : ("operating" as const),
+    deadheadSource: leg.isDeadhead ? "micrew_context" : undefined,
+    confirmationNumber: leg.confirmationCode ?? undefined,
     carrier: leg.carrier ?? undefined,
     sourceText: leg.sourceText ?? undefined,
-    excludeFromLogbookExport: false,
+    excludeFromLogbookExport: Boolean(leg.isDeadhead),
   }));
   const parsedRotationLegs = mappedLegs.map((leg, index) => ({
     id: leg.id,
@@ -1015,12 +1062,12 @@ function buildICrewDebugPreviewDashboard(
     scheduledBlock: leg.scheduledBlockMinutes,
     turnAfterPreviousLeg: leg.turnMinutes,
     status: "placeholder" as const,
-    isDeadhead: false,
-    legKind: "operating" as const,
-    confirmationNumber: undefined,
+    isDeadhead: leg.isDeadhead,
+    legKind: leg.isDeadhead ? ("deadhead" as const) : ("operating" as const),
+    confirmationNumber: leg.confirmationNumber,
     carrier: leg.carrier,
     sourceText: leg.sourceText,
-    deadheadSource: undefined,
+    deadheadSource: leg.deadheadSource,
   }));
   const nextLeg = firstLeg
     ? {
@@ -1034,15 +1081,15 @@ function buildICrewDebugPreviewDashboard(
         scheduledBlockMinutes: parseClockishMinutes(firstLeg.scheduledBlock),
         turnMinutes: parseClockishMinutes(firstLeg.turn),
         status: "placeholder" as const,
-        aircraft: undefined,
+        aircraft: findSegmentEquipment(firstLeg) ?? undefined,
         gate: undefined,
-        isDeadhead: false,
-        legKind: "operating" as const,
-        deadheadSource: undefined,
-        confirmationNumber: undefined,
+        isDeadhead: Boolean(firstLeg.isDeadhead),
+        legKind: firstLeg.isDeadhead ? ("deadhead" as const) : ("operating" as const),
+        deadheadSource: firstLeg.isDeadhead ? "micrew_context" : undefined,
+        confirmationNumber: firstLeg.confirmationCode ?? undefined,
         carrier: firstLeg.carrier ?? undefined,
         sourceText: firstLeg.sourceText ?? undefined,
-        excludeFromLogbookExport: false,
+        excludeFromLogbookExport: Boolean(firstLeg.isDeadhead),
       }
     : undefined;
   const whatMatters = parsed.deadheadAnnotations.map((annotation) => ({
@@ -1073,7 +1120,7 @@ function buildICrewDebugPreviewDashboard(
     tonightLayoverCity: layoverCities[0] ?? "TBD",
     tomorrowReportTime: undefined,
     scheduledRestMinutes: undefined,
-    note: "Previewing iCrew debug parse through the shared rotation display model.",
+    note: options?.previewNote ?? "Loaded from iCrew text.",
     source: "parsed",
     parsedRotation: {
       rotationNumber: parsed.header.rotationNumber,
@@ -1202,51 +1249,28 @@ function buildScreenshotBackedDashboardModel(
       layoverCities: header.layoverCities ?? [],
       startDate: header.startDate,
       endDate: header.endDate,
+      reportTime: header.reportTime ?? null,
     },
   });
   const deadheadAnnotations = chainBuildResult.deadheadAnnotations;
-  const sanitizedUserFacingLegs = excludeDeadheadLegsFromVisibleChainPure(
-    chainBuildResult.userFacingLegs,
-    deadheadAnnotations,
-  );
-  const userFacingLegs = sanitizedUserFacingLegs;
-  if (rawFinalOrderedChain.length === 0) {
+  const userFacingLegs = chainBuildResult.userFacingLegs;
+  const hasAuthoritativeUserFacingChain =
+    userFacingLegs.length > 0 || chainBuildResult.allTripSegments.length > 0;
+  if (!hasAuthoritativeUserFacingChain) {
     return {
       ...dashboard,
       note: dashboard.note,
       parsedRotation: {
         ...dashboard.parsedRotation,
-        parserWarnings: Array.from(
-          new Set([...(dashboard.parsedRotation.parserWarnings ?? []), "Ordered screenshot chain was empty."]),
-        ),
+        parserWarnings: Array.from(new Set([
+          ...(dashboard.parsedRotation.parserWarnings ?? []),
+          "Screenshot chain builder could not produce a final ordered route chain from the extracted candidate pool.",
+        ])),
       },
     };
   }
-  const visibleDeadheadLeak = userFacingLegs.filter((leg) =>
-    deadheadAnnotations.some((annotation) => {
-      const sameRoute =
-        (leg.departureAirport ?? "").toUpperCase() === annotation.origin.toUpperCase() &&
-        (leg.arrivalAirport ?? "").toUpperCase() === annotation.destination.toUpperCase();
-      const sameCarrier =
-        (annotation.carrier ?? "").toUpperCase() === "" ||
-        (leg.carrier ?? "").toUpperCase() === (annotation.carrier ?? "").toUpperCase();
-      const sameFlight =
-        (annotation.flightNumber ?? "").replace(/\D/g, "") === "" ||
-        (leg.flightNumber ?? "").replace(/\D/g, "") === (annotation.flightNumber ?? "").replace(/\D/g, "");
-      return sameRoute && sameCarrier && sameFlight;
-    }),
-  );
-  if (visibleDeadheadLeak.length > 0) {
-    console.error("VISIBLE_DH_LEAK_REGRESSION", {
-      visibleOperatingLegs: userFacingLegs.map(
-        (leg) => `${leg.departureAirport ?? "?"}-${leg.arrivalAirport ?? "?"} ${leg.carrier ?? ""}${leg.flightNumber ?? ""}`.trim(),
-      ),
-      leakedLegs: visibleDeadheadLeak.map(
-        (leg) => `${leg.departureAirport ?? "?"}-${leg.arrivalAirport ?? "?"} ${leg.carrier ?? ""}${leg.flightNumber ?? ""}`.trim(),
-      ),
-      deadheadAnnotations,
-    });
-  }
+  const operatingLegs = userFacingLegs.filter((leg) => !leg.isDeadhead);
+  const deadheadLegs = userFacingLegs.filter((leg) => leg.isDeadhead);
   const mappedUserFacingLegs = userFacingLegs.map((leg, index) => {
     const inferredDayLabel =
       leg.date ? leg.date.toUpperCase() : `Leg ${index + 1}`;
@@ -1265,13 +1289,13 @@ function buildScreenshotBackedDashboardModel(
       status: "placeholder" as const,
       aircraft: undefined,
       gate: undefined,
-      isDeadhead: false,
-      legKind: "operating" as const,
-      deadheadSource: undefined,
-      confirmationNumber: undefined,
-      carrier: undefined,
+      isDeadhead: Boolean(leg.isDeadhead),
+      legKind: leg.isDeadhead ? ("deadhead" as const) : ("operating" as const),
+      deadheadSource: leg.isDeadhead ? "micrew_context" : undefined,
+      confirmationNumber: leg.confirmationCode ?? undefined,
+      carrier: leg.carrier ?? undefined,
       sourceText: leg.sourceText ?? undefined,
-      excludeFromLogbookExport: false,
+      excludeFromLogbookExport: Boolean(leg.isDeadhead),
     };
   });
   const deadheadReturnHome = deadheadAnnotations.find(
@@ -1281,7 +1305,7 @@ function buildScreenshotBackedDashboardModel(
   );
   const snapshotComputation = computeSnapshotFromUserFacingChainPure({
     userFacingLegs,
-    headerScheduledBlockMinutes: parseClockishMinutes(header.totalScheduledBlock),
+    headerScheduledBlockMinutes: undefined,
     fallbackScheduledBlockMinutes: dashboard.snapshot.scheduledBlockMinutes,
     finalArrivalFallback: dashboard.snapshot.finalArrival,
   });
@@ -1299,9 +1323,11 @@ function buildScreenshotBackedDashboardModel(
     partialDiagnosis.isPartial &&
     (partialDiagnosis.partialReason ?? "").includes("does not return to base") &&
     Boolean(deadheadReturnHome);
-  const operatingLegs = userFacingLegs;
   const operatingBlockMinutes = snapshotComputation.computedUserFacingScheduledBlock;
-  const deadheadBlockMinutes = 0;
+  const deadheadBlockMinutes = deadheadLegs.reduce(
+    (sum, leg) => sum + (parseClockishMinutes(leg.scheduledBlock) ?? 0),
+    0,
+  );
   const missingBlockWarnings = operatingLegs
     .filter((leg) => !leg.scheduledBlock)
     .map((leg) => `Missing block for leg ${leg.flightNumber ?? "unknown"}`);
@@ -1320,6 +1346,7 @@ function buildScreenshotBackedDashboardModel(
   }
   const firstOrderedLeg = userFacingLegs[0];
   const lastOrderedLeg = userFacingLegs.at(-1);
+  const lastOperatingLeg = operatingLegs.at(-1);
   if (
     firstOrderedLeg &&
     (dashboard.nextLeg?.origin !== firstOrderedLeg.departureAirport ||
@@ -1345,12 +1372,12 @@ function buildScreenshotBackedDashboardModel(
         arrivalTime: extractCompactClock(firstOrderedLeg.scheduledIn) ?? dashboard.nextLeg?.arrivalTime,
         scheduledBlockMinutes: parseClockishMinutes(firstOrderedLeg.scheduledBlock) ?? dashboard.nextLeg?.scheduledBlockMinutes,
         turnMinutes: parseClockishMinutes(firstOrderedLeg.turn) ?? dashboard.nextLeg?.turnMinutes,
-        isDeadhead: false,
-        legKind: "operating" as const,
-        confirmationNumber: undefined,
-        carrier: undefined,
+        isDeadhead: Boolean(firstOrderedLeg.isDeadhead),
+        legKind: firstOrderedLeg.isDeadhead ? ("deadhead" as const) : ("operating" as const),
+        confirmationNumber: firstOrderedLeg.confirmationCode ?? undefined,
+        carrier: firstOrderedLeg.carrier ?? undefined,
         sourceText: firstOrderedLeg.sourceText ?? dashboard.nextLeg?.sourceText,
-        excludeFromLogbookExport: false,
+        excludeFromLogbookExport: Boolean(firstOrderedLeg.isDeadhead),
       }
     : dashboard.nextLeg;
 
@@ -1387,7 +1414,8 @@ function buildScreenshotBackedDashboardModel(
     headerLooksComplete &&
     userFacingLegs.length > 0 &&
     partialDiagnosis.hasTerminalReturnToBase &&
-    snapshotComputation.finalArrival === (partialDiagnosis.rotationBase ?? snapshotComputation.finalArrival);
+    (lastOrderedLeg?.arrivalAirport ?? snapshotComputation.finalArrival) ===
+      (partialDiagnosis.rotationBase ?? (lastOrderedLeg?.arrivalAirport ?? snapshotComputation.finalArrival));
   const parserWarnings = [...(dashboard.parsedRotation.parserWarnings ?? []), ...missingBlockWarnings, ...validationWarnings];
   if (shouldTreatRotationAsFull && chainBuildResult.discardedAfterTerminal > 0) {
     parserWarnings.push("Discarded unmatched screenshot fragments after building complete route chain.");
@@ -1408,11 +1436,16 @@ function buildScreenshotBackedDashboardModel(
       : "unknown",
     chainBeforePrefixRecoveryCount: chainBuildResult.chainBeforePrefixRecoveryCount,
     chainAfterPrefixRecoveryCount: chainBuildResult.chainAfterPrefixRecoveryCount,
+    chainAnchorReason: chainBuildResult.chainAnchorReason,
+    anchoredFirstLeg: chainBuildResult.anchoredFirstLeg,
+    wasChainRotated: chainBuildResult.wasChainRotated,
     prefixRecoveryAttempted: chainBuildResult.prefixRecoveryAttempted,
     prefixRecoveredCount: chainBuildResult.prefixRecoveredCount,
     recoveredPrefixLegs: chainBuildResult.recoveredPrefixLegs.join(", ") || "none",
-    sanitizedUserFacingLegsCount: sanitizedUserFacingLegs.length,
+    sanitizedUserFacingLegsCount: userFacingLegs.length,
     userFacingLegsCount: userFacingLegs.length,
+    operatingLegsCount: operatingLegs.length,
+    dhLegsCount: deadheadLegs.length,
     firstUserFacingLeg: firstOrderedLeg ? `${firstOrderedLeg.departureAirport ?? "?"}-${firstOrderedLeg.arrivalAirport ?? "?"}` : "unknown",
     lastUserFacingLeg: lastOrderedLeg ? `${lastOrderedLeg.departureAirport ?? "?"}-${lastOrderedLeg.arrivalAirport ?? "?"}` : "unknown",
     terminalReturnLeg: chainBuildResult.terminalReturnLeg,
@@ -1421,7 +1454,7 @@ function buildScreenshotBackedDashboardModel(
     partialBannerVisible,
     partialSourceUsed,
     partialVisibleLegsCount: userFacingLegs.length,
-    operatingLegsCount: userFacingLegs.length,
+    canonicalChainSource: chainBuildResult.canonicalCandidateSource,
     builderOutputFirstLeg: firstOrderedLeg ? `${firstOrderedLeg.departureAirport ?? "?"}-${firstOrderedLeg.arrivalAirport ?? "?"}` : "unknown",
     builderOutputLegCount: userFacingLegs.length,
     scheduledBlock: snapshotComputation.scheduledBlockMinutes,
@@ -1446,6 +1479,9 @@ function buildScreenshotBackedDashboardModel(
       runtimeUserFacingLegs: userFacingLegs.map(
         (leg) => `${leg.departureAirport ?? "?"}-${leg.arrivalAirport ?? "?"}`,
       ),
+      runtimeOperatingLegCount: operatingLegs.length,
+      runtimeDeadheadLegCount: deadheadLegs.length,
+      runtimeLogbookExportLegCount: operatingLegs.length,
       builderOutputFirstLeg: visibleRotationSourceDebug.builderOutputFirstLeg,
       builderOutputLegCount: visibleRotationSourceDebug.builderOutputLegCount,
       runtimeFirstLeg: visibleRotationSourceDebug.firstUserFacingLeg,
@@ -1498,7 +1534,11 @@ function buildScreenshotBackedDashboardModel(
       totalCredit: parseClockishMinutes(header?.totalCredit) ?? dashboard.parsedRotation.totalCredit,
       totalScheduledBlock: snapshotComputation.scheduledBlockMinutes,
       deadheadBlock: deadheadBlockMinutes,
-      excludedDeadheadLegs: 0,
+      excludedDeadheadLegs: deadheadLegs.length,
+      finalArrivalAfterDh: lastOrderedLeg?.arrivalAirport ?? snapshotComputation.finalArrival,
+      chainAnchorReason: chainBuildResult.chainAnchorReason,
+      anchoredFirstLeg: chainBuildResult.anchoredFirstLeg,
+      wasChainRotated: chainBuildResult.wasChainRotated,
       layoverCities: (header?.layoverCities?.length ?? 0) > 0 ? header.layoverCities : dashboard.parsedRotation.layoverCities,
       dutyPeriods: screenshotDutyPeriods,
       legs: mappedUserFacingLegs.map((leg, index) => ({
@@ -1981,7 +2021,9 @@ export default function App() {
   const rotationDebugPreviewDashboard = useMemo(
     () =>
       rotationDebugEnabled && rotationICrewDebugResult
-        ? buildICrewDebugPreviewDashboard(rotationICrewDebugResult)
+        ? buildICrewParsedDashboard(rotationICrewDebugResult, {
+            previewNote: "Previewing iCrew debug parse through the shared rotation display model.",
+          })
         : null,
     [rotationDebugEnabled, rotationICrewDebugResult],
   );
@@ -1989,6 +2031,46 @@ export default function App() {
   const hasICrewDebugParseAttempt =
     rotationDebugEnabled &&
     Boolean(rotationICrewDebugResult || rotationICrewDebugDiagnostics || rotationICrewDebugError);
+  const dashboardSourceNote = useMemo(() => {
+    if (!displayedRotationDashboard) {
+      return null;
+    }
+    if (rotationDebugPreviewDashboard) {
+      return "Loaded from iCrew text";
+    }
+    if (rotationScreenshots.length > 0 || rotationScreenshotParseResult) {
+      return "Loaded from screenshots";
+    }
+    if (displayedRotationDashboard.parsedRotation.sourceFormat === "icrew_printout") {
+      return "Loaded from iCrew text";
+    }
+    return "Loaded from pasted rotation text";
+  }, [
+    displayedRotationDashboard,
+    rotationDebugPreviewDashboard,
+    rotationScreenshots.length,
+    rotationScreenshotParseResult,
+  ]);
+
+  const formatLegFlightDisplay = (leg: RotationDashboardData["legs"][number]) => {
+    const carrierPrefix =
+      leg.flightNumber && leg.carrier && !leg.flightNumber.toUpperCase().startsWith(leg.carrier.toUpperCase())
+        ? leg.carrier.toUpperCase()
+        : "";
+    const flightCode = `${carrierPrefix}${leg.flightNumber ?? "TBD"}`;
+    return `Flight ${flightCode}`;
+  };
+
+  const formatLegEquipmentDisplay = (leg: RotationDashboardData["legs"][number]) => {
+    return leg.aircraft ? String(leg.aircraft) : "TBD";
+  };
+
+  const formatLegGateDisplay = (leg: RotationDashboardData["legs"][number]) => {
+    return leg.gate ?? "TBD";
+  };
+
+  const shouldShowLegStatus = (leg: RotationDashboardData["legs"][number]) =>
+    !leg.isDeadhead && leg.status !== "placeholder";
   const [mobilePreferencesLoaded, setMobilePreferencesLoaded] = useState(false);
   const [mobilePreferencesEditing, setMobilePreferencesEditing] = useState(true);
   const [mobilePreferencesEditorInitialized, setMobilePreferencesEditorInitialized] = useState(false);
@@ -2351,8 +2433,13 @@ export default function App() {
     setRotationScreenshotParseResult(null);
     setRotationCopiedDebugJson(false);
     setRotationDashboard(null);
+    setRotationICrewDebugResult(null);
+    setRotationICrewDebugDiagnostics(null);
+    setRotationICrewDebugError("");
+    setRotationCopiedICrewDebugJson(false);
     try {
-      const hasText = rotationPasteInput.trim().length > 0;
+      const trimmedText = rotationPasteInput.trim();
+      const hasText = trimmedText.length > 0;
       const hasScreenshots = rotationScreenshots.length > 0;
       if (!hasText && !hasScreenshots) {
         setRotationAnalyzeError("Paste trip text, upload screenshots, or use the sample rotation.");
@@ -2374,8 +2461,38 @@ export default function App() {
         setRotationScreenshotParseResult(screenshotParse);
       }
 
+      if (hasText && !hasScreenshots && looksLikeICrewRotationText(trimmedText)) {
+        const debugResult = parseICrewTextWithDiagnostics(trimmedText);
+        setRotationICrewDebugResult(debugResult.parsed);
+        setRotationICrewDebugDiagnostics(debugResult.diagnostics);
+        setRotationICrewDebugError(
+          debugResult.parserSucceeded
+            ? ""
+            : debugResult.diagnostics.parserError ?? "Unable to parse iCrew raw text.",
+        );
+        setRotationCopiedICrewDebugJson(false);
+        if (!debugResult.parserSucceeded || !debugResult.parsed) {
+          setRotationAnalyzeError(
+            "iCrew rotation detected, but we could not parse the full rotation. Paste the full printout or try again.",
+          );
+          setRotationDashboard(null);
+          return;
+        }
+        if (rotationActiveRunIdRef.current !== analysisRunId) {
+          console.warn("STALE_SCREENSHOT_PARSE_RESULT_IGNORED", {
+            attemptedRunId: analysisRunId,
+            activeRunId: rotationActiveRunIdRef.current,
+            phase: "before_icrew_dashboard_apply",
+          });
+          return;
+        }
+        setRotationDashboard(buildICrewParsedDashboard(debugResult.parsed));
+        setActiveTab("today");
+        return;
+      }
+
       const normalizedScreenshotText = screenshotParse?.ok ? screenshotParse.normalizedText.trim() : "";
-      const combinedInput = [rotationPasteInput.trim(), normalizedScreenshotText].filter(Boolean).join("\n\n");
+      const combinedInput = [trimmedText, normalizedScreenshotText].filter(Boolean).join("\n\n");
       const parsed = parseRotationIntoDashboard(combinedInput);
       if (!parsed.ok) {
         if (!hasText && screenshotParse && !screenshotParse.ok) {
@@ -2421,7 +2538,13 @@ export default function App() {
           ? `Loaded from ${rotationScreenshots.length} screenshot${rotationScreenshots.length === 1 ? "" : "s"}.`
           : parsed.dashboard.note,
       };
-      const hasRuntimeBuilderInput = Boolean(screenshotParse?.debug?.orderedChain?.length);
+      const hasRuntimeBuilderInput =
+        Boolean(screenshotParse?.debug) &&
+        getLiveChainInputSources(
+          screenshotParse as RotationScreenshotParseResponse & {
+            debug: NonNullable<RotationScreenshotParseResponse["debug"]>;
+          },
+        ).selectedCandidates.length > 0;
       if (rotationActiveRunIdRef.current !== analysisRunId) {
         console.warn("STALE_SCREENSHOT_PARSE_RESULT_IGNORED", {
           attemptedRunId: analysisRunId,
@@ -4360,7 +4483,7 @@ export default function App() {
               description="Trip-first view with the live pieces that matter most right now."
             >
               <View style={styles.sectionStack}>
-                {__DEV__ && rotationScreenshotParseResult?.debug ? (() => {
+                {rotationDebugEnabled && rotationScreenshotParseResult?.debug ? (() => {
                   const liveChainInputSources = getLiveChainInputSources(
                     rotationScreenshotParseResult as RotationScreenshotParseResponse & {
                       debug: NonNullable<RotationScreenshotParseResponse["debug"]>;
@@ -4387,7 +4510,7 @@ export default function App() {
                     </View>
                   );
                 })() : null}
-                <View style={styles.resultPanel}>
+                <View style={[styles.resultPanel, styles.snapshotPanelCompact]}>
                   <Text style={styles.inputLabel}>Rotation snapshot</Text>
                   {rotationDashboard.parsedRotation.isPartial ? (
                     <View style={styles.resultPanel}>
@@ -4412,7 +4535,7 @@ export default function App() {
                       </View>
                     </View>
                   ) : null}
-                  {__DEV__ && rotationScreenshotParseResult ? (
+                  {rotationDebugEnabled && rotationScreenshotParseResult ? (
                     <View style={styles.resultPanel}>
                       <Text style={styles.inputLabel}>Screenshot parser</Text>
                       <Text style={styles.resultSupportMetaText}>
@@ -4475,74 +4598,81 @@ export default function App() {
                       ) : null}
                     </View>
                   ) : null}
-                  <FormRow>
-                    <ResultLine label="Trip dates" value={rotationDashboard.snapshot.tripDates} />
-                    <ResultLine label="Rotation #" value={rotationDashboard.snapshot.rotationNumber} />
-                  </FormRow>
-                  <FormRow>
-                    <ResultLine
-                      label="Total credit"
+                  <View style={styles.snapshotSummaryHeader}>
+                    <Text style={styles.snapshotSummaryRotation}>ROT {rotationDashboard.snapshot.rotationNumber}</Text>
+                    <Text style={styles.snapshotSummaryDates}>{rotationDashboard.snapshot.tripDates}</Text>
+                  </View>
+                  <View style={styles.snapshotRow}>
+                    <SnapshotPill
+                      label="Credit"
                       value={
                         rotationDashboard.parsedRotation.missingSections.includes("total credit")
                           ? "Needs full rotation"
                           : rotationFormatMinutes(rotationDashboard.snapshot.totalCreditMinutes)
                       }
                     />
-                    <ResultLine
-                      label="Scheduled block"
+                    <SnapshotPill
+                      label="Op block"
                       value={
                         rotationDashboard.parsedRotation.missingSections.includes("total scheduled block")
                           ? "Needs full rotation"
                           : rotationFormatMinutes(rotationDashboard.snapshot.scheduledBlockMinutes)
                       }
+                      detail={
+                        rotationDashboard.parsedRotation.deadheadBlock != null &&
+                        rotationDashboard.parsedRotation.deadheadBlock > 0
+                          ? `DH block ${rotationFormatMinutes(rotationDashboard.parsedRotation.deadheadBlock)}`
+                          : null
+                      }
                     />
-                  </FormRow>
-                  <FormRow>
-                    <ResultLine
-                      label="Operating legs"
+                  </View>
+                  <View style={styles.snapshotRow}>
+                    <SnapshotPill
+                      label="Op legs"
                       value={String(rotationDashboard.parsedRotation.legs.filter((leg) => !leg.isDeadhead).length)}
                     />
-                    <ResultLine
-                      label={(rotationDashboard.parsedRotation.deadheadAnnotations?.length ?? 0) > 0 ? "DH legs" : rotationDashboard.parsedRotation.legs.filter((leg) => leg.isDeadhead).length > 0 ? "DH legs" : "Final arrival"}
-                      value={
-                          (rotationDashboard.parsedRotation.deadheadAnnotations?.length ?? 0) > 0
-                            ? String(rotationDashboard.parsedRotation.deadheadAnnotations?.length ?? 0)
-                            : rotationDashboard.parsedRotation.legs.filter((leg) => leg.isDeadhead).length > 0
-                            ? String(rotationDashboard.parsedRotation.legs.filter((leg) => leg.isDeadhead).length)
-                            : rotationDashboard.snapshot.finalArrival
-                        }
+                    {(rotationDashboard.parsedRotation.deadheadAnnotations?.length ?? 0) > 0 ||
+                    rotationDashboard.parsedRotation.legs.some((leg) => leg.isDeadhead) ? (
+                      <SnapshotPill
+                        label="DH legs"
+                        value={String(
+                          (rotationDashboard.parsedRotation.deadheadAnnotations?.length ?? 0) ||
+                            rotationDashboard.parsedRotation.legs.filter((leg) => leg.isDeadhead).length,
+                        )}
                       />
-                    </FormRow>
-                  {(rotationDashboard.parsedRotation.deadheadAnnotations?.length ?? 0) > 0 ? (
-                    <>
-                      <ResultLine
-                        label="Final operating arrival"
+                    ) : null}
+                    <SnapshotPill
+                      label="Layovers"
+                      value={rotationDashboard.snapshot.layoverCities.join(", ") || "TBD"}
+                    />
+                  </View>
+                  <View style={styles.snapshotRow}>
+                    <SnapshotPill
+                      label="Trip final"
+                      value={
+                        rotationDashboard.parsedRotation.finalArrivalAfterDh ??
+                        rotationDashboard.snapshot.finalArrival
+                      }
+                    />
+                    {(rotationDashboard.parsedRotation.deadheadAnnotations?.length ?? 0) > 0 ? (
+                      <SnapshotPill
+                        label="Operating final"
                         value={rotationDashboard.snapshot.finalArrival}
                       />
-                      <ResultLine
-                        label="DH legs"
-                        value={rotationDashboard.parsedRotation.deadheadAnnotations?.map((annotation) => annotation.cityPair).join(", ") ?? "TBD"}
-                      />
-                      <ResultLine
-                        label="Final arrival after DH"
-                        value={
-                          rotationDashboard.parsedRotation.finalArrivalAfterDh ??
-                          rotationDashboard.snapshot.finalArrival
-                        }
-                      />
-                    </>
-                  ) : rotationDashboard.parsedRotation.legs.filter((leg) => leg.isDeadhead).length > 0 ? (
-                    <ResultLine
-                      label="Final arrival"
-                      value={rotationDashboard.snapshot.finalArrival}
-                    />
+                    ) : null}
+                  </View>
+                  {(rotationDashboard.parsedRotation.deadheadAnnotations?.length ?? 0) > 0 ? (
+                    <Text style={styles.resultSupportMetaText}>
+                      DH legs: {rotationDashboard.parsedRotation.deadheadAnnotations?.map((annotation) => annotation.cityPair).join(", ") ?? "TBD"}
+                    </Text>
                   ) : null}
-                  <ResultLine
-                    label="Layovers"
-                    value={rotationDashboard.snapshot.layoverCities.join(", ") || "TBD"}
-                  />
-                  {rotationDashboard.note ? (
-                    <Text style={styles.insightText}>{rotationDashboard.note}</Text>
+                  {dashboardSourceNote ? (
+                    <Text style={styles.resultSupportMetaText}>{dashboardSourceNote}</Text>
+                  ) : null}
+                  {rotationDashboard.note &&
+                  !rotationDebugPreviewDashboard &&
+                  !/^Loaded from /i.test(rotationDashboard.note) ? (
+                    <Text style={styles.resultSupportMetaText}>{rotationDashboard.note}</Text>
                   ) : null}
                   {rotationDebugEnabled && (rotationScreenshots.length > 0 || rotationScreenshotParseResult) ? (
                     <TouchableOpacity style={styles.quickLinkButton} onPress={copyLiveChainDebugJson}>
@@ -4589,13 +4719,13 @@ export default function App() {
                 </View>
 
                 <View style={styles.resultPanel}>
-                  <Text style={styles.inputLabel}>Next flight</Text>
+                  <Text style={styles.inputLabel}>Next event</Text>
                   {rotationDashboard.nextLeg ? (
                     <>
                       {rotationDashboard.nextLeg.isDeadhead ? (
-                        <Text style={[styles.statusBadge, styles.deadheadBadge]}>DEADHEAD</Text>
+                        <Text style={[styles.statusBadge, styles.deadheadBadge]}>DH</Text>
                       ) : (
-                        <Text style={[styles.statusBadge, styles.statusBadgeResolved]}>Operating</Text>
+                        <Text style={[styles.statusBadge, styles.statusBadgeResolved]}>OPERATING</Text>
                       )}
                       <FormRow>
                         <ResultLine
@@ -4610,23 +4740,40 @@ export default function App() {
                       </FormRow>
                       <FormRow>
                         <ResultLine
-                          label={rotationDashboard.nextLeg.isDeadhead ? "Connection time" : "Turn time"}
+                          label={rotationDashboard.nextLeg.isDeadhead ? "DH block" : "Block"}
+                          value={rotationFormatMinutes(rotationDashboard.nextLeg.scheduledBlockMinutes)}
+                        />
+                        <ResultLine
+                          label={rotationDashboard.nextLeg.isDeadhead ? "Connection / sit" : "Turn"}
                           value={rotationDashboard.nextLeg.turnMinutes != null ? rotationFormatMinutes(rotationDashboard.nextLeg.turnMinutes) : "TBD"}
                         />
+                      </FormRow>
+                      <FormRow>
                         <ResultLine
-                          label={rotationDashboard.nextLeg.isDeadhead ? "Carrier / gate" : "Aircraft / gate"}
-                          value={`${rotationDashboard.nextLeg.isDeadhead ? rotationDashboard.nextLeg.carrier ?? "Deadhead" : rotationDashboard.nextLeg.aircraft ?? "TBD"} • ${rotationDashboard.nextLeg.gate ?? "TBD"}`}
+                          label="Flight"
+                          value={formatLegFlightDisplay(rotationDashboard.nextLeg)}
+                        />
+                        <ResultLine
+                          label={rotationDashboard.nextLeg.isDeadhead ? "Carrier" : "Ship / eqp"}
+                          value={
+                            rotationDashboard.nextLeg.isDeadhead
+                              ? rotationDashboard.nextLeg.carrier ?? "Deadhead"
+                              : formatLegEquipmentDisplay(rotationDashboard.nextLeg)
+                          }
                         />
                       </FormRow>
-                      {rotationDashboard.nextLeg.isDeadhead ? (
-                        <ResultLine
-                          label="Flight / carrier"
-                          value={`${rotationDashboard.nextLeg.flightNumber ?? "TBD"} • ${rotationDashboard.nextLeg.carrier ?? "Deadhead"}`}
-                        />
+                      <FormRow>
+                        <ResultLine label="Gate" value={formatLegGateDisplay(rotationDashboard.nextLeg)} />
+                        {rotationDashboard.nextLeg.isDeadhead ? (
+                          <ResultLine label="Logbook" value="Excluded from export" />
+                        ) : null}
+                      </FormRow>
+                      {!rotationDashboard.nextLeg.isDeadhead && shouldShowLegStatus(rotationDashboard.nextLeg) ? (
+                        <ResultLine label="Status" value={rotationDashboard.nextLeg.status.replace(/_/g, " ")} />
                       ) : null}
                       {rotationDashboard.nextLeg.isDeadhead && rotationDashboard.nextLeg.confirmationNumber ? (
                         <View style={styles.sectionStack}>
-                          <ResultLine label="Confirmation" value={rotationDashboard.nextLeg.confirmationNumber} />
+                          <ResultLine label="PNR" value={rotationDashboard.nextLeg.confirmationNumber} />
                           <TouchableOpacity
                             style={styles.quickLinkButton}
                             onPress={() => copyRotationConfirmationCode(rotationDashboard.nextLeg?.confirmationNumber)}
@@ -4639,7 +4786,9 @@ export default function App() {
                           </TouchableOpacity>
                         </View>
                       ) : null}
-                      <ResultLine label="Inbound delay" value="Placeholder" />
+                      {rotationDashboard.nextLeg.isDeadhead ? (
+                        <Text style={styles.resultSupportMetaText}>Excluded from logbook block/export.</Text>
+                      ) : null}
                     </>
                   ) : (
                     <Text style={styles.resultBodyText}>Load a rotation to populate the next flight card.</Text>
@@ -4648,7 +4797,10 @@ export default function App() {
 
                 <View style={styles.resultPanel}>
                   <Text style={styles.inputLabel}>What matters right now</Text>
-                  {rotationDashboard.whatMatters.map((item) => (
+                  {(rotationDashboard.whatMatters.filter((item) => item.label !== "FAR 117 watch").length > 0
+                    ? rotationDashboard.whatMatters.filter((item) => item.label !== "FAR 117 watch")
+                    : [{ label: "No major issues found", tone: "good" as const, detail: "Nothing obvious is flagged from the trip shape that is currently loaded." }])
+                    .map((item) => (
                     <View key={item.label} style={styles.rerouteSupportCard}>
                       <Text
                         style={[
@@ -4662,7 +4814,13 @@ export default function App() {
                       >
                         {item.label}
                       </Text>
-                      <Text style={styles.resultBodyText}>{item.detail}</Text>
+                      <Text style={styles.resultBodyText}>
+                        {item.label === "DEADHEAD HOME"
+                          ? item.detail.replace(/^Deadhead /i, "DH home: ")
+                          : item.label === "DEADHEAD LEG"
+                            ? item.detail.replace(/^Deadhead /i, "DH leg: ")
+                            : item.detail}
+                      </Text>
                       {item.actionCopyValue && item.actionLabel ? (
                         <TouchableOpacity
                           style={styles.quickLinkButton}
@@ -4702,8 +4860,8 @@ export default function App() {
                       { label: quickContacts.van ? "Call van" : "Add van", key: "van" as const },
                       { label: quickContacts.hotel ? "Call hotel" : "Add hotel", key: "hotel" as const },
                       { label: "Open hotel", key: "hotel" as const },
-                      { label: quickContacts.crewScheduling ? "Call Crew Scheduling" : "Add Crew Scheduling", key: "crewScheduling" as const },
-                      { label: quickContacts.dispatch ? "Call Dispatch" : "Add Dispatch", key: "dispatch" as const },
+                      { label: quickContacts.crewScheduling ? "Crew Scheduling" : "Add Crew Scheduling", key: "crewScheduling" as const },
+                      { label: quickContacts.dispatch ? "Dispatch" : "Add Dispatch", key: "dispatch" as const },
                     ].map((action) => (
                       <TouchableOpacity key={action.label} style={styles.quickActionButton} onPress={() => handleQuickContactPress(action.key)}>
                         <Text style={styles.quickActionButtonText}>{action.label}</Text>
@@ -4863,7 +5021,7 @@ export default function App() {
                 </View>
               ) : null}
 
-              {__DEV__ && (rotationScreenshots.length > 0 || rotationScreenshotParseResult) ? (
+              {rotationDebugEnabled && (rotationScreenshots.length > 0 || rotationScreenshotParseResult) ? (
                 <View style={styles.resultPanel}>
                   <Text style={styles.inputLabel}>Screenshot parser</Text>
                   {!rotationScreenshotParseResult ? (
@@ -4977,7 +5135,7 @@ export default function App() {
                 </View>
               ) : null}
 
-              {__DEV__ && rotationScreenshotParseResult?.debug ? (
+              {rotationDebugEnabled && rotationScreenshotParseResult?.debug ? (
                 <View style={styles.resultPanel}>
                   <Text style={styles.inputLabel}>Rotation Parse Trace</Text>
                   <View style={styles.sectionStack}>
@@ -5201,6 +5359,10 @@ export default function App() {
                           rawFinalOrderedChainCount: {rotationScreenshotParseResult.debug.finalOrderedChainCount},
                           {" "}sanitizedUserFacingLegsCount: {rotationDashboard.legs.length},
                           {" "}userFacingLegsCount: {rotationDashboard.legs.length},
+                          {" "}canonicalChainSource: screenshot_display_model,
+                          {" "}chainAnchorReason: {rotationDashboard.parsedRotation.chainAnchorReason ?? "unknown"},
+                          {" "}anchoredFirstLeg: {rotationDashboard.parsedRotation.anchoredFirstLeg ?? (rotationDashboard.legs.at(0) ? `${rotationDashboard.legs.at(0)?.origin}-${rotationDashboard.legs.at(0)?.destination}` : "unknown")},
+                          {" "}wasChainRotated: {rotationDashboard.parsedRotation.wasChainRotated ? "true" : "false"},
                           {" "}firstUserFacingLeg: {rotationDashboard.legs.at(0) ? `${rotationDashboard.legs.at(0)?.origin}-${rotationDashboard.legs.at(0)?.destination}` : "unknown"},
                           {" "}lastUserFacingLeg: {rotationDashboard.legs.at(-1) ? `${rotationDashboard.legs.at(-1)?.origin}-${rotationDashboard.legs.at(-1)?.destination}` : "unknown"},
                           {" "}terminalReturnLeg: {rotationDashboard.legs.at(-1) ? `${rotationDashboard.legs.at(-1)?.origin}-${rotationDashboard.legs.at(-1)?.destination}` : "unknown"},
@@ -5209,10 +5371,12 @@ export default function App() {
                           {" "}partialBannerVisible: {rotationDashboard.parsedRotation.isPartial ? "true" : "false"},
                           {" "}partialVisibleLegsCount: {rotationDashboard.parsedRotation.visibleLegCount},
                           {" "}operatingLegsCount: {rotationDashboard.parsedRotation.legs.filter((leg) => !leg.isDeadhead).length},
+                          {" "}dhLegsCount: {rotationDashboard.parsedRotation.legs.filter((leg) => leg.isDeadhead).length},
+                          {" "}logbookExportLegsCount: {rotationDashboard.legs.filter((leg) => !leg.excludeFromLogbookExport).length},
                           {" "}scheduledBlock: {rotationDashboard.snapshot.scheduledBlockMinutes},
-                          {" "}scheduledBlockSource: {typeof rotationScreenshotParseResult.extracted?.totals?.totalScheduledBlockMinutes === "number" && rotationScreenshotParseResult.extracted.totals.totalScheduledBlockMinutes > 0 ? "header" : rotationDashboard.snapshot.scheduledBlockMinutes > 0 ? "computedFromUserFacingLegs" : "fallback"},
-                          {" "}headerScheduledBlock: {rotationScreenshotParseResult.extracted?.totals?.totalScheduledBlockMinutes ?? "none"},
-                          {" "}computedUserFacingScheduledBlock: {rotationDashboard.parsedRotation.legs.reduce((sum, leg) => sum + (leg.scheduledBlock ?? 0), 0)},
+                          {" "}scheduledBlockSource: {rotationDashboard.snapshot.scheduledBlockMinutes > 0 ? "computedFromUserFacingLegs" : "fallback"},
+                          {" "}headerScheduledBlock: none,
+                          {" "}computedUserFacingScheduledBlock: {rotationDashboard.parsedRotation.legs.filter((leg) => !leg.isDeadhead).reduce((sum, leg) => sum + (leg.scheduledBlock ?? 0), 0)},
                           {" "}finalArrival: {rotationDashboard.snapshot.finalArrival},
                           {" "}nextFlightCityPair: {rotationDashboard.nextLeg ? `${rotationDashboard.nextLeg.origin}-${rotationDashboard.nextLeg.destination}` : "unknown"},
                           {" "}logbookLegCount: {rotationDashboard.legs.length},
@@ -5316,7 +5480,7 @@ export default function App() {
               description="Leg-by-leg trip view with placeholders ready for actual out/in and block deltas."
             >
               <View style={styles.sectionStack}>
-                {rotationDashboard.legs.map((leg) => (
+                    {rotationDashboard.legs.map((leg) => (
                   <View key={leg.id} style={[styles.resultPanel, leg.isDeadhead ? styles.deadheadLegPanel : null]}>
                     <View style={styles.rotationLegHeaderRow}>
                       <Text style={styles.inputLabel}>{leg.dayLabel}</Text>
@@ -5327,23 +5491,19 @@ export default function App() {
                     <FormRow>
                       <ResultLine label="City pair" value={`${leg.origin}-${leg.destination}`} emphasis />
                       <ResultLine
-                        label={leg.isDeadhead ? "Flight / carrier" : "Flight"}
-                        value={
-                          leg.isDeadhead
-                            ? `${leg.flightNumber ?? "TBD"} • ${leg.carrier ?? "Deadhead"}`
-                            : `${leg.aircraft ?? "Aircraft"} • ${leg.flightNumber}`
-                        }
+                        label="Flight"
+                        value={formatLegFlightDisplay(leg)}
                       />
                     </FormRow>
                     <FormRow>
                       <ResultLine label="Scheduled out / in" value={`${leg.departureTime ?? "TBD"} - ${leg.arrivalTime ?? "TBD"}`} />
-                      <ResultLine label="Scheduled block" value={rotationFormatMinutes(leg.scheduledBlockMinutes)} />
+                      <ResultLine label={leg.isDeadhead ? "DH block" : "Block"} value={rotationFormatMinutes(leg.scheduledBlockMinutes)} />
                     </FormRow>
                     <FormRow>
                       <ResultLine label="Actual out / in" value={`${leg.actualOut ?? "—"} - ${leg.actualIn ?? "—"}`} />
                       <ResultLine label="Actual block" value={rotationFormatMinutes(leg.actualBlockMinutes)} />
                     </FormRow>
-                    {leg.isDeadhead || leg.status === "placeholder" ? (
+                    {leg.isDeadhead || !shouldShowLegStatus(leg) ? (
                       <ResultLine
                         label={leg.isDeadhead ? "Connection time" : "Turn time"}
                         value={leg.isDeadhead ? "De-emphasized" : rotationFormatMinutes(leg.turnMinutes)}
@@ -5359,14 +5519,21 @@ export default function App() {
                     )}
                     <FormRow>
                       <ResultLine
-                        label={leg.isDeadhead ? "Carrier / gate" : "Aircraft / gate"}
-                        value={`${leg.isDeadhead ? leg.carrier ?? leg.aircraft ?? "Deadhead" : leg.aircraft ?? "TBD"} • ${leg.gate ?? "TBD"}`}
+                        label={leg.isDeadhead ? "Carrier" : "Ship / eqp"}
+                        value={leg.isDeadhead ? leg.carrier ?? "Deadhead" : formatLegEquipmentDisplay(leg)}
                       />
+                      <ResultLine label="Gate" value={formatLegGateDisplay(leg)} />
+                    </FormRow>
+                    <FormRow>
                       <ResultLine label="Logbook export" value={leg.excludeFromLogbookExport ? "Exclude" : "Include"} />
+                      <ResultLine
+                        label={leg.isDeadhead ? "Timeline" : "Status"}
+                        value={leg.isDeadhead ? "DH / visible" : leg.status.replace(/_/g, " ")}
+                      />
                     </FormRow>
                     {leg.isDeadhead && leg.confirmationNumber ? (
                       <View style={styles.sectionStack}>
-                        <ResultLine label="Confirmation" value={leg.confirmationNumber} />
+                        <ResultLine label="PNR" value={leg.confirmationNumber} />
                         <TouchableOpacity
                           style={styles.quickLinkButton}
                           onPress={() => copyRotationConfirmationCode(leg.confirmationNumber)}
@@ -5377,7 +5544,7 @@ export default function App() {
                         </TouchableOpacity>
                       </View>
                     ) : null}
-                    {__DEV__ ? (
+                    {rotationDebugEnabled ? (
                       <Text style={styles.resultSupportMetaText}>
                         isDeadhead: {leg.isDeadhead ? "true" : "false"} • source: {leg.deadheadSource ?? "unknown"} • confirmation: {leg.confirmationNumber ?? "none"}
                       </Text>
@@ -8652,7 +8819,15 @@ function MetricCard({
   );
 }
 
-function SnapshotPill({ label, value }: { label: string; value: string }) {
+function SnapshotPill({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: string;
+  detail?: string | null;
+}) {
   const palette = getFliegerPalette();
   return (
     <InstrumentPanel variant="dataPlate" style={styles.snapshotPill}>
@@ -8667,6 +8842,7 @@ function SnapshotPill({ label, value }: { label: string; value: string }) {
       >
         {value}
       </Text>
+      {detail ? <Text style={styles.snapshotDetail}>{detail}</Text> : null}
     </InstrumentPanel>
   );
 }
@@ -10756,7 +10932,7 @@ const styles = StyleSheet.create({
   },
   container: {
     padding: 20,
-    paddingBottom: 120,
+    paddingBottom: 228,
     gap: 18,
   },
   hero: {
@@ -10830,7 +11006,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 14,
     paddingTop: 18,
-    paddingBottom: 20,
+    paddingBottom: 34,
     backgroundColor: appStylePalette.surface,
     borderTopWidth: 1,
     borderTopColor: appStylePalette.borderStrong,
@@ -10966,8 +11142,8 @@ const styles = StyleSheet.create({
   snapshotPill: {
     backgroundColor: appStylePalette.surfaceRaised,
     borderRadius: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     gap: 4,
   },
   snapshotLabel: {
@@ -10981,6 +11157,36 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: appStylePalette.textPrimary,
     fontVariant: ["tabular-nums"],
+  },
+  snapshotDetail: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: appStylePalette.textMuted,
+  },
+  snapshotSummaryHeader: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "baseline",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  snapshotSummaryRotation: {
+    fontSize: 20,
+    fontWeight: "900",
+    color: appStylePalette.textPrimary,
+    letterSpacing: 0.8,
+  },
+  snapshotSummaryDates: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: appStylePalette.textMuted,
+    textTransform: "uppercase",
+    letterSpacing: fliegerTypography.letterSpacingLabel,
+  },
+  snapshotPanelCompact: {
+    padding: 14,
+    gap: 10,
+    alignSelf: "stretch",
   },
   formRow: {
     flexDirection: "row",
