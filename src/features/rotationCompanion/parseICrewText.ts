@@ -18,6 +18,7 @@ export type ICrewHeader = {
   totalCreditMinutes: number | null;
   scheduledBlockMinutes: number | null;
   totalDeadheadBlockMinutes: number | null;
+  totalDeadheadBlockSource: "tdhdSummary" | "summedDhdLines" | "none";
   tafbCredit: string | null;
   tafbElapsed: string | null;
 };
@@ -73,6 +74,7 @@ export type ICrewParserDiagnostics = {
     totalCreditMinutes?: number | null;
     scheduledBlockMinutes?: number | null;
     totalDeadheadBlockMinutes?: number | null;
+    totalDeadheadBlockSource?: "tdhdSummary" | "summedDhdLines" | "none" | null;
     tafbCredit?: string | null;
     tafbElapsed?: string | null;
   } | null;
@@ -168,6 +170,10 @@ function isArrivalToken(token?: string | null) {
   return /^\*?[A-Z]{3}\.\d{4}$/i.test(token ?? "");
 }
 
+function isArrivalAirportToken(token?: string | null) {
+  return /^\*?[A-Z]{3}$/i.test(token ?? "");
+}
+
 function isDayOnlyToken(token?: string | null) {
   return /^\d{1,2}$/i.test(token ?? "");
 }
@@ -191,11 +197,13 @@ function isFlightTokenLike(token?: string | null) {
 
 export function parseICrewFlightToken(dayToken: string, rawToken: string) {
   const normalizedDay = String(Number(dayToken));
-  const withoutDayPrefix = rawToken.startsWith(dayToken)
-    ? rawToken.slice(dayToken.length)
-    : rawToken.startsWith(normalizedDay)
-      ? rawToken.slice(normalizedDay.length)
-      : rawToken;
+  const compactDayPrefixedToken = new RegExp(
+    `^(?:${dayToken}|${normalizedDay})(?:D\\d{2,5}|DL\\d{2,5}|9E\\d{2,5}|OO\\d{2,5}|YX\\d{2,5})$`,
+    "i",
+  );
+  const withoutDayPrefix = compactDayPrefixedToken.test(rawToken)
+    ? rawToken.replace(new RegExp(`^(?:${dayToken}|${normalizedDay})`, "i"), "")
+    : rawToken;
   if (/^\d{2,5}$/i.test(withoutDayPrefix)) {
     return {
       marker: null,
@@ -232,6 +240,91 @@ export function parseICrewFlightToken(dayToken: string, rawToken: string) {
 
 function parseFlightToken(dayToken: string, rawToken: string) {
   return parseICrewFlightToken(dayToken, rawToken);
+}
+
+function isEquipmentLikeToken(token?: string | null) {
+  return /^[A-Z]?\d{2,4}$/i.test(token ?? "");
+}
+
+function parseICrewPostBlockColumns(
+  tokens: string[],
+  options?: {
+    preferSingleDurationAsTurn?: boolean;
+  },
+) {
+  const durationColumns: Array<{
+    duration: string;
+    raw: string;
+    suffix: string;
+    mealMarker: string | null;
+    equipmentShip: string | null;
+  }> = [];
+  let standaloneEquipmentShip: string | null = null;
+  let standaloneMealMarker: string | null = null;
+
+  for (const token of tokens) {
+    const stripped = token.replace(/^\*+/, "");
+    const durationMatch = stripped.match(/^(\d{1,2}[.:]\d{2})([A-Z0-9]*)$/i);
+    if (durationMatch?.[1]) {
+      const suffix = durationMatch[2] ?? "";
+      const mealMarker = /^M/i.test(suffix) ? "M" : null;
+      const equipmentShip = suffix.replace(/^M/i, "");
+      durationColumns.push({
+        duration: durationMatch[1],
+        raw: stripped,
+        suffix,
+        mealMarker,
+        equipmentShip: equipmentShip && isEquipmentLikeToken(equipmentShip) ? equipmentShip : null,
+      });
+      continue;
+    }
+
+    if (/^M$/i.test(stripped)) {
+      standaloneMealMarker = "M";
+      continue;
+    }
+
+    if (isEquipmentLikeToken(stripped)) {
+      standaloneEquipmentShip = stripped.replace(/^M/i, "");
+    }
+  }
+
+  let makeUpToken: string | null = null;
+  let turnToken: string | null = null;
+
+  if (durationColumns.length >= 2) {
+    makeUpToken = durationColumns[0]?.duration ?? null;
+    turnToken = durationColumns[1]?.duration ?? null;
+  } else if (durationColumns.length === 1) {
+    const loneDuration = durationColumns[0];
+    const hasSeparateEquipmentEvidence =
+      Boolean(standaloneEquipmentShip) || Boolean(loneDuration?.equipmentShip) || Boolean(loneDuration?.mealMarker);
+    if (options?.preferSingleDurationAsTurn) {
+      turnToken = loneDuration?.duration ?? null;
+    } else if (hasSeparateEquipmentEvidence) {
+      makeUpToken = loneDuration?.duration ?? null;
+    } else {
+      makeUpToken = loneDuration?.duration ?? null;
+    }
+  }
+
+  const mealMarker =
+    durationColumns[1]?.mealMarker ??
+    durationColumns[0]?.mealMarker ??
+    standaloneMealMarker ??
+    null;
+  const equipmentShip =
+    durationColumns[1]?.equipmentShip ??
+    durationColumns[0]?.equipmentShip ??
+    standaloneEquipmentShip ??
+    null;
+
+  return {
+    makeUpToken,
+    turnToken,
+    mealMarker,
+    equipmentShip,
+  };
 }
 
 function buildICrewParserDiagnostics(
@@ -303,6 +396,7 @@ function extractICrewHeaderParts(rawText: string, parsedSegments: Array<Rotation
   const scheduledBlockToken = extractFirstDuration(normalizedText, [
     /\bTBL\s+(\d{1,2}[.:]\d{2})\b/i,
     /\b(\d{1,2}[.:]\d{2})TBL\b/i,
+    /\bREGULAR-.*?(\d{1,2}[.:]\d{2})BL\b/i,
   ]);
   const totalDeadheadToken = extractFirstDuration(normalizedText, [
     /\bTDHD\s+(\d{1,2}[.:]\d{2})\b/i,
@@ -365,6 +459,7 @@ function parseICrewHeader(rawText: string, parsedSegments: Array<RotationChainCa
     totalCreditMinutes: parts.totalCreditToken ? parseDotDurationToMinutes(parts.totalCreditToken) : null,
     scheduledBlockMinutes: parts.scheduledBlockToken ? parseDotDurationToMinutes(parts.scheduledBlockToken) : null,
     totalDeadheadBlockMinutes: parts.totalDeadheadToken ? parseDotDurationToMinutes(parts.totalDeadheadToken) : null,
+    totalDeadheadBlockSource: parts.totalDeadheadToken ? "tdhdSummary" : "none",
     tafbCredit: parts.tafbCreditToken ? parts.tafbCreditToken.replace(".", ":") : null,
     tafbElapsed: parts.tafbElapsedToken ? parts.tafbElapsedToken.replace(".", ":") : null,
   };
@@ -473,6 +568,9 @@ function parseICrewSegments(rawText: string) {
       marker?: "D" | "O" | null;
       confirmationCode?: string | null;
       segmentType?: "operating" | "deadhead" | "return_to_gate";
+      makeUp?: string | null;
+      mealMarker?: string | null;
+      equipmentShip?: string | null;
     }
   > = [];
   const attemptedLegParseResults: ICrewParserDiagnostics["attemptedLegParseResults"] = [];
@@ -513,7 +611,8 @@ function parseICrewSegments(rawText: string) {
       tokens[0] &&
       isAirportToken(tokens[0]) &&
       /^\d{4}$/.test(tokens[1] ?? "") &&
-      isArrivalToken(tokens[2]) &&
+      ((isArrivalToken(tokens[2]) as boolean) ||
+        (isArrivalAirportToken(tokens[2]) && /^\d{4}$/.test(tokens[3] ?? ""))) &&
       lastRawFlightToken;
 
     if (tokens[0] && isDayOnlyToken(tokens[0]) && tokens[1] && isFlightTokenLike(tokens[1])) {
@@ -521,6 +620,17 @@ function parseICrewSegments(rawText: string) {
       currentDayToken = dayToken;
       rawFlightToken = tokens[1];
       cursor = 2;
+    } else if (
+      tokens[0] &&
+      isDayOnlyToken(tokens[0]) &&
+      /^(D|O)$/i.test(tokens[1] ?? "") &&
+      tokens[2] &&
+      isFlightTokenLike(tokens[2])
+    ) {
+      dayToken = tokens[0].padStart(2, "0");
+      currentDayToken = dayToken;
+      rawFlightToken = `${tokens[1]}${tokens[2]}`;
+      cursor = 3;
     } else if (tokens[0] && /^(\d{1,2})(D\d{2,5}|DL\d{2,5}|9E\d{2,5}|OO\d{2,5}|YX\d{2,5})$/i.test(tokens[0])) {
       const match = tokens[0].match(/^(\d{1,2})(D\d{2,5}|DL\d{2,5}|9E\d{2,5}|OO\d{2,5}|YX\d{2,5})$/i);
       dayToken = match?.[1]?.padStart(2, "0") ?? currentDayToken;
@@ -547,6 +657,8 @@ function parseICrewSegments(rawText: string) {
     let departureAirportToken = tokens[cursor] ?? null;
     let departureTimeToken = tokens[cursor + 1] ?? null;
     let arrivalToken = tokens[cursor + 2] ?? null;
+    let arrivalAirportToken = arrivalToken;
+    let arrivalTimeToken: string | null = null;
     let trailingTokens = tokens.slice(cursor + 3);
 
     const gluedDepartureMatch = departureAirportToken?.match(/^(\*?[A-Z]{3})\*?(\d{4})$/i);
@@ -554,10 +666,25 @@ function parseICrewSegments(rawText: string) {
       departureAirportToken = gluedDepartureMatch[1];
       departureTimeToken = gluedDepartureMatch[2];
       arrivalToken = tokens[cursor + 1] ?? null;
+      arrivalAirportToken = arrivalToken;
       trailingTokens = tokens.slice(cursor + 2);
     }
 
-    if (!isAirportToken(departureAirportToken) || !/^\d{4}$/.test(departureTimeToken ?? "") || !isArrivalToken(arrivalToken)) {
+    if (isArrivalToken(arrivalToken)) {
+      const inlineArrivalMatch = arrivalToken.match(/^\*?([A-Z]{3})\.(\d{4})$/i);
+      arrivalAirportToken = inlineArrivalMatch?.[1] ?? null;
+      arrivalTimeToken = inlineArrivalMatch?.[2] ?? null;
+    } else if (isArrivalAirportToken(arrivalAirportToken) && /^\d{4}$/.test(tokens[cursor + 3] ?? "")) {
+      arrivalTimeToken = tokens[cursor + 3] ?? null;
+      trailingTokens = tokens.slice(cursor + 4);
+    }
+
+    if (
+      !isAirportToken(departureAirportToken) ||
+      !/^\d{4}$/.test(departureTimeToken ?? "") ||
+      !isArrivalAirportToken(arrivalAirportToken) ||
+      !/^\d{4}$/.test(arrivalTimeToken ?? "")
+    ) {
       attemptedLegParseResults.push({
         line: normalizedLine,
         matched: false,
@@ -568,24 +695,23 @@ function parseICrewSegments(rawText: string) {
           departureAirportToken: departureAirportToken ?? null,
           departureTimeToken: departureTimeToken ?? null,
           arrivalToken: arrivalToken ?? null,
+          arrivalAirportToken: arrivalAirportToken ?? null,
+          arrivalTimeToken: arrivalTimeToken ?? null,
         },
       });
       continue;
     }
 
     let blockToken: string | null = null;
-    let turnToken: string | null = null;
+    const trailingAfterBlock: string[] = [];
     for (const trailingToken of trailingTokens) {
       const stripped = trailingToken.replace(/^\*+/, "");
-      if (/^\d{1,2}[.:]\d{2}(?:BL)?$/i.test(stripped)) {
-        if (!blockToken) {
-          blockToken = stripped.replace(/BL$/i, "");
-          continue;
-        }
-        if (!turnToken) {
-          turnToken = stripped.replace(/BL$/i, "");
-          break;
-        }
+      if (!blockToken && /^\d{1,2}[.:]\d{2}(?:BL)?$/i.test(stripped)) {
+        blockToken = stripped.replace(/BL$/i, "");
+        continue;
+      }
+      if (blockToken) {
+        trailingAfterBlock.push(stripped);
       }
     }
     if (!blockToken) {
@@ -603,17 +729,18 @@ function parseICrewSegments(rawText: string) {
       });
       continue;
     }
-
-    const arrivalMatch = arrivalToken.match(/^\*?([A-Z]{3})\.(\d{4})$/i);
     const token = parseFlightToken(dayToken, rawFlightToken.toUpperCase());
     const confirmationCode = normalizedLine.match(/CONFIRMATION\s+#?([A-Z0-9]+)/i)?.[1]?.toUpperCase() ?? null;
     const dateLabel = buildICrewDateLabel(dayToken, effectiveMonth);
     const departureAirport = stripLeadingMarkerAirport(departureAirportToken);
-    const arrivalAirport = arrivalMatch?.[1]?.toUpperCase() ?? null;
+    const arrivalAirport = stripLeadingMarkerAirport(arrivalAirportToken);
     const segmentType =
       departureAirport && arrivalAirport && departureAirport === arrivalAirport
         ? ("return_to_gate" as const)
         : ("operating" as const);
+    const parsedPostBlockColumns = parseICrewPostBlockColumns(trailingAfterBlock, {
+      preferSingleDurationAsTurn: segmentType === "return_to_gate",
+    });
     const parsedSegment = {
       dayToken,
       date: dateLabel,
@@ -622,9 +749,16 @@ function parseICrewSegments(rawText: string) {
       departureAirport,
       arrivalAirport,
       scheduledOut: `${formatClockDigits(departureTimeToken)} ${dateLabel}`,
-      scheduledIn: `${formatClockDigits(arrivalMatch?.[2])} ${dateLabel}`,
+      scheduledIn: `${formatClockDigits(arrivalTimeToken)} ${dateLabel}`,
       scheduledBlock: formatDurationString(blockToken),
-      turn: turnToken ? formatDurationString(turnToken) : null,
+      turn: parsedPostBlockColumns.turnToken
+        ? formatDurationString(parsedPostBlockColumns.turnToken)
+        : null,
+      makeUp: parsedPostBlockColumns.makeUpToken
+        ? formatDurationString(parsedPostBlockColumns.makeUpToken)
+        : null,
+      mealMarker: parsedPostBlockColumns.mealMarker,
+      equipmentShip: parsedPostBlockColumns.equipmentShip,
       sourceText: normalizedLine,
       rawSourceLine: line.trim(),
       confirmationCode,
@@ -646,9 +780,12 @@ function parseICrewSegments(rawText: string) {
         departureAirport: parsedSegment.departureAirport,
         departureTime: departureTimeToken,
         arrivalAirport: parsedSegment.arrivalAirport,
-        arrivalTime: arrivalMatch?.[2] ?? null,
+        arrivalTime: arrivalTimeToken ?? null,
         blockToken,
-        turnToken,
+        makeUpToken: parsedPostBlockColumns.makeUpToken,
+        turnToken: parsedPostBlockColumns.turnToken,
+        mealMarker: parsedPostBlockColumns.mealMarker,
+        equipmentShip: parsedPostBlockColumns.equipmentShip,
         confirmationCode,
         segmentType,
       },
@@ -688,9 +825,23 @@ function parseICrewTextInternal(rawText: string): ParsedICrewTextResult {
     throw new Error("Unable to parse iCrew leg rows from the provided text.");
   }
 
-  const header = parseICrewHeader(rawText, parsedSegments);
+  let header = parseICrewHeader(rawText, parsedSegments);
   const layoverCities = parseICrewLayoverCities(rawText);
   const dayTotals = parseDayLevelDhdTotals(rawText);
+  const summedDayDeadheadMinutes = Array.from(dayTotals.values()).reduce(
+    (sum, totals) => sum + totals.deadheadBlockMinutes,
+    0,
+  );
+  if (header.totalDeadheadBlockMinutes == null) {
+    if (summedDayDeadheadMinutes > 0) {
+      header = {
+        ...header,
+        totalDeadheadBlockMinutes: summedDayDeadheadMinutes,
+        totalDeadheadBlockSource: "summedDhdLines",
+      };
+    }
+  }
+  const totalDeadheadBlockRecoveredFromDayLines = header.totalDeadheadBlockSource === "summedDhdLines";
   const incompleteFragments = collectICrewIncompleteFragments(
     parsedSegmentAttempt.attemptedLegParseResults,
   );
@@ -698,7 +849,10 @@ function parseICrewTextInternal(rawText: string): ParsedICrewTextResult {
   const missingTotals = [
     header.totalCreditMinutes == null ? "totalCredit" : null,
     header.scheduledBlockMinutes == null ? "scheduledBlock" : null,
-    header.totalDeadheadBlockMinutes == null ? "totalDeadheadBlock" : null,
+    header.totalDeadheadBlockMinutes == null &&
+    header.totalDeadheadBlockSource !== "summedDhdLines"
+      ? "totalDeadheadBlock"
+      : null,
     header.tafbCredit == null ? "tafbCredit" : null,
     header.tafbElapsed == null ? "tafbElapsed" : null,
   ].filter((value): value is string => Boolean(value));
@@ -706,6 +860,9 @@ function parseICrewTextInternal(rawText: string): ParsedICrewTextResult {
     parserNotes.push(
       `iCrew partial text did not include summary totals for: ${missingTotals.join(", ")}.`,
     );
+  }
+  if (header.totalDeadheadBlockSource === "summedDhdLines") {
+    parserNotes.push("Deadhead total recovered from day-level DHD lines.");
   }
   if (incompleteFragments.length > 0) {
     parserNotes.push(
@@ -782,6 +939,21 @@ function parseICrewTextInternal(rawText: string): ParsedICrewTextResult {
     segmentType: segment.isDeadhead ? "deadhead" : segment.segmentType ?? "operating",
   }));
 
+  for (let index = 1; index < allTripSegments.length; index += 1) {
+    const previousSegment = allTripSegments[index - 1];
+    const currentSegment = allTripSegments[index];
+    if (
+      previousSegment?.arrivalAirport &&
+      currentSegment?.departureAirport &&
+      previousSegment.arrivalAirport !== currentSegment.departureAirport
+    ) {
+      parserNotes.push(
+        `Route continuity warning: ${previousSegment.arrivalAirport} does not connect directly to ${currentSegment.departureAirport} between ${previousSegment.departureAirport}-${previousSegment.arrivalAirport} and ${currentSegment.departureAirport}-${currentSegment.arrivalAirport}.`,
+      );
+      break;
+    }
+  }
+
   const deadheadAnnotations: ICrewDeadheadAnnotation[] = segmentsWithKinds
     .filter((segment) => segment.isDeadhead)
     .map((segment) => ({
@@ -840,10 +1012,33 @@ function parseICrewTextInternal(rawText: string): ParsedICrewTextResult {
       : visibleOperatingLegs.length > 0
         ? "computedFromPartialICrewLegs"
         : null;
+  const hasRequiredICrewSummaryFields =
+    header.rotationNumber != null &&
+    header.effectiveDate != null &&
+    header.tripDates != null &&
+    header.totalCreditMinutes != null &&
+    header.scheduledBlockMinutes != null &&
+    header.tafbCredit != null &&
+    header.tafbElapsed != null;
+  const hasResolvedDeadheadSummary =
+    header.totalDeadheadBlockMinutes != null ||
+    deadheadScheduledBlockMinutes > 0 ||
+    totalDeadheadBlockRecoveredFromDayLines;
+  const hasCompleteICrewRotationEnvelope =
+    hasRequiredICrewSummaryFields &&
+    (hasResolvedDeadheadSummary || deadheadAnnotations.length === 0);
+  const iCrewTotalsAreIncomplete =
+    header.totalCreditMinutes == null ||
+    header.scheduledBlockMinutes == null ||
+    header.tafbCredit == null ||
+    header.tafbElapsed == null ||
+    (!hasResolvedDeadheadSummary && deadheadAnnotations.length > 0);
   const partialStatus =
-    partialDiagnosis.isPartial || missingTotals.length > 0 || incompleteFragments.length > 0;
+    incompleteFragments.length > 0 ||
+    iCrewTotalsAreIncomplete ||
+    (!hasCompleteICrewRotationEnvelope && partialDiagnosis.isPartial);
   const partialReason =
-    missingTotals.length > 0 || incompleteFragments.length > 0
+    iCrewTotalsAreIncomplete || incompleteFragments.length > 0
       ? "Partial iCrew text detected. Please paste the full rotation text."
       : partialDiagnosis.partialReason;
 
@@ -871,6 +1066,11 @@ export function parseICrewTextWithDiagnostics(rawText: string): ICrewParseDebugR
   try {
     const parsedSegmentAttempt = parseICrewSegments(rawText);
     const parsedHeaderParts = extractICrewHeaderParts(rawText, parsedSegmentAttempt.segments);
+    const dayTotals = parseDayLevelDhdTotals(rawText);
+    const summedDayDeadheadMinutes = Array.from(dayTotals.values()).reduce(
+      (sum, totals) => sum + totals.deadheadBlockMinutes,
+      0,
+    );
     const partialHeader = {
       fleetCategory: parsedHeaderParts.fleetCategory ?? undefined,
       base: parsedHeaderParts.base ?? undefined,
@@ -884,7 +1084,16 @@ export function parseICrewTextWithDiagnostics(rawText: string): ICrewParseDebugR
       tripDates: parsedHeaderParts.tripDates ?? null,
       totalCreditMinutes: parsedHeaderParts.totalCreditToken ? parseDotDurationToMinutes(parsedHeaderParts.totalCreditToken) : null,
       scheduledBlockMinutes: parsedHeaderParts.scheduledBlockToken ? parseDotDurationToMinutes(parsedHeaderParts.scheduledBlockToken) : null,
-      totalDeadheadBlockMinutes: parsedHeaderParts.totalDeadheadToken ? parseDotDurationToMinutes(parsedHeaderParts.totalDeadheadToken) : null,
+      totalDeadheadBlockMinutes: parsedHeaderParts.totalDeadheadToken
+        ? parseDotDurationToMinutes(parsedHeaderParts.totalDeadheadToken)
+        : summedDayDeadheadMinutes > 0
+          ? summedDayDeadheadMinutes
+          : null,
+      totalDeadheadBlockSource: parsedHeaderParts.totalDeadheadToken
+        ? "tdhdSummary"
+        : summedDayDeadheadMinutes > 0
+          ? "summedDhdLines"
+          : "none",
       tafbCredit: parsedHeaderParts.tafbCreditToken ? parsedHeaderParts.tafbCreditToken.replace(".", ":") : null,
       tafbElapsed: parsedHeaderParts.tafbElapsedToken ? parsedHeaderParts.tafbElapsedToken.replace(".", ":") : null,
     };

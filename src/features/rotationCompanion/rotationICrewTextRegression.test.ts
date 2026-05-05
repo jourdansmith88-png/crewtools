@@ -16,6 +16,7 @@ import { rotation0233ICrewPartialText } from "./fixtures/rotation0233ICrewPartia
 import { rotation0983ICrewRawText } from "./fixtures/rotation0983ICrewText.ts";
 import { rotation0613ICrewRawText } from "./fixtures/rotation0613ICrewText.ts";
 import { rotation7942ICrewRawText } from "./fixtures/rotation7942ICrewText.ts";
+import { rotation0118ICrewRawText } from "./fixtures/rotation0118ICrewText.ts";
 
 function assert(condition: unknown, message: string) {
   if (!condition) {
@@ -664,6 +665,20 @@ runICrewAssertions("rotation0233 iCrew live-paste fixture", rotation0233ICrewLiv
       continuationResult?.parsedTokens?.dayToken === "19",
     `[${label}] Expected continuation leg to inherit DL1342 day 19, got ${JSON.stringify(continuationResult?.parsedTokens)}`,
   );
+  assert(
+    continuationResult?.parsedTokens?.makeUpToken === "0.09" &&
+      continuationResult?.parsedTokens?.turnToken === "1.07",
+    `[${label}] Expected continuation leg to separate M/U 0.09 from TURN 1.07, got ${JSON.stringify(continuationResult?.parsedTokens)}`,
+  );
+
+  const firstLeg = parsed.allTripSegments[0];
+  const continuationLeg = parsed.allTripSegments[1];
+  const denLgaLeg = parsed.allTripSegments[3];
+  const lgaDfwLeg = parsed.allTripSegments[4];
+  assert(firstLeg?.scheduledBlock === "1:34", `[${label}] Expected first leg block 1:34, got ${firstLeg?.scheduledBlock}`);
+  assert(continuationLeg?.turn === "1:07", `[${label}] Expected SMF-SLC turn 1:07, got ${continuationLeg?.turn}`);
+  assert(denLgaLeg?.turn == null, `[${label}] Expected DEN-LGA turn null, got ${denLgaLeg?.turn}`);
+  assert(lgaDfwLeg?.turn === null || lgaDfwLeg?.turn === "0:53", `[${label}] Expected LGA-DFW turn to preserve true TURN when available, got ${lgaDfwLeg?.turn}`);
 
   const allTripSegments = parsed.allTripSegments.map(
     (leg) => `${leg.departureAirport}-${leg.arrivalAirport} ${leg.scheduledOut ?? "?"}-${leg.scheduledIn ?? "?"} ${leg.scheduledBlock}`,
@@ -717,4 +732,197 @@ runICrewAssertions("rotation0233 iCrew live-paste fixture", rotation0233ICrewLiv
       2,
     ),
   );
+}
+
+{
+  const label = "rotation0118 iCrew raw-text fixture";
+  const debugResult = parseICrewTextWithDiagnostics(rotation0118ICrewRawText);
+  assert(debugResult.parserSucceeded === true, `[${label}] Expected parserSucceeded true, got ${JSON.stringify(debugResult.diagnostics)}`);
+  const parsed = parseICrewText(rotation0118ICrewRawText);
+
+  assert(parsed.header.rotationNumber === "0118", `[${label}] Expected rotationNumber 0118, got ${parsed.header.rotationNumber}`);
+  assert(parsed.header.base === "SLC", `[${label}] Expected base SLC, got ${parsed.header.base}`);
+  assert(parsed.header.position === "A", `[${label}] Expected position A, got ${parsed.header.position}`);
+  assert(parsed.header.effectiveDate === "MAY02", `[${label}] Expected effectiveDate MAY02, got ${parsed.header.effectiveDate}`);
+  assert(parsed.header.tripDates === "02MAY - 04MAY", `[${label}] Expected tripDates 02MAY - 04MAY, got ${parsed.header.tripDates}`);
+  assert(parsed.header.totalCreditMinutes === 945, `[${label}] Expected totalCreditMinutes 945, got ${parsed.header.totalCreditMinutes}`);
+  assert(parsed.header.scheduledBlockMinutes === 565, `[${label}] Expected scheduledBlockMinutes 565, got ${parsed.header.scheduledBlockMinutes}`);
+  assert(parsed.header.totalDeadheadBlockMinutes === 120, `[${label}] Expected totalDeadheadBlockMinutes 120, got ${parsed.header.totalDeadheadBlockMinutes}`);
+  assert(parsed.header.totalDeadheadBlockSource === "summedDhdLines", `[${label}] Expected totalDeadheadBlockSource summedDhdLines, got ${parsed.header.totalDeadheadBlockSource}`);
+  assert(parsed.header.tafbCredit === "47:11", `[${label}] Expected TAFB credit 47:11, got ${parsed.header.tafbCredit}`);
+  assert(
+    debugResult.diagnostics.parsedTotals?.totalDeadheadBlockMinutes === 120,
+    `[${label}] Expected diagnostics totalDeadheadBlockMinutes 120 from summed day DHD lines, got ${debugResult.diagnostics.parsedTotals?.totalDeadheadBlockMinutes}`,
+  );
+  assert(
+    debugResult.diagnostics.parsedTotals?.totalDeadheadBlockSource === "summedDhdLines",
+    `[${label}] Expected diagnostics totalDeadheadBlockSource summedDhdLines, got ${debugResult.diagnostics.parsedTotals?.totalDeadheadBlockSource}`,
+  );
+
+  const allTripSegments = parsed.allTripSegments.map(
+    (leg) => `${leg.departureAirport}-${leg.arrivalAirport} ${leg.date} ${leg.isDeadhead ? "DH" : "OP"} ${leg.scheduledBlock}`,
+  );
+  assert(
+    JSON.stringify(allTripSegments) ===
+      JSON.stringify([
+        "SLC-DFW 02MAY OP 2:30",
+        "DFW-SEA 03MAY OP 4:14",
+        "SEA-SNA 03MAY OP 2:41",
+        "BUR-SLC 04MAY DH 2:00",
+      ]),
+    `[${label}] Expected parsed allTripSegments to match fixture, got ${allTripSegments.join(" | ")}`,
+  );
+
+  const row2796 = debugResult.diagnostics.attemptedLegParseResults.find((item) =>
+    item.line.includes("2 2796 SLC 1759 DFW 2129 2.30 0.08 221"),
+  );
+  assert(
+    parsed.allTripSegments[0]?.flightNumber === "2796" &&
+      parsed.visibleOperatingLegs[0]?.flightNumber === "2796",
+    `[${label}] Expected first flight number to stay 2796, got ${parsed.allTripSegments[0]?.flightNumber} / ${parsed.visibleOperatingLegs[0]?.flightNumber}`,
+  );
+
+  assert(
+    row2796?.matched === true &&
+      row2796?.parsedTokens?.flightNumber === "2796" &&
+      row2796?.parsedTokens?.arrivalAirport === "DFW" &&
+      row2796?.parsedTokens?.arrivalTime === "2129" &&
+      row2796?.parsedTokens?.makeUpToken === "0.08" &&
+      row2796?.parsedTokens?.turnToken == null &&
+      row2796?.parsedTokens?.equipmentShip === "221",
+    `[${label}] Expected 2796 split-arrival row to parse correctly, got ${JSON.stringify(row2796)}`,
+  );
+
+  const row803 = debugResult.diagnostics.attemptedLegParseResults.find((item) =>
+    item.line.includes("3 803 *DFW 1627 SEA 1841 4.14 0.09 0.59M"),
+  );
+  assert(
+    row803?.matched === true &&
+      row803?.parsedTokens?.departureAirport === "DFW" &&
+      row803?.parsedTokens?.arrivalAirport === "SEA" &&
+      row803?.parsedTokens?.makeUpToken === "0.09" &&
+      row803?.parsedTokens?.turnToken === "0.59" &&
+      row803?.parsedTokens?.mealMarker === "M",
+    `[${label}] Expected 803 star-airport row to parse correctly, got ${JSON.stringify(row803)}`,
+  );
+
+  const row1105 = debugResult.diagnostics.attemptedLegParseResults.find((item) =>
+    item.line.includes("1105 SEA 1940 SNA 2221 2.41 0.07"),
+  );
+  assert(
+    row1105?.matched === true &&
+      row1105?.parsedTokens?.dayToken === "03" &&
+      row1105?.parsedTokens?.carrier === "DL" &&
+      row1105?.parsedTokens?.flightNumber === "1105" &&
+      row1105?.parsedTokens?.arrivalAirport === "SNA" &&
+      row1105?.parsedTokens?.arrivalTime === "2221" &&
+      row1105?.parsedTokens?.makeUpToken === "0.07" &&
+      row1105?.parsedTokens?.turnToken == null,
+    `[${label}] Expected 1105 continuation row to inherit day and parse correctly, got ${JSON.stringify(row1105)}`,
+  );
+
+  const row828 = debugResult.diagnostics.attemptedLegParseResults.find((item) =>
+    item.line.includes("4 D 828 BUR 1240 SLC 1540 2.00 223"),
+  );
+  assert(
+    row828?.matched === true &&
+      row828?.parsedTokens?.carrier === "DL" &&
+      row828?.parsedTokens?.flightNumber === "828" &&
+      row828?.parsedTokens?.arrivalAirport === "SLC" &&
+      row828?.parsedTokens?.arrivalTime === "1540" &&
+      row828?.parsedTokens?.blockToken === "2.00",
+    `[${label}] Expected separated D-marker row to parse correctly, got ${JSON.stringify(row828)}`,
+  );
+
+  assert(parsed.deadheadAnnotations.length === 1, `[${label}] Expected 1 deadhead annotation, got ${parsed.deadheadAnnotations.length}`);
+  assert(
+    parsed.deadheadAnnotations[0]?.cityPair === "BUR-SLC" &&
+      parsed.deadheadAnnotations[0]?.flightNumber === "828" &&
+      parsed.deadheadAnnotations[0]?.reason === "explicit_D_marker",
+    `[${label}] Expected BUR-SLC explicit D-marker deadhead, got ${JSON.stringify(parsed.deadheadAnnotations[0])}`,
+  );
+  assert(parsed.visibleOperatingLegs.length === 3, `[${label}] Expected 3 operating legs, got ${parsed.visibleOperatingLegs.length}`);
+  assert(parsed.operatingScheduledBlockMinutes === 565, `[${label}] Expected operating block 565, got ${parsed.operatingScheduledBlockMinutes}`);
+  assert(parsed.deadheadScheduledBlockMinutes === 120, `[${label}] Expected deadhead block 120, got ${parsed.deadheadScheduledBlockMinutes}`);
+  assert(parsed.partialStatus === false, `[${label}] Expected partialStatus false, got ${parsed.partialStatus}`);
+  assert(
+    !parsed.parserNotes.some((note) => note.includes("missing summary totals") || note.includes("totalDeadheadBlock")),
+    `[${label}] Expected parserNotes not to claim totalDeadheadBlock is missing, got ${JSON.stringify(parsed.parserNotes)}`,
+  );
+  assert(
+    parsed.parserNotes.includes("Deadhead total recovered from day-level DHD lines."),
+    `[${label}] Expected summedDhdLines recovery note, got ${JSON.stringify(parsed.parserNotes)}`,
+  );
+  assert(parsed.scheduledBlockSource === "iCrewSummaryTotals", `[${label}] Expected scheduledBlockSource iCrewSummaryTotals, got ${parsed.scheduledBlockSource}`);
+  assert(
+    parsed.parserNotes.some((note) => note.includes("Route continuity warning")),
+    `[${label}] Expected non-blocking route continuity warning, got ${JSON.stringify(parsed.parserNotes)}`,
+  );
+
+  console.log(`${label} passed`);
+  console.log(
+    `${label} parsed:`,
+    JSON.stringify(
+      {
+        header: parsed.header,
+        allTripSegments,
+        visibleOperatingLegs: parsed.visibleOperatingLegs.map(
+          (leg) => `${leg.departureAirport}-${leg.arrivalAirport}`,
+        ),
+        deadheadAnnotations: parsed.deadheadAnnotations,
+        parserNotes: parsed.parserNotes,
+      },
+      null,
+      2,
+    ),
+  );
+}
+
+{
+  const label = "iCrew post-BLK token parsing";
+  const representativeText = [
+    "SLC   PILOT 220         *** ROTATION OPER",
+    "9999     POS-A        EFFECTIVE APR19         CHECK IN AT 14.35",
+    "ACTUAL REPORT TIME 1435",
+    "TRIP DATES                    19APR - 21APR",
+    "REGULAR- 10.00TL                      8.01TBL  0.24TBMU  0.53TDHD  0.00TDMU",
+    "RESERVE- 10.00TL                      8.01TBL  0.24TBMU  0.53TDHD  0.00TDMU",
+    "TAFB  10.00CR",
+    "TAFB  10.00EX",
+    "19  1342  SLC 1536 SMF.1610 * 1.34 0.14 1.02 8142",
+    "20  716 *DEN 1742 LGA.2320 3.38 0.10 8337",
+    "21  846 LGA 1551 DFW.1840 3.49 0.21 0.53M8310",
+  ].join("\n");
+  const debugResult = parseICrewTextWithDiagnostics(representativeText);
+  assert(debugResult.parserSucceeded === true, `[${label}] Expected parserSucceeded true, got ${JSON.stringify(debugResult.diagnostics)}`);
+  const [firstRow, secondRow, thirdRow] = debugResult.diagnostics.attemptedLegParseResults.filter((item) => item.matched);
+  assert(
+    firstRow?.parsedTokens?.carrier === "DL" &&
+      firstRow?.parsedTokens?.flightNumber === "1342" &&
+      firstRow?.parsedTokens?.blockToken === "1.34" &&
+      firstRow?.parsedTokens?.makeUpToken === "0.14" &&
+      firstRow?.parsedTokens?.turnToken === "1.02" &&
+      firstRow?.parsedTokens?.equipmentShip === "8142",
+    `[${label}] Expected 1342 row to parse BLK/M-U/TURN/EQP correctly, got ${JSON.stringify(firstRow?.parsedTokens)}`,
+  );
+  assert(
+    secondRow?.parsedTokens?.carrier === "DL" &&
+      secondRow?.parsedTokens?.flightNumber === "716" &&
+      secondRow?.parsedTokens?.blockToken === "3.38" &&
+      secondRow?.parsedTokens?.makeUpToken === "0.10" &&
+      secondRow?.parsedTokens?.turnToken == null &&
+      secondRow?.parsedTokens?.equipmentShip === "8337",
+    `[${label}] Expected 716 row to keep M/U and omit TURN, got ${JSON.stringify(secondRow?.parsedTokens)}`,
+  );
+  assert(
+    thirdRow?.parsedTokens?.carrier === "DL" &&
+      thirdRow?.parsedTokens?.flightNumber === "846" &&
+      thirdRow?.parsedTokens?.blockToken === "3.49" &&
+      thirdRow?.parsedTokens?.makeUpToken === "0.21" &&
+      thirdRow?.parsedTokens?.turnToken === "0.53" &&
+      thirdRow?.parsedTokens?.mealMarker === "M" &&
+      thirdRow?.parsedTokens?.equipmentShip === "8310",
+    `[${label}] Expected 846 row to parse TURN+meal+EQP correctly, got ${JSON.stringify(thirdRow?.parsedTokens)}`,
+  );
+  console.log(`${label} passed`);
 }
