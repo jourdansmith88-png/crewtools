@@ -120,6 +120,9 @@ export type RotationLayoverDetail = {
   hotelName?: string;
   hotelPhone?: string;
   transport?: string;
+  transportProvider?: string;
+  transportType?: "skyhop" | "ccar" | "limo";
+  transportPhone?: string;
   pickup?: string;
   restMinutes?: number;
 };

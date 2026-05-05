@@ -99,6 +99,7 @@ type RotationScreenshotAttachment = {
 };
 
 const DELTA_CHECK_IN_URL = "https://www.delta.com/check-in";
+const SKYHOP_URL = "https://www.skyhopglobal.com";
 
 type RotationScreenshotParseResponse =
   | {
@@ -1028,6 +1029,9 @@ function buildICrewParsedDashboard(
     hotelName: detail.hotelName,
     hotelPhone: detail.hotelPhone,
     transport: detail.transport,
+    transportProvider: detail.transportProvider,
+    transportType: detail.transportType,
+    transportPhone: detail.transportPhone,
     pickup: detail.pickup,
     restMinutes: detail.restMinutes,
   }));
@@ -4701,30 +4705,63 @@ export default function App() {
                         <Text style={styles.tripBoardSummaryStripRotation}>ROT {rotationDashboard.snapshot.rotationNumber}</Text>
                         <Text style={styles.tripBoardSummaryStripDates}>{rotationDashboard.snapshot.tripDates}</Text>
                       </View>
-                      <Text style={styles.tripBoardSummaryStripLine}>
-                        Credit {rotationDashboard.parsedRotation.missingSections.includes("total credit")
-                          ? "Needs full rotation"
-                          : rotationFormatMinutes(rotationDashboard.snapshot.totalCreditMinutes)}
-                        {" · "}Op {rotationDashboard.parsedRotation.missingSections.includes("total scheduled block")
-                          ? "Needs full rotation"
-                          : rotationFormatMinutes(rotationDashboard.snapshot.scheduledBlockMinutes)}
+                      <View style={styles.tripBoardSummaryStripChipRow}>
+                        <View style={[styles.tripBoardSummaryInlineChip, styles.tripBoardSummaryInlineChipPrimary]}>
+                          <Text style={styles.tripBoardSummaryInlineChipLabel}>Credit</Text>
+                          <Text style={styles.tripBoardSummaryInlineChipValue}>
+                            {rotationDashboard.parsedRotation.missingSections.includes("total credit")
+                              ? "Needs full"
+                              : rotationFormatMinutes(rotationDashboard.snapshot.totalCreditMinutes)}
+                          </Text>
+                        </View>
+                        <View style={[styles.tripBoardSummaryInlineChip, styles.tripBoardSummaryInlineChipPrimary]}>
+                          <Text style={styles.tripBoardSummaryInlineChipLabel}>Op block</Text>
+                          <Text style={styles.tripBoardSummaryInlineChipValue}>
+                            {rotationDashboard.parsedRotation.missingSections.includes("total scheduled block")
+                              ? "Needs full"
+                              : rotationFormatMinutes(rotationDashboard.snapshot.scheduledBlockMinutes)}
+                          </Text>
+                        </View>
                         {rotationDashboard.parsedRotation.deadheadBlock != null &&
-                        rotationDashboard.parsedRotation.deadheadBlock > 0
-                          ? ` · DH ${rotationFormatMinutes(rotationDashboard.parsedRotation.deadheadBlock)}`
-                          : ""}
-                      </Text>
-                      <Text style={styles.tripBoardSummaryStripLine}>
-                        Op legs {rotationDashboard.parsedRotation.legs.filter((leg) => !leg.isDeadhead).length}
+                        rotationDashboard.parsedRotation.deadheadBlock > 0 ? (
+                          <View style={[styles.tripBoardSummaryInlineChip, styles.tripBoardSummaryInlineChipPrimary]}>
+                            <Text style={styles.tripBoardSummaryInlineChipLabel}>DH block</Text>
+                            <Text style={styles.tripBoardSummaryInlineChipValue}>
+                              {rotationFormatMinutes(rotationDashboard.parsedRotation.deadheadBlock)}
+                            </Text>
+                          </View>
+                        ) : null}
+                      </View>
+                      <View style={styles.tripBoardSummaryStripChipRow}>
+                        <View style={styles.tripBoardSummaryInlineChipMini}>
+                          <Text style={styles.tripBoardSummaryInlineChipMiniLabel}>Op</Text>
+                          <Text style={styles.tripBoardSummaryInlineChipMiniValue}>
+                            {rotationDashboard.parsedRotation.legs.filter((leg) => !leg.isDeadhead).length}
+                          </Text>
+                        </View>
                         {((rotationDashboard.parsedRotation.deadheadAnnotations?.length ?? 0) > 0 ||
-                          rotationDashboard.parsedRotation.legs.some((leg) => leg.isDeadhead))
-                          ? ` · DH legs ${
-                              (rotationDashboard.parsedRotation.deadheadAnnotations?.length ?? 0) ||
-                              rotationDashboard.parsedRotation.legs.filter((leg) => leg.isDeadhead).length
-                            }`
-                          : ""}
-                        {" · "}Layover {rotationDashboard.snapshot.layoverCities.join(", ") || "TBD"}
-                        {" · "}Final {rotationDashboard.parsedRotation.finalArrivalAfterDh ?? rotationDashboard.snapshot.finalArrival}
-                      </Text>
+                          rotationDashboard.parsedRotation.legs.some((leg) => leg.isDeadhead)) ? (
+                          <View style={styles.tripBoardSummaryInlineChipMini}>
+                            <Text style={styles.tripBoardSummaryInlineChipMiniLabel}>DH</Text>
+                            <Text style={styles.tripBoardSummaryInlineChipMiniValue}>
+                              {(rotationDashboard.parsedRotation.deadheadAnnotations?.length ?? 0) ||
+                                rotationDashboard.parsedRotation.legs.filter((leg) => leg.isDeadhead).length}
+                            </Text>
+                          </View>
+                        ) : null}
+                        <View style={[styles.tripBoardSummaryInlineChipMini, styles.tripBoardSummaryInlineChipMiniWide]}>
+                          <Text style={styles.tripBoardSummaryInlineChipMiniLabel}>Layover</Text>
+                          <Text style={styles.tripBoardSummaryInlineChipMiniValue}>
+                            {rotationDashboard.snapshot.layoverCities.join(", ") || "TBD"}
+                          </Text>
+                        </View>
+                        <View style={styles.tripBoardSummaryInlineChipMini}>
+                          <Text style={styles.tripBoardSummaryInlineChipMiniLabel}>Final</Text>
+                          <Text style={styles.tripBoardSummaryInlineChipMiniValue}>
+                            {rotationDashboard.parsedRotation.finalArrivalAfterDh ?? rotationDashboard.snapshot.finalArrival}
+                          </Text>
+                        </View>
+                      </View>
                     </View>
                   ) : (
                     <>
@@ -4859,7 +4896,7 @@ export default function App() {
                 </View>
 
                 <View style={[styles.resultPanel, isCompactMobile && styles.resultPanelCompact]}>
-                  <Text style={styles.inputLabel}>Trip timeline</Text>
+                  {!isCompactMobile ? <Text style={styles.inputLabel}>Trip timeline</Text> : null}
                   <View style={[styles.tripBoardTimelineStack, isCompactMobile && styles.tripBoardTimelineStackCompact]}>
                     {mobileTimelineItems.map((item, itemIndex) => {
                       const showDateLabel =
@@ -4868,6 +4905,10 @@ export default function App() {
                         item.type === "layover"
                           ? getTimelineLayoverDetail(rotationDashboard, item.city)
                           : null;
+                      const layoverTransportDisplay = getLayoverTransportDisplay(layoverDetail);
+                      const layoverTransportPhone = getLayoverActionableTransportPhone(layoverDetail);
+                      const layoverTransportPhoneLabel = getLayoverTransportPhoneLabel(layoverDetail);
+                      const showSkyHopAction = layoverDetail?.transportType === "skyhop";
                       const layoverRestLabel =
                         layoverDetail?.restMinutes != null
                           ? `Rest ${rotationFormatMinutes(layoverDetail.restMinutes)}`
@@ -4925,26 +4966,90 @@ export default function App() {
                               {layoverDetail?.hotelName ? (
                                 <View style={[styles.tripBoardTimelineMetaRow, isCompactMobile && styles.tripBoardTimelineMetaRowCompact]}>
                                   <Text style={[styles.tripBoardTimelineMeta, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
-                                    {layoverDetail.hotelName}
+                                    Hotel: {layoverDetail.hotelName}
                                   </Text>
                                   {layoverDetail.hotelPhone ? (
-                                    <Text style={[styles.tripBoardTimelineMeta, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
-                                      {layoverDetail.hotelPhone}
-                                    </Text>
+                                    <TouchableOpacity onPress={() => openRotationExternalUrl(`tel:${layoverDetail.hotelPhone}`)}>
+                                      <Text
+                                        style={[
+                                          styles.tripBoardTimelineMeta,
+                                          styles.tripBoardTimelinePhoneLink,
+                                          isCompactMobile && styles.tripBoardTimelineMetaCompact,
+                                        ]}
+                                      >
+                                        Phone: {layoverDetail.hotelPhone}
+                                      </Text>
+                                    </TouchableOpacity>
                                   ) : null}
                                 </View>
                               ) : null}
-                              {layoverDetail?.transport ? (
+                              {layoverTransportDisplay ? (
                                 <Text style={[styles.tripBoardTimelineMeta, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
-                                  Transport: {layoverDetail.transport}
+                                  Transport: {layoverTransportDisplay}
                                 </Text>
+                              ) : null}
+                              {layoverTransportPhone ? (
+                                <View style={[styles.tripBoardTimelineMetaRow, isCompactMobile && styles.tripBoardTimelineMetaRowCompact]}>
+                                  <Text style={[styles.tripBoardTimelineMeta, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+                                    {layoverTransportPhoneLabel}:
+                                  </Text>
+                                  <TouchableOpacity onPress={() => openRotationExternalUrl(`tel:${layoverTransportPhone}`)}>
+                                    <Text
+                                      style={[
+                                        styles.tripBoardTimelineMeta,
+                                        styles.tripBoardTimelinePhoneLink,
+                                        isCompactMobile && styles.tripBoardTimelineMetaCompact,
+                                      ]}
+                                    >
+                                      {layoverTransportPhone}
+                                    </Text>
+                                  </TouchableOpacity>
+                                </View>
+                              ) : null}
+                              {showSkyHopAction ? (
+                                <View style={styles.tripBoardTimelineActionRow}>
+                                  {layoverTransportPhone ? (
+                                    <TouchableOpacity
+                                      style={[styles.tripBoardTimelineActionButton, styles.tripBoardTimelineActionButtonSecondary]}
+                                      onPress={() => openRotationExternalUrl(`tel:${layoverTransportPhone}`)}
+                                    >
+                                      <Text
+                                        style={[
+                                          styles.tripBoardTimelineActionButtonText,
+                                        ]}
+                                      >
+                                        Call van
+                                      </Text>
+                                    </TouchableOpacity>
+                                  ) : null}
+                                  <TouchableOpacity
+                                    style={[styles.tripBoardTimelineActionButton, styles.tripBoardTimelineActionButtonSecondary]}
+                                    onPress={() => openRotationExternalUrl(SKYHOP_URL)}
+                                  >
+                                    <Text style={styles.tripBoardTimelineActionButtonText}>Open SkyHop</Text>
+                                  </TouchableOpacity>
+                                </View>
+                              ) : null}
+                              {layoverDetail?.transportType === "ccar" && layoverDetail?.hotelPhone ? (
+                                <View style={styles.tripBoardTimelineActionRow}>
+                                  <TouchableOpacity
+                                    style={[styles.tripBoardTimelineActionButton, styles.tripBoardTimelineActionButtonSecondary]}
+                                    onPress={() => openRotationExternalUrl(`tel:${layoverDetail.hotelPhone}`)}
+                                  >
+                                    <Text style={styles.tripBoardTimelineActionButtonText}>Call hotel</Text>
+                                  </TouchableOpacity>
+                                </View>
                               ) : null}
                               {layoverDetail?.pickup ? (
                                 <Text style={[styles.tripBoardTimelineMeta, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
                                   Pickup: {layoverDetail.pickup}
                                 </Text>
                               ) : null}
-                              {!layoverDetail?.hotelName && !layoverDetail?.transport && !layoverDetail?.pickup && !layoverRestLabel ? (
+                              {!layoverDetail?.hotelName &&
+                              !layoverDetail?.transport &&
+                              !layoverDetail?.transportProvider &&
+                              !layoverDetail?.pickup &&
+                              !layoverRestLabel ? (
                                 <Text style={[styles.tripBoardTimelineMeta, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
                                   Rest TBD
                                 </Text>
@@ -9395,6 +9500,60 @@ function getTimelineLayoverDetail(dashboard: RotationDashboardData, city: string
   );
 }
 
+function isPlaceholderPhoneValue(value?: string | null) {
+  if (!value) {
+    return false;
+  }
+  const digits = value.replace(/\D/g, "");
+  if (digits.length < 10) {
+    return false;
+  }
+  return /^(\d)\1+$/.test(digits);
+}
+
+function getLayoverTransportDisplay(detail: RotationLayoverDetail | null) {
+  if (!detail) {
+    return null;
+  }
+  if (detail.transportType === "skyhop") {
+    return "SkyHop Global";
+  }
+  if (detail.transportType === "ccar") {
+    return "Hotel / CCAR";
+  }
+  if (detail.transportType === "limo") {
+    return detail.transportProvider ?? "Limo";
+  }
+  return detail.transportProvider ?? detail.transport ?? null;
+}
+
+function getLayoverTransportPhoneLabel(detail: RotationLayoverDetail | null) {
+  if (!detail) {
+    return null;
+  }
+  if (detail.transportType === "skyhop") {
+    return "Van";
+  }
+  if (detail.transportType === "limo") {
+    return "Limo";
+  }
+  if (detail.transportType === "ccar") {
+    return "CCAR";
+  }
+  return "Transport";
+}
+
+function getLayoverActionableTransportPhone(detail: RotationLayoverDetail | null) {
+  if (!detail) {
+    return null;
+  }
+  const transportPhone = !isPlaceholderPhoneValue(detail.transportPhone) ? detail.transportPhone : null;
+  if (detail.transportType === "ccar") {
+    return transportPhone ?? detail.hotelPhone ?? null;
+  }
+  return transportPhone;
+}
+
 function CompactAlertChip({
   label,
   tone,
@@ -11671,42 +11830,105 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   tripBoardSummaryPanelCompact: {
-    padding: 10,
-    gap: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    gap: 6,
   },
   tripBoardSummaryStrip: {
     backgroundColor: appStylePalette.surfaceRaised,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: appStylePalette.borderSubtle,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 7,
+    gap: 6,
   },
   tripBoardSummaryStripRow: {
     flexDirection: "row",
     alignItems: "baseline",
     justifyContent: "space-between",
-    gap: 8,
+    gap: 6,
   },
   tripBoardSummaryStripRotation: {
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: "900",
     color: appStylePalette.textPrimary,
-    letterSpacing: 0.5,
+    letterSpacing: 0.35,
   },
   tripBoardSummaryStripDates: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "800",
     color: appStylePalette.accent,
     textTransform: "uppercase",
-    letterSpacing: 0.7,
+    letterSpacing: 0.6,
   },
   tripBoardSummaryStripLine: {
     fontSize: 11,
     lineHeight: 15,
     color: appStylePalette.textSecondary,
     fontWeight: "700",
+  },
+  tripBoardSummaryStripChipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    alignItems: "stretch",
+  },
+  tripBoardSummaryInlineChip: {
+    flexGrow: 1,
+    flexBasis: 88,
+    minWidth: 88,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(105, 191, 255, 0.18)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    gap: 2,
+  },
+  tripBoardSummaryInlineChipPrimary: {
+    minHeight: 44,
+  },
+  tripBoardSummaryInlineChipLabel: {
+    fontSize: 9,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 0.7,
+    color: appStylePalette.accent,
+  },
+  tripBoardSummaryInlineChipValue: {
+    fontSize: 15,
+    lineHeight: 18,
+    fontWeight: "900",
+    color: appStylePalette.textPrimary,
+    fontVariant: ["tabular-nums"],
+  },
+  tripBoardSummaryInlineChipMini: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "rgba(255,255,255,0.025)",
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  tripBoardSummaryInlineChipMiniWide: {
+    flexShrink: 1,
+  },
+  tripBoardSummaryInlineChipMiniLabel: {
+    fontSize: 9,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+    color: appStylePalette.textMuted,
+  },
+  tripBoardSummaryInlineChipMiniValue: {
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: "800",
+    color: appStylePalette.textPrimary,
   },
   tripBoardSummaryHeader: {
     flexDirection: "row",
@@ -12411,6 +12633,9 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     color: appStylePalette.textMuted,
     fontWeight: "700",
+  },
+  tripBoardTimelinePhoneLink: {
+    color: appStylePalette.accent,
   },
   tripBoardTimelineMetaCompact: {
     fontSize: 11,

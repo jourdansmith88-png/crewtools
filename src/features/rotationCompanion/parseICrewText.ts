@@ -47,6 +47,9 @@ export type ParsedICrewTextResult = {
     hotelName?: string;
     hotelPhone?: string;
     transport?: string;
+    transportProvider?: string;
+    transportType?: "skyhop" | "ccar" | "limo";
+    transportPhone?: string;
     pickup?: string;
     restMinutes?: number;
   }>;
@@ -504,7 +507,18 @@ function parseICrewLayoverCities(rawText: string) {
   return Array.from(new Set(layovers));
 }
 
-function parseICrewLayoverDetails(rawText: string) {
+export function parseICrewLayoverDetails(rawText: string) {
+  const splitLabelAndPhone = (value: string) => {
+    const trimmed = value.trim();
+    const phoneMatch = trimmed.match(/^(.*?)(?:\s+)?((?:\d{3}-\d{3}-\d{4})|(?:\d{10,11}))$/);
+    if (!phoneMatch) {
+      return { label: trimmed, phone: undefined as string | undefined };
+    }
+    return {
+      label: phoneMatch[1]?.trim() || undefined,
+      phone: phoneMatch[2]?.trim() || undefined,
+    };
+  };
   const detailsByCity = new Map<
     string,
     {
@@ -512,6 +526,9 @@ function parseICrewLayoverDetails(rawText: string) {
       hotelName?: string;
       hotelPhone?: string;
       transport?: string;
+      transportProvider?: string;
+      transportType?: "skyhop" | "ccar" | "limo";
+      transportPhone?: string;
       pickup?: string;
       restMinutes?: number;
     }
@@ -576,15 +593,49 @@ function parseICrewLayoverDetails(rawText: string) {
 
     const transportMatch = rawLine.match(/^\s*TRANSPORTATION\s*-\s*(.+)$/i);
     if (transportMatch?.[1]) {
-      activeDetail.transport = transportMatch[1].trim();
+      const transportValue = splitLabelAndPhone(transportMatch[1]);
+      const providerLabel = transportValue.label ?? transportMatch[1].trim();
+      activeDetail.transportProvider = providerLabel;
+      activeDetail.transportPhone = transportValue.phone ?? activeDetail.transportPhone;
+      if (/SKYHOP/i.test(providerLabel)) {
+        activeDetail.transportType = "skyhop";
+        activeDetail.transportProvider = "SkyHop Global";
+      }
+      activeDetail.transport = activeDetail.transportProvider;
       continue;
     }
 
-    const ccarMatch = rawLine.match(/^\s*CCAR\s+(.+)$/i);
-    if (ccarMatch?.[1]) {
-      activeDetail.transport = activeDetail.transport
-        ? `${activeDetail.transport} / CCAR ${ccarMatch[1].trim()}`
-        : `CCAR ${ccarMatch[1].trim()}`;
+    const transportTypeMatch = rawLine.match(/^\s*(CCAR|LIMO)\s+(.+)$/i);
+    if (transportTypeMatch?.[1] && transportTypeMatch?.[2]) {
+      const transportTypeToken = transportTypeMatch[1].trim().toUpperCase();
+      const typedTransportValue = splitLabelAndPhone(transportTypeMatch[2]);
+      const isSkyHopLabel = Boolean(typedTransportValue.label && /SKYHOP/i.test(typedTransportValue.label));
+      if (activeDetail.transportType !== "skyhop") {
+        activeDetail.transportType =
+          transportTypeToken === "CCAR"
+            ? "ccar"
+            : isSkyHopLabel
+              ? "skyhop"
+              : "limo";
+      }
+      if (typedTransportValue.phone) {
+        activeDetail.transportPhone = typedTransportValue.phone;
+      }
+      if ((activeDetail.transportType === "limo" || activeDetail.transportType === "skyhop") && typedTransportValue.label) {
+        activeDetail.transportProvider = /SKYHOP/i.test(typedTransportValue.label)
+          ? "SkyHop Global"
+          : typedTransportValue.label;
+      }
+      if (activeDetail.transportType === "ccar") {
+        activeDetail.transportProvider = activeDetail.transportProvider || "Hotel / CCAR";
+      }
+      activeDetail.transport =
+        activeDetail.transportProvider ??
+        (activeDetail.transportType === "ccar"
+          ? "Hotel / CCAR"
+          : activeDetail.transportType === "skyhop"
+            ? "SkyHop Global"
+            : "Limo");
       continue;
     }
 

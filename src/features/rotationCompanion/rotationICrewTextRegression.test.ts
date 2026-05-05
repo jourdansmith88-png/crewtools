@@ -5,6 +5,7 @@ import {
 } from "./rotationChainBuilder.ts";
 import {
   parseICrewFlightToken,
+  parseICrewLayoverDetails,
   parseICrewText,
   parseICrewTextWithDiagnostics,
 } from "./parseICrewText.ts";
@@ -558,7 +559,9 @@ runICrewAssertions("rotation0233 iCrew live-paste fixture", rotation0233ICrewLiv
     parsed.layoverDetails[0]?.city === "IDA" &&
       parsed.layoverDetails[0]?.hotelName === "Hilton Garden Inn" &&
       parsed.layoverDetails[0]?.hotelPhone === "208-522-9500" &&
-      parsed.layoverDetails[0]?.transport === "Hilton Garden Inn / CCAR 11111111111" &&
+      parsed.layoverDetails[0]?.transportProvider === "Hilton Garden Inn" &&
+      parsed.layoverDetails[0]?.transportType === "ccar" &&
+      parsed.layoverDetails[0]?.transportPhone === "11111111111" &&
       parsed.layoverDetails[0]?.pickup === "Outside baggage claim",
     `[${label}] Expected rich layover detail mapping for IDA, got ${JSON.stringify(parsed.layoverDetails[0])}`,
   );
@@ -637,6 +640,36 @@ runICrewAssertions("rotation0233 iCrew live-paste fixture", rotation0233ICrewLiv
       2,
     ),
   );
+}
+
+{
+  const label = "iCrew layover transport classification";
+  const layoverDetails = parseICrewLayoverDetails(`
+ABC - HOTEL - Test Hotel     208-555-1111
+      TRANSPORTATION - SKYHOP GLOBAL 954-573-2727
+      LIMO 954-573-2727
+XYZ - HOTEL - Another Hotel     303-555-2222
+      TRANSPORTATION - Hotel Shuttle
+      CCAR 11111111111
+`.trim());
+
+  const skyhopDetail = layoverDetails.find((detail) => detail.city === "ABC");
+  const ccarDetail = layoverDetails.find((detail) => detail.city === "XYZ");
+
+  assert(
+    skyhopDetail?.transportType === "skyhop" &&
+      skyhopDetail.transportProvider === "SkyHop Global" &&
+      skyhopDetail.transportPhone === "954-573-2727",
+    `[${label}] Expected SKYHOP transport classification, got ${JSON.stringify(skyhopDetail)}`,
+  );
+  assert(
+    ccarDetail?.transportType === "ccar" &&
+      ccarDetail.transportProvider === "Hotel Shuttle" &&
+      ccarDetail.transportPhone === "11111111111",
+    `[${label}] Expected CCAR transport classification without SkyHop promotion, got ${JSON.stringify(ccarDetail)}`,
+  );
+
+  console.log(`${label} passed`);
 }
 
 {
