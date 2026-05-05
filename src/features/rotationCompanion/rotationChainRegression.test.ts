@@ -2,7 +2,6 @@ import {
   buildScreenshotUserFacingChain,
   computeSnapshotFromUserFacingChain,
   diagnoseScreenshotRotationPartialStatus,
-  extractDeadheadAnnotationsFromScreenshotEvidence,
   normalizeCarrierFlight,
 } from "./rotationChainBuilder.ts";
 import {
@@ -50,7 +49,7 @@ function runFixture(args: RotationChainFixture) {
 
     const snapshot = computeSnapshotFromUserFacingChain({
       userFacingLegs: chain.userFacingLegs,
-      headerScheduledBlockMinutes: args.headerScheduledBlockMinutes,
+      headerScheduledBlockMinutes: undefined,
       fallbackScheduledBlockMinutes: 0,
       finalArrivalFallback: "TBD",
     });
@@ -59,28 +58,15 @@ function runFixture(args: RotationChainFixture) {
       allTripSegments: chain.allTripSegments,
       context: args.context,
     });
-    const selectedSeedKeys = new Set(args.selectedSeedChain.map((candidate) => buildFixtureCandidateKey(candidate)));
     const visibleKeys = new Set(chain.userFacingLegs.map((candidate) => buildFixtureCandidateKey(candidate)));
     const discardedFragments = args.selectedSeedChain.filter(
       (candidate) => !visibleKeys.has(buildFixtureCandidateKey(candidate)),
     );
-    const unmatchedCandidates = args.builderInputCandidates.filter(
-      (candidate) => !selectedSeedKeys.has(buildFixtureCandidateKey(candidate)),
-    );
-    const deadheadAnnotations = extractDeadheadAnnotationsFromScreenshotEvidence({
-      userFacingLegs: chain.userFacingLegs,
-      discardedFragments,
-      unmatchedCandidates,
-      builderInputCandidates: args.builderInputCandidates,
-      rotationBase: args.context.base,
-    });
     return {
       chain,
       snapshot,
       partialDiagnosis,
       discardedFragments,
-      unmatchedCandidates,
-      deadheadAnnotations,
     };
   };
 
@@ -89,8 +75,8 @@ function runFixture(args: RotationChainFixture) {
   assert(
     JSON.stringify({
       allTripSegments: firstRun.chain.allTripSegments,
-      visibleOperatingLegs: firstRun.chain.userFacingLegs,
-      deadheadAnnotations: firstRun.deadheadAnnotations,
+      userFacingLegs: firstRun.chain.userFacingLegs,
+      deadheadAnnotations: firstRun.chain.deadheadAnnotations,
       scheduledBlock: firstRun.snapshot.scheduledBlockMinutes,
       scheduledBlockSource: firstRun.snapshot.scheduledBlockSource,
       partialStatus: firstRun.partialDiagnosis.isPartial,
@@ -98,8 +84,8 @@ function runFixture(args: RotationChainFixture) {
     }) ===
       JSON.stringify({
         allTripSegments: secondRun.chain.allTripSegments,
-        visibleOperatingLegs: secondRun.chain.userFacingLegs,
-        deadheadAnnotations: secondRun.deadheadAnnotations,
+        userFacingLegs: secondRun.chain.userFacingLegs,
+        deadheadAnnotations: secondRun.chain.deadheadAnnotations,
         scheduledBlock: secondRun.snapshot.scheduledBlockMinutes,
         scheduledBlockSource: secondRun.snapshot.scheduledBlockSource,
         partialStatus: secondRun.partialDiagnosis.isPartial,
@@ -113,13 +99,15 @@ function runFixture(args: RotationChainFixture) {
     snapshot,
     partialDiagnosis,
     discardedFragments,
-    unmatchedCandidates,
-    deadheadAnnotations,
   } = firstRun;
+  const deadheadAnnotations = chain.deadheadAnnotations;
 
   const visibleRoutes = chain.userFacingLegs.map(
     (leg) => `${leg.departureAirport ?? "?"}-${leg.arrivalAirport ?? "?"}`,
   );
+  const operatingRoutes = chain.userFacingLegs
+    .filter((leg) => !leg.isDeadhead)
+    .map((leg) => `${leg.departureAirport ?? "?"}-${leg.arrivalAirport ?? "?"}`);
   const dedupedVisibleRoutes = Array.from(new Set(visibleRoutes));
 
   assert(
@@ -139,7 +127,7 @@ function runFixture(args: RotationChainFixture) {
     `[${args.name}] Expected final arrival ${args.expectedFinalArrival}, got ${snapshot.finalArrival}`,
   );
   if (args.expectedFinalArrivalAfterDeadhead) {
-    const finalArrivalAfterDeadhead = deadheadAnnotations.at(-1)?.destination ?? snapshot.finalArrival;
+    const finalArrivalAfterDeadhead = chain.userFacingLegs.at(-1)?.arrivalAirport ?? snapshot.finalArrival;
     assert(
       finalArrivalAfterDeadhead === args.expectedFinalArrivalAfterDeadhead,
       `[${args.name}] Expected final arrival after DH ${args.expectedFinalArrivalAfterDeadhead}, got ${finalArrivalAfterDeadhead}`,
@@ -159,8 +147,8 @@ function runFixture(args: RotationChainFixture) {
   );
   for (const excludedCityPair of args.expectedExcludedCityPairs ?? []) {
     assert(
-      !visibleRoutes.includes(excludedCityPair),
-      `[${args.name}] Expected ${excludedCityPair} to stay out of visible output, got ${visibleRoutes.join(" -> ")}`,
+      !operatingRoutes.includes(excludedCityPair),
+      `[${args.name}] Expected ${excludedCityPair} to stay out of operating output, got ${operatingRoutes.join(" -> ")}`,
     );
   }
   for (const evidenceCandidate of args.expectedEvidenceCandidates ?? []) {
@@ -254,6 +242,16 @@ function runFixture(args: RotationChainFixture) {
     snapshot.nextFlightCityPair === args.expectedFirstLeg,
     `[${args.name}] Expected next flight ${args.expectedFirstLeg}, got ${snapshot.nextFlightCityPair}`,
   );
+  if (args.rotationNumber === "0983") {
+    assert(
+      chain.anchoredFirstLeg === "SLC-DTW",
+      `[${args.name}] Expected anchored first leg SLC-DTW, got ${chain.anchoredFirstLeg}`,
+    );
+    assert(
+      chain.chainAnchorReason === "base_start_date_after_report" || chain.chainAnchorReason === "base_start_date",
+      `[${args.name}] Expected a base/start-date anchor reason, got ${chain.chainAnchorReason}`,
+    );
+  }
   assert(
     chain.discardedAfterTerminal >= 0,
     `[${args.name}] Expected discardedAfterTerminal to be defined`,
@@ -298,6 +296,9 @@ function runFixture(args: RotationChainFixture) {
         scheduledBlockMinutes: snapshot.scheduledBlockMinutes,
         scheduledBlockSource: snapshot.scheduledBlockSource,
         nextFlightCityPair: snapshot.nextFlightCityPair,
+        chainAnchorReason: chain.chainAnchorReason,
+        anchoredFirstLeg: chain.anchoredFirstLeg,
+        wasChainRotated: chain.wasChainRotated,
         deadheadAnnotations,
       },
       null,
@@ -321,8 +322,11 @@ function runFixture(args: RotationChainFixture) {
     scheduledBlockSource: snapshot.scheduledBlockSource,
     finalArrival: snapshot.finalArrival,
     finalArrivalAfterDeadhead: args.expectedFinalArrivalAfterDeadhead
-      ? deadheadAnnotations.at(-1)?.destination ?? snapshot.finalArrival
+      ? chain.userFacingLegs.at(-1)?.arrivalAirport ?? snapshot.finalArrival
       : snapshot.finalArrival,
+    chainAnchorReason: chain.chainAnchorReason,
+    anchoredFirstLeg: chain.anchoredFirstLeg,
+    wasChainRotated: chain.wasChainRotated,
   };
 }
 
@@ -351,6 +355,9 @@ for (const [group, results] of comparisonGroups) {
         scheduledBlockSource: result.scheduledBlockSource,
         finalArrival: result.finalArrival,
         finalArrivalAfterDeadhead: result.finalArrivalAfterDeadhead,
+        chainAnchorReason: result.chainAnchorReason,
+        anchoredFirstLeg: result.anchoredFirstLeg,
+        wasChainRotated: result.wasChainRotated,
       }) ===
         JSON.stringify({
           allTripSegments: first.allTripSegments,
@@ -360,8 +367,79 @@ for (const [group, results] of comparisonGroups) {
           scheduledBlockSource: first.scheduledBlockSource,
           finalArrival: first.finalArrival,
           finalArrivalAfterDeadhead: first.finalArrivalAfterDeadhead,
+          chainAnchorReason: first.chainAnchorReason,
+          anchoredFirstLeg: first.anchoredFirstLeg,
+          wasChainRotated: first.wasChainRotated,
         }),
       `[${group}] Expected paired fixtures to produce identical final display model`,
     );
   }
+}
+
+const rotation0983DeadheadPreservationFixture = rotationChainFixtures.find(
+  (fixture) => fixture.name === "rotation0983 live-captured fixture",
+);
+
+assert(rotation0983DeadheadPreservationFixture, "[rotation0983 deadhead preservation] Missing 0983 live-captured fixture");
+
+if (rotation0983DeadheadPreservationFixture) {
+  const deadheadInjectedCandidates = rotation0983DeadheadPreservationFixture.builderInputCandidates.map((candidate) =>
+    `${candidate.departureAirport ?? "?"}-${candidate.arrivalAirport ?? "?"}` === "SLC-DTW"
+      ? {
+          ...candidate,
+          sourceText: `${candidate.sourceText ?? ""} Confirmation #AB12CD`.trim(),
+        }
+      : candidate,
+  );
+  const deadheadInjectedSeedChain = rotation0983DeadheadPreservationFixture.selectedSeedChain.map((candidate) =>
+    `${candidate.departureAirport ?? "?"}-${candidate.arrivalAirport ?? "?"}` === "SLC-DTW"
+      ? {
+          ...candidate,
+          sourceText: `${candidate.sourceText ?? ""} Confirmation #AB12CD`.trim(),
+        }
+      : candidate,
+  );
+  const chain = buildScreenshotUserFacingChain({
+    rawFinalOrderedChain: deadheadInjectedSeedChain,
+    legCandidates: deadheadInjectedCandidates,
+    context: rotation0983DeadheadPreservationFixture.context,
+  });
+  const snapshot = computeSnapshotFromUserFacingChain({
+    userFacingLegs: chain.userFacingLegs,
+    headerScheduledBlockMinutes: undefined,
+    fallbackScheduledBlockMinutes: 0,
+    finalArrivalFallback: "TBD",
+  });
+  const routes = chain.userFacingLegs.map((leg) => `${leg.departureAirport ?? "?"}-${leg.arrivalAirport ?? "?"}`);
+  const firstLeg = chain.userFacingLegs[0];
+  const finalSatSlcLegs = chain.userFacingLegs.filter(
+    (leg) => `${leg.departureAirport ?? "?"}-${leg.arrivalAirport ?? "?"}` === "SAT-SLC",
+  );
+
+  assert(routes[0] === "SLC-DTW", "[rotation0983 deadhead preservation] Expected SLC-DTW to remain first in userFacingLegs");
+  assert(firstLeg?.isDeadhead === true, "[rotation0983 deadhead preservation] Expected SLC-DTW to stay in chain and be marked deadhead");
+  assert(
+    chain.deadheadAnnotations.some((annotation) => annotation.cityPair === "SLC-DTW"),
+    "[rotation0983 deadhead preservation] Expected SLC-DTW deadhead annotation",
+  );
+  assert(
+    snapshot.scheduledBlockMinutes === 17 * 60 + 15,
+    `[rotation0983 deadhead preservation] Expected operating block 1035, got ${snapshot.scheduledBlockMinutes}`,
+  );
+  assert(
+    finalSatSlcLegs.length === 1 &&
+      finalSatSlcLegs[0]?.scheduledOut === "1338" &&
+      finalSatSlcLegs[0]?.scheduledIn === "1535",
+    "[rotation0983 deadhead preservation] Expected a single complete SAT-SLC terminal leg with times",
+  );
+  const partialDiagnosis = diagnoseScreenshotRotationPartialStatus({
+    userFacingLegs: chain.userFacingLegs,
+    allTripSegments: chain.allTripSegments,
+    context: rotation0983DeadheadPreservationFixture.context,
+  });
+  assert(
+    partialDiagnosis.isPartial === false,
+    "[rotation0983 deadhead preservation] Expected no partial banner when the full chain returns to base",
+  );
+  console.log("rotation0983 deadhead preservation fixture passed");
 }

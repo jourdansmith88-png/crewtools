@@ -25,6 +25,7 @@ export type RotationChainContext = {
   layoverCities?: string[];
   startDate?: string;
   endDate?: string;
+  reportTime?: string | null;
 };
 
 export type RotationChainBuildResult = {
@@ -33,6 +34,9 @@ export type RotationChainBuildResult = {
   userFacingLegs: RotationChainLeg[];
   deadheadAnnotations: ScreenshotDeadheadAnnotation[];
   canonicalCandidateSource: "builderInputCandidates" | "selectedSeedChainFallback";
+  chainAnchorReason: string;
+  anchoredFirstLeg: string;
+  wasChainRotated: boolean;
   prefixRecoveryAttempted: boolean;
   prefixRecoveredCount: number;
   recoveredPrefixLegs: string[];
@@ -154,6 +158,59 @@ export function excludeDeadheadLegsFromVisibleChain(
       normalized.flightNumber,
     ].join("|");
     return !routeFlightDeadheadKeys.has(routeFlightKey);
+  });
+}
+
+function annotateChainLegsWithDeadheadMetadata(
+  legs: RotationChainLeg[],
+  deadheadAnnotations: ScreenshotDeadheadAnnotation[],
+) {
+  const deadheadByExactKey = new Map(
+    deadheadAnnotations.map((annotation) => [buildDeadheadAnnotationMatchKey(annotation), annotation]),
+  );
+  const deadheadByRouteFlightKey = new Map(
+    deadheadAnnotations.map((annotation) => {
+      const normalized = normalizeCarrierFlight(annotation.carrier, annotation.flightNumber);
+      const routeFlightKey = [
+        annotation.origin.trim().toUpperCase(),
+        annotation.destination.trim().toUpperCase(),
+        normalized.carrier,
+        normalized.flightNumber,
+      ].join("|");
+      return [routeFlightKey, annotation] as const;
+    }),
+  );
+
+  return legs.map((leg, index) => {
+    const exactKey = buildVisibleLegDeadheadMatchKey(leg);
+    const normalized = normalizeCarrierFlight(leg.carrier, leg.flightNumber);
+    const routeFlightKey = [
+      (leg.departureAirport ?? "").trim().toUpperCase(),
+      (leg.arrivalAirport ?? "").trim().toUpperCase(),
+      normalized.carrier,
+      normalized.flightNumber,
+    ].join("|");
+    const matchedAnnotation = deadheadByExactKey.get(exactKey) ?? deadheadByRouteFlightKey.get(routeFlightKey);
+    if (!matchedAnnotation) {
+      return {
+        ...leg,
+        index: index + 1,
+        isDeadhead: false,
+        legKind: leg.segmentType === "return_to_gate" ? "operating" : leg.legKind ?? "operating",
+      };
+    }
+
+    return {
+      ...leg,
+      index: index + 1,
+      isDeadhead: true,
+      legKind: "deadhead" as const,
+      carrier: leg.carrier ?? matchedAnnotation.carrier ?? null,
+      flightNumber: leg.flightNumber ?? matchedAnnotation.flightNumber ?? null,
+      confirmationCode: leg.confirmationCode ?? matchedAnnotation.confirmationCode ?? null,
+      sourceText: leg.sourceText ?? null,
+      segmentType: "deadhead" as const,
+    };
   });
 }
 
@@ -499,24 +556,112 @@ function buildCanonicalChronologicalCandidateChain(
   if (candidatesWithMoments.length === 0) {
     return [] as RotationChainLeg[];
   }
-  const base = context.base?.trim().toUpperCase() || null;
-  const sortedCandidates = [...candidatesWithMoments].sort((left, right) => {
-    const leftFromBase = base && (left.departureAirport ?? "").toUpperCase() === base ? 0 : 1;
-    const rightFromBase = base && (right.departureAirport ?? "").toUpperCase() === base ? 0 : 1;
-    if (leftFromBase !== rightFromBase) {
-      return leftFromBase - rightFromBase;
-    }
-    const leftMoment =
-      buildComparableLegMoment(resolveLegDateToken(left), left.scheduledOut) ?? Number.POSITIVE_INFINITY;
-    const rightMoment =
-      buildComparableLegMoment(resolveLegDateToken(right), right.scheduledOut) ?? Number.POSITIVE_INFINITY;
-    if (leftMoment !== rightMoment) {
-      return leftMoment - rightMoment;
-    }
-    return buildCandidateRichnessScore(right) - buildCandidateRichnessScore(left);
-  });
-  const seed = mergePreferredLeg(undefined, sortedCandidates[0]);
+  const seed = mergePreferredLeg(undefined, chooseAnchoredFirstLeg(candidatesWithMoments, context).leg);
   return buildChronologicalContiguousChain([seed], allCandidates);
+}
+
+function chooseAnchoredFirstLeg<T extends RotationChainLeg | RotationChainCandidate>(
+  legs: T[],
+  context: RotationChainContext,
+) {
+  const base = context.base?.trim().toUpperCase() || null;
+  const startDate = context.startDate?.trim().toUpperCase() || null;
+  const reportTimeMinutes = parseClockTokenMinutes(context.reportTime);
+  const ranked = [...legs]
+    .map((leg) => {
+      const departureAirport = (leg.departureAirport ?? "").trim().toUpperCase();
+      const legDate = resolveLegDateToken(leg) ?? null;
+      const departureMinutes = parseClockTokenMinutes(leg.scheduledOut);
+      const comparableMoment =
+        buildComparableLegMoment(resolveLegDateToken(leg), leg.scheduledOut) ?? Number.POSITIVE_INFINITY;
+      const fromBase = Boolean(base) && departureAirport === base;
+      const onStartDate = Boolean(startDate) && legDate === startDate;
+      const afterReport = departureMinutes != null && reportTimeMinutes != null && departureMinutes >= reportTimeMinutes;
+
+      let priority = 4;
+      let reason = "continuity_fallback";
+      if (fromBase && onStartDate && afterReport) {
+        priority = 0;
+        reason = "base_start_date_after_report";
+      } else if (fromBase && onStartDate) {
+        priority = 1;
+        reason = "base_start_date";
+      } else if (onStartDate) {
+        priority = 2;
+        reason = "earliest_start_date_leg";
+      } else if (legDate) {
+        priority = 3;
+        reason = "earliest_dated_leg";
+      }
+
+      return {
+        leg,
+        priority,
+        reason,
+        comparableMoment,
+        richness: buildCandidateRichnessScore(leg),
+      };
+    })
+    .sort((left, right) => {
+      if (left.priority !== right.priority) {
+        return left.priority - right.priority;
+      }
+      if (left.comparableMoment !== right.comparableMoment) {
+        return left.comparableMoment - right.comparableMoment;
+      }
+      return right.richness - left.richness;
+    });
+
+  const best = ranked[0];
+  return {
+    leg: best?.leg ?? legs[0],
+    reason: best?.reason ?? "continuity_fallback",
+  };
+}
+
+function rotateClosedLoopChainToAnchor(
+  chain: RotationChainLeg[],
+  context: RotationChainContext,
+) {
+  if (chain.length <= 1) {
+    return {
+      rotatedChain: chain,
+      chainAnchorReason: chain[0]
+        ? chooseAnchoredFirstLeg(chain, context).reason
+        : "continuity_fallback",
+      anchoredFirstLeg: chain[0]
+        ? `${chain[0]?.departureAirport ?? "?"}-${chain[0]?.arrivalAirport ?? "?"}`
+        : "unknown",
+      wasChainRotated: false,
+    };
+  }
+
+  const { leg: anchoredLeg, reason } = chooseAnchoredFirstLeg(chain, context);
+  const anchorKey = buildStableLegKey(anchoredLeg);
+  const anchorIndex = chain.findIndex((leg) => buildStableLegKey(leg) === anchorKey);
+  const firstDeparture = chain[0]?.departureAirport?.trim().toUpperCase() ?? null;
+  const lastArrival = chain.at(-1)?.arrivalAirport?.trim().toUpperCase() ?? null;
+  const isClosedLoop = Boolean(firstDeparture && lastArrival && firstDeparture === lastArrival);
+
+  if (anchorIndex <= 0 || !isClosedLoop) {
+    return {
+      rotatedChain: chain.map((leg, index) => ({ ...leg, index: index + 1 })),
+      chainAnchorReason: reason,
+      anchoredFirstLeg: `${(chain[anchorIndex >= 0 ? anchorIndex : 0]?.departureAirport) ?? "?"}-${(chain[anchorIndex >= 0 ? anchorIndex : 0]?.arrivalAirport) ?? "?"}`,
+      wasChainRotated: false,
+    };
+  }
+
+  const rotatedChain = [...chain.slice(anchorIndex), ...chain.slice(0, anchorIndex)].map((leg, index) => ({
+    ...leg,
+    index: index + 1,
+  }));
+  return {
+    rotatedChain,
+    chainAnchorReason: reason,
+    anchoredFirstLeg: `${anchoredLeg.departureAirport ?? "?"}-${anchoredLeg.arrivalAirport ?? "?"}`,
+    wasChainRotated: true,
+  };
 }
 
 export function recoverContiguousPrefixForScreenshotChain(
@@ -705,7 +850,8 @@ export function buildScreenshotUserFacingChain(args: {
   const fallbackSanitizeResult = sanitizeScreenshotFinalChainBeforeDisplay(chronologicalFallbackChain, args.context);
   const usingCanonicalCandidates = Boolean(canonicalSanitizeResult && canonicalSanitizeResult.sanitizedUserFacingLegs.length > 0);
   const sanitizeResult = canonicalSanitizeResult ?? fallbackSanitizeResult;
-  const allTripSegments = sanitizeResult.sanitizedUserFacingLegs.map((leg, index) => ({ ...leg, index: index + 1 }));
+  const anchoredChainResult = rotateClosedLoopChainToAnchor(sanitizeResult.sanitizedUserFacingLegs, args.context);
+  const allTripSegments = anchoredChainResult.rotatedChain;
   const deadheadAnnotations = extractDeadheadAnnotationsFromScreenshotEvidence({
     userFacingLegs: [],
     allTripSegments,
@@ -714,27 +860,16 @@ export function buildScreenshotUserFacingChain(args: {
     builderInputCandidates: prunedCandidates,
     rotationBase: args.context.base,
   });
-  const deadheadKeys = new Set(
-    deadheadAnnotations.map((annotation) =>
-      buildStableLegKey({
-        date: extractEmbeddedDateToken(annotation.scheduledOut) ?? null,
-        departureAirport: annotation.origin,
-        arrivalAirport: annotation.destination,
-        carrier: annotation.carrier ?? null,
-        flightNumber: annotation.flightNumber ?? null,
-        scheduledOut: annotation.scheduledOut ?? null,
-      }),
-    ),
-  );
-  const operatingUserFacingLegs = allTripSegments
-    .filter((leg) => !deadheadKeys.has(buildStableLegKey(leg)))
-    .map((leg, index) => ({ ...leg, index: index + 1 }));
+  const annotatedTripSegments = annotateChainLegsWithDeadheadMetadata(allTripSegments, deadheadAnnotations);
   return {
     rawFinalOrderedChain: prunedSeedChain,
-    allTripSegments,
-    userFacingLegs: operatingUserFacingLegs,
+    allTripSegments: annotatedTripSegments,
+    userFacingLegs: annotatedTripSegments,
     deadheadAnnotations,
     canonicalCandidateSource: usingCanonicalCandidates ? "builderInputCandidates" : "selectedSeedChainFallback",
+    chainAnchorReason: anchoredChainResult.chainAnchorReason,
+    anchoredFirstLeg: anchoredChainResult.anchoredFirstLeg,
+    wasChainRotated: anchoredChainResult.wasChainRotated,
     prefixRecoveryAttempted: usingCanonicalCandidates ? false : prefixRecoveryResult.prefixRecoveryAttempted,
     prefixRecoveredCount: usingCanonicalCandidates ? 0 : prefixRecoveryResult.prefixRecoveredCount,
     recoveredPrefixLegs: usingCanonicalCandidates ? [] : prefixRecoveryResult.recoveredPrefixLegs,
@@ -756,7 +891,8 @@ export function computeSnapshotFromUserFacingChain(args: {
   fallbackScheduledBlockMinutes?: number;
   finalArrivalFallback?: string;
 }) {
-  const computedUserFacingScheduledBlock = args.userFacingLegs.reduce(
+  const operatingLegs = args.userFacingLegs.filter((leg) => !leg.isDeadhead);
+  const computedUserFacingScheduledBlock = operatingLegs.reduce(
     (sum, leg) => sum + (parseClockishMinutes(leg.scheduledBlock) ?? 0),
     0,
   );
@@ -772,7 +908,7 @@ export function computeSnapshotFromUserFacingChain(args: {
       : scheduledBlockSource === "computedFromUserFacingLegs"
         ? computedUserFacingScheduledBlock
         : args.fallbackScheduledBlockMinutes ?? 0;
-  const finalLeg = args.userFacingLegs.at(-1);
+  const finalLeg = operatingLegs.at(-1) ?? args.userFacingLegs.at(-1);
   const firstLeg = args.userFacingLegs[0];
   return {
     scheduledBlockMinutes,
@@ -896,7 +1032,7 @@ export function extractDeadheadAnnotationsFromScreenshotEvidence(args: {
     source: ScreenshotDeadheadAnnotation["source"];
     candidates: Array<RotationChainLeg | RotationChainCandidate>;
   }> = [
-    { source: "discardedFragment", candidates: args.allTripSegments ?? [] },
+    { source: "candidateEvidence", candidates: args.allTripSegments ?? [] },
     { source: "discardedFragment", candidates: args.discardedFragments ?? [] },
     { source: "unmatchedCandidate", candidates: args.unmatchedCandidates ?? [] },
     { source: "candidateEvidence", candidates: args.builderInputCandidates ?? [] },

@@ -554,6 +554,14 @@ runICrewAssertions("rotation0233 iCrew live-paste fixture", rotation0233ICrewLiv
     JSON.stringify(parsed.layoverCities) === JSON.stringify(["IDA"]),
     `[${label}] Expected layoverCities IDA, got ${parsed.layoverCities.join(" | ")}`,
   );
+  assert(
+    parsed.layoverDetails[0]?.city === "IDA" &&
+      parsed.layoverDetails[0]?.hotelName === "Hilton Garden Inn" &&
+      parsed.layoverDetails[0]?.hotelPhone === "208-522-9500" &&
+      parsed.layoverDetails[0]?.transport === "Hilton Garden Inn / CCAR 11111111111" &&
+      parsed.layoverDetails[0]?.pickup === "Outside baggage claim",
+    `[${label}] Expected rich layover detail mapping for IDA, got ${JSON.stringify(parsed.layoverDetails[0])}`,
+  );
 
   const ooRowResult = debugResult.diagnostics.attemptedLegParseResults.find((item) =>
     item.line.includes("12OO3895 SLC 1726 IDA.1817 0.51 0.07"),
@@ -618,6 +626,7 @@ runICrewAssertions("rotation0233 iCrew live-paste fixture", rotation0233ICrewLiv
       {
         header: parsed.header,
         layoverCities: parsed.layoverCities,
+        layoverDetails: parsed.layoverDetails,
         visibleOperatingLegs,
         deadheadAnnotations: parsed.deadheadAnnotations,
         operatingScheduledBlockMinutes: parsed.operatingScheduledBlockMinutes,
@@ -651,6 +660,11 @@ runICrewAssertions("rotation0233 iCrew live-paste fixture", rotation0233ICrewLiv
   assert(
     JSON.stringify(parsed.layoverCities) === JSON.stringify(["DEN", "LGA"]),
     `[${label}] Expected layoverCities DEN, LGA, got ${parsed.layoverCities.join(" | ")}`,
+  );
+  assert(
+    parsed.layoverDetails[0]?.hotelName === "LEMERIDIEN AC HOTEL" &&
+      parsed.layoverDetails[1]?.hotelName === "DOUBLETREE LGA",
+    `[${label}] Expected DEN/LGA layover hotel details, got ${JSON.stringify(parsed.layoverDetails)}`,
   );
   assert(!parsed.layoverCities.includes("SMF"), `[${label}] Expected layoverCities not to include SMF`);
   assert(!parsed.layoverCities.includes("DFW"), `[${label}] Expected layoverCities not to include DFW`);
@@ -750,6 +764,11 @@ runICrewAssertions("rotation0233 iCrew live-paste fixture", rotation0233ICrewLiv
   assert(parsed.header.totalDeadheadBlockMinutes === 120, `[${label}] Expected totalDeadheadBlockMinutes 120, got ${parsed.header.totalDeadheadBlockMinutes}`);
   assert(parsed.header.totalDeadheadBlockSource === "summedDhdLines", `[${label}] Expected totalDeadheadBlockSource summedDhdLines, got ${parsed.header.totalDeadheadBlockSource}`);
   assert(parsed.header.tafbCredit === "47:11", `[${label}] Expected TAFB credit 47:11, got ${parsed.header.tafbCredit}`);
+  assert(
+    parsed.layoverDetails.some((detail) => detail.city === "DFW" && detail.hotelName === "HOTEL DFW") &&
+      parsed.layoverDetails.some((detail) => detail.city === "BUR" && detail.hotelName === "HOTEL BURBANK"),
+    `[${label}] Expected DFW and BUR layover details to be captured, got ${JSON.stringify(parsed.layoverDetails)}`,
+  );
   assert(
     debugResult.diagnostics.parsedTotals?.totalDeadheadBlockMinutes === 120,
     `[${label}] Expected diagnostics totalDeadheadBlockMinutes 120 from summed day DHD lines, got ${debugResult.diagnostics.parsedTotals?.totalDeadheadBlockMinutes}`,

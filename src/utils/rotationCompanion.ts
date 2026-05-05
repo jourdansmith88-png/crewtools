@@ -47,6 +47,9 @@ export type ParsedRotation = {
   totalScheduledBlock?: number;
   deadheadBlock?: number;
   finalArrivalAfterDh?: string;
+  chainAnchorReason?: string;
+  anchoredFirstLeg?: string;
+  wasChainRotated?: boolean;
   excludedDeadheadLegs: number;
   layoverCities: string[];
   dutyPeriods: ParsedRotationDutyPeriod[];
@@ -108,6 +111,17 @@ export type RotationWhatMattersCard = {
   detail: string;
   actionLabel?: string;
   actionCopyValue?: string;
+  secondaryActionLabel?: string;
+  secondaryActionUrl?: string;
+};
+
+export type RotationLayoverDetail = {
+  city: string;
+  hotelName?: string;
+  hotelPhone?: string;
+  transport?: string;
+  pickup?: string;
+  restMinutes?: number;
 };
 
 export type RotationDeadheadAnnotation = {
@@ -140,6 +154,7 @@ export type RotationDashboardData = {
   legs: RotationLeg[];
   nextLeg?: RotationLeg;
   whatMatters: RotationWhatMattersCard[];
+  layoverDetails?: RotationLayoverDetail[];
   dutyDays: RotationDutyDay[];
   tonightLayoverCity: string;
   tomorrowReportTime?: string;

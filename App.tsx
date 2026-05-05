@@ -55,6 +55,7 @@ import {
   parseRotationIntoDashboard,
   SAMPLE_ROTATION_TEXT,
   type RotationDashboardData,
+  type RotationLayoverDetail,
 } from "./src/utils/rotationCompanion";
 import { ContractCopilotPanel } from "./src/components/contractCopilot/ContractCopilotPanel";
 import {
@@ -96,6 +97,8 @@ type RotationScreenshotAttachment = {
   previewUri: string;
   mimeType?: string;
 };
+
+const DELTA_CHECK_IN_URL = "https://www.delta.com/check-in";
 
 type RotationScreenshotParseResponse =
   | {
@@ -1020,6 +1023,15 @@ function buildICrewParsedDashboard(
   const finalOperatingArrival = parsed.finalOperatingArrival;
   const finalArrivalAfterDh = parsed.finalArrivalAfterDeadhead;
   const layoverCities = parsed.layoverCities;
+  const layoverDetails: RotationLayoverDetail[] = parsed.layoverDetails.map((detail) => ({
+    city: detail.city,
+    hotelName: detail.hotelName,
+    hotelPhone: detail.hotelPhone,
+    transport: detail.transport,
+    pickup: detail.pickup,
+    restMinutes: detail.restMinutes,
+  }));
+  const firstLayoverDetail = layoverDetails[0];
   const findSegmentEquipment = (leg: RotationChainLeg) =>
     parsed.normalizedCandidates.find(
       (candidate) =>
@@ -1098,9 +1110,15 @@ function buildICrewParsedDashboard(
         ? "DEADHEAD HOME"
         : "DEADHEAD",
     tone: "watch" as const,
-    detail: `Deadhead ${annotation.cityPair} on ${annotation.carrier ?? "DL"}${annotation.flightNumber ? annotation.flightNumber : ""} departs ${annotation.scheduledOut ?? "TBD"}${annotation.confirmationCode ? `. Confirmation #${annotation.confirmationCode}.` : "."}`,
+    detail: `Deadhead ${annotation.cityPair} on ${annotation.carrier ?? "DL"}${annotation.flightNumber ? annotation.flightNumber : ""} departs ${annotation.scheduledOut ?? "TBD"}${
+      annotation.confirmationCode
+        ? `. Confirmation #${annotation.confirmationCode}.`
+        : ". DH confirmation not found. Add MiCrew DH card to enable check-in actions."
+    }`,
     actionLabel: annotation.confirmationCode ? "Copy confirmation code" : undefined,
     actionCopyValue: annotation.confirmationCode ?? undefined,
+    secondaryActionLabel: annotation.confirmationCode ? "Check in" : undefined,
+    secondaryActionUrl: annotation.confirmationCode ? DELTA_CHECK_IN_URL : undefined,
   }));
 
   return {
@@ -1116,10 +1134,11 @@ function buildICrewParsedDashboard(
     legs: mappedLegs,
     nextLeg,
     whatMatters,
+    layoverDetails,
     dutyDays: [],
     tonightLayoverCity: layoverCities[0] ?? "TBD",
     tomorrowReportTime: undefined,
-    scheduledRestMinutes: undefined,
+    scheduledRestMinutes: firstLayoverDetail?.restMinutes,
     note: options?.previewNote ?? "Loaded from iCrew text.",
     source: "parsed",
     parsedRotation: {
@@ -1395,9 +1414,15 @@ function buildScreenshotBackedDashboardModel(
         ? "DEADHEAD HOME"
         : "DEADHEAD",
     tone: "watch" as const,
-    detail: `Deadhead ${annotation.cityPair} on ${annotation.carrier ?? "DL"}${annotation.flightNumber ? annotation.flightNumber : ""} departs ${annotation.scheduledOut ?? "TBD"}${annotation.confirmationCode ? `. Confirmation #${annotation.confirmationCode}.` : "."}`,
+    detail: `Deadhead ${annotation.cityPair} on ${annotation.carrier ?? "DL"}${annotation.flightNumber ? annotation.flightNumber : ""} departs ${annotation.scheduledOut ?? "TBD"}${
+      annotation.confirmationCode
+        ? `. Confirmation #${annotation.confirmationCode}.`
+        : ". DH confirmation not found. Add MiCrew DH card to enable check-in actions."
+    }`,
     actionLabel: annotation.confirmationCode ? "Copy confirmation code" : undefined,
     actionCopyValue: annotation.confirmationCode ?? undefined,
+    secondaryActionLabel: annotation.confirmationCode ? "Check in" : undefined,
+    secondaryActionUrl: annotation.confirmationCode ? DELTA_CHECK_IN_URL : undefined,
   }));
 
   const screenshotDutyPeriods = dashboard.parsedRotation.dutyPeriods.map((period) => ({
@@ -2290,17 +2315,40 @@ export default function App() {
     }
   };
 
+  const copyTextToClipboard = async (value: string) => {
+    if (Platform.OS !== "web") {
+      return false;
+    }
+    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(value);
+      return true;
+    }
+    if (typeof document !== "undefined") {
+      const textArea = document.createElement("textarea");
+      textArea.value = value;
+      textArea.setAttribute("readonly", "true");
+      textArea.style.position = "absolute";
+      textArea.style.left = "-9999px";
+      document.body.appendChild(textArea);
+      textArea.select();
+      const copied = document.execCommand("copy");
+      document.body.removeChild(textArea);
+      return copied;
+    }
+    return false;
+  };
+
   const copyRotationConfirmationCode = async (value?: string | null) => {
     if (!value) {
       setRotationAnalyzeError("No confirmation code was available to copy.");
       return;
     }
-    if (Platform.OS !== "web" || typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
-      setRotationAnalyzeError("Copy confirmation is currently available in the web build only.");
-      return;
-    }
     try {
-      await navigator.clipboard.writeText(value);
+      const copied = await copyTextToClipboard(value);
+      if (!copied) {
+        setRotationAnalyzeError("Copy confirmation is currently available in the web build only.");
+        return;
+      }
       setRotationCopiedConfirmation(value);
       setRotationAnalyzeError("");
       setTimeout(() => {
@@ -2309,6 +2357,17 @@ export default function App() {
     } catch (error) {
       setRotationAnalyzeError(error instanceof Error ? error.message : "Unable to copy confirmation code.");
     }
+  };
+
+  const openRotationExternalUrl = (value?: string | null) => {
+    if (!value) {
+      return;
+    }
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      window.open(value, "_blank", "noopener,noreferrer");
+      return;
+    }
+    setRotationAnalyzeError("Open link is currently available in the web build only.");
   };
 
   const copyLiveChainDebugJson = async () => {
@@ -4430,59 +4489,90 @@ export default function App() {
       <StatusBar style={colorScheme === "dark" ? "light" : "dark"} />
       <ScrollView
         ref={scrollRef}
-        contentContainerStyle={[styles.container, { backgroundColor: flieger.background }]}
+        contentContainerStyle={[
+          styles.container,
+          isCompactMobile && styles.containerCompact,
+          { backgroundColor: flieger.background },
+        ]}
         showsVerticalScrollIndicator={false}
       >
-        <View
-          style={[
-            styles.hero,
-            {
-              backgroundColor: flieger.surface,
-              borderWidth: 2,
-              borderColor: flieger.borderStrong,
-              borderRadius: 16,
-            },
-          ]}
-        >
-          <View style={{ alignItems: "center", gap: 12 }}>
-            <FliegerMarker color={flieger.textPrimary} dotSize={7} triangleWidth={14} triangleHeight={12} />
+        {!(isCompactMobile && activeTab === "today" && displayedRotationDashboard) ? (
+          <View
+            style={[
+              styles.hero,
+              isCompactMobile && styles.heroCompact,
+              {
+                backgroundColor: flieger.surface,
+                borderWidth: 2,
+                borderColor: flieger.borderStrong,
+                borderRadius: 16,
+              },
+            ]}
+          >
+            <View style={{ alignItems: "center", gap: isCompactMobile ? 8 : 12 }}>
+              <FliegerMarker color={flieger.textPrimary} dotSize={7} triangleWidth={14} triangleHeight={12} />
+              <Text
+                style={[
+                  styles.title,
+                  isCompactMobile && styles.titleCompact,
+                  {
+                    color: flieger.textPrimary,
+                    fontFamily: fliegerTypography.familyDisplay,
+                    letterSpacing: fliegerTypography.letterSpacingWordmark,
+                  },
+                ]}
+              >
+                FLIGHTCREWTOOLS
+              </Text>
             <Text
               style={[
-                styles.title,
-                {
-                  color: flieger.textPrimary,
-                  fontFamily: fliegerTypography.familyDisplay,
-                  letterSpacing: fliegerTypography.letterSpacingWordmark,
-                },
-              ]}
+                  styles.subtitle,
+                  isCompactMobile && styles.subtitleCompact,
+                  {
+                    color: flieger.label,
+                    textAlign: "center",
+                    fontFamily: fliegerTypography.familyLabel,
+                    letterSpacing: fliegerTypography.letterSpacingWide,
+                  },
+                ]}
             >
-              FLIGHTCREWTOOLS
+                DATA. DECISION. ACTION.
             </Text>
-          <Text
-            style={[
-                styles.subtitle,
-                {
-                  color: flieger.label,
-                  textAlign: "center",
-                  fontFamily: fliegerTypography.familyLabel,
-                  letterSpacing: fliegerTypography.letterSpacingWide,
-                },
-              ]}
-          >
-              DATA. DECISION. ACTION.
-          </Text>
+            </View>
           </View>
-        </View>
+        ) : null}
 
         {activeTab === "today" && (
           displayedRotationDashboard ? (() => {
             const rotationDashboard = displayedRotationDashboard;
+            const timelineItems = buildTodayTimelineItems(rotationDashboard);
+            const mobileTimelineItems = timelineItems.slice(0, isCompactMobile ? 5 : 7);
+            const compactWhatMatters = rotationDashboard.whatMatters.filter((item) => item.label !== "FAR 117 watch");
+            const actionableWhatMatters = compactWhatMatters.filter(
+              (item) => item.detail || item.actionCopyValue || item.secondaryActionUrl,
+            );
             return (
             <SectionCard
-              title="Rotation Dashboard"
-              description="Trip-first view with the live pieces that matter most right now."
+              title="Trip Board"
+              description={
+                isCompactMobile
+                  ? "Compact trip-first board with your summary, timeline, and quick actions."
+                  : "Compact trip-first board with your rotation summary, timeline, and quick actions."
+              }
+              hideHeader={isCompactMobile}
             >
               <View style={styles.sectionStack}>
+                {isCompactMobile ? (
+                  <View style={styles.tripBoardMobileAppBar}>
+                    <View style={styles.tripBoardMobileAppBarBrand}>
+                      <FliegerMarker color={flieger.textPrimary} dotSize={5} triangleWidth={10} triangleHeight={8} />
+                      <Text style={styles.tripBoardMobileAppBarTitle}>FLIGHTCREWTOOLS</Text>
+                    </View>
+                    {dashboardSourceNote ? (
+                      <Text style={styles.tripBoardMobileAppBarMeta}>{dashboardSourceNote}</Text>
+                    ) : null}
+                  </View>
+                ) : null}
                 {rotationDebugEnabled && rotationScreenshotParseResult?.debug ? (() => {
                   const liveChainInputSources = getLiveChainInputSources(
                     rotationScreenshotParseResult as RotationScreenshotParseResponse & {
@@ -4510,8 +4600,15 @@ export default function App() {
                     </View>
                   );
                 })() : null}
-                <View style={[styles.resultPanel, styles.snapshotPanelCompact]}>
-                  <Text style={styles.inputLabel}>Rotation snapshot</Text>
+                <View
+                  style={[
+                    styles.resultPanel,
+                    styles.tripBoardSummaryPanel,
+                    isCompactMobile && styles.resultPanelCompact,
+                    isCompactMobile && styles.tripBoardSummaryPanelCompact,
+                  ]}
+                >
+                  {!isCompactMobile ? <Text style={styles.inputLabel}>Rotation snapshot</Text> : null}
                   {rotationDashboard.parsedRotation.isPartial ? (
                     <View style={styles.resultPanel}>
                       <Text style={[styles.statusBadge, styles.statusBadgeCaution]}>Partial rotation detected</Text>
@@ -4598,76 +4695,119 @@ export default function App() {
                       ) : null}
                     </View>
                   ) : null}
-                  <View style={styles.snapshotSummaryHeader}>
-                    <Text style={styles.snapshotSummaryRotation}>ROT {rotationDashboard.snapshot.rotationNumber}</Text>
-                    <Text style={styles.snapshotSummaryDates}>{rotationDashboard.snapshot.tripDates}</Text>
-                  </View>
-                  <View style={styles.snapshotRow}>
-                    <SnapshotPill
-                      label="Credit"
-                      value={
-                        rotationDashboard.parsedRotation.missingSections.includes("total credit")
+                  {isCompactMobile ? (
+                    <View style={styles.tripBoardSummaryStrip}>
+                      <View style={styles.tripBoardSummaryStripRow}>
+                        <Text style={styles.tripBoardSummaryStripRotation}>ROT {rotationDashboard.snapshot.rotationNumber}</Text>
+                        <Text style={styles.tripBoardSummaryStripDates}>{rotationDashboard.snapshot.tripDates}</Text>
+                      </View>
+                      <Text style={styles.tripBoardSummaryStripLine}>
+                        Credit {rotationDashboard.parsedRotation.missingSections.includes("total credit")
                           ? "Needs full rotation"
-                          : rotationFormatMinutes(rotationDashboard.snapshot.totalCreditMinutes)
-                      }
-                    />
-                    <SnapshotPill
-                      label="Op block"
-                      value={
-                        rotationDashboard.parsedRotation.missingSections.includes("total scheduled block")
+                          : rotationFormatMinutes(rotationDashboard.snapshot.totalCreditMinutes)}
+                        {" · "}Op {rotationDashboard.parsedRotation.missingSections.includes("total scheduled block")
                           ? "Needs full rotation"
-                          : rotationFormatMinutes(rotationDashboard.snapshot.scheduledBlockMinutes)
-                      }
-                      detail={
-                        rotationDashboard.parsedRotation.deadheadBlock != null &&
+                          : rotationFormatMinutes(rotationDashboard.snapshot.scheduledBlockMinutes)}
+                        {rotationDashboard.parsedRotation.deadheadBlock != null &&
                         rotationDashboard.parsedRotation.deadheadBlock > 0
-                          ? `DH block ${rotationFormatMinutes(rotationDashboard.parsedRotation.deadheadBlock)}`
-                          : null
-                      }
-                    />
-                  </View>
-                  <View style={styles.snapshotRow}>
-                    <SnapshotPill
-                      label="Op legs"
-                      value={String(rotationDashboard.parsedRotation.legs.filter((leg) => !leg.isDeadhead).length)}
-                    />
-                    {(rotationDashboard.parsedRotation.deadheadAnnotations?.length ?? 0) > 0 ||
-                    rotationDashboard.parsedRotation.legs.some((leg) => leg.isDeadhead) ? (
-                      <SnapshotPill
-                        label="DH legs"
-                        value={String(
-                          (rotationDashboard.parsedRotation.deadheadAnnotations?.length ?? 0) ||
-                            rotationDashboard.parsedRotation.legs.filter((leg) => leg.isDeadhead).length,
-                        )}
-                      />
-                    ) : null}
-                    <SnapshotPill
-                      label="Layovers"
-                      value={rotationDashboard.snapshot.layoverCities.join(", ") || "TBD"}
-                    />
-                  </View>
-                  <View style={styles.snapshotRow}>
-                    <SnapshotPill
-                      label="Trip final"
-                      value={
-                        rotationDashboard.parsedRotation.finalArrivalAfterDh ??
-                        rotationDashboard.snapshot.finalArrival
-                      }
-                    />
-                    {(rotationDashboard.parsedRotation.deadheadAnnotations?.length ?? 0) > 0 ? (
-                      <SnapshotPill
-                        label="Operating final"
-                        value={rotationDashboard.snapshot.finalArrival}
-                      />
-                    ) : null}
-                  </View>
-                  {(rotationDashboard.parsedRotation.deadheadAnnotations?.length ?? 0) > 0 ? (
-                    <Text style={styles.resultSupportMetaText}>
-                      DH legs: {rotationDashboard.parsedRotation.deadheadAnnotations?.map((annotation) => annotation.cityPair).join(", ") ?? "TBD"}
-                    </Text>
-                  ) : null}
+                          ? ` · DH ${rotationFormatMinutes(rotationDashboard.parsedRotation.deadheadBlock)}`
+                          : ""}
+                      </Text>
+                      <Text style={styles.tripBoardSummaryStripLine}>
+                        Op legs {rotationDashboard.parsedRotation.legs.filter((leg) => !leg.isDeadhead).length}
+                        {((rotationDashboard.parsedRotation.deadheadAnnotations?.length ?? 0) > 0 ||
+                          rotationDashboard.parsedRotation.legs.some((leg) => leg.isDeadhead))
+                          ? ` · DH legs ${
+                              (rotationDashboard.parsedRotation.deadheadAnnotations?.length ?? 0) ||
+                              rotationDashboard.parsedRotation.legs.filter((leg) => leg.isDeadhead).length
+                            }`
+                          : ""}
+                        {" · "}Layover {rotationDashboard.snapshot.layoverCities.join(", ") || "TBD"}
+                        {" · "}Final {rotationDashboard.parsedRotation.finalArrivalAfterDh ?? rotationDashboard.snapshot.finalArrival}
+                      </Text>
+                    </View>
+                  ) : (
+                    <>
+                      <View style={[styles.tripBoardSummaryHeader, isCompactMobile && styles.tripBoardSummaryHeaderCompact]}>
+                        <View style={styles.tripBoardSummaryHeaderMain}>
+                          <Text style={[styles.tripBoardSummaryRotation, isCompactMobile && styles.tripBoardSummaryRotationCompact]}>
+                            ROT {rotationDashboard.snapshot.rotationNumber}
+                          </Text>
+                          <Text style={[styles.tripBoardSummaryDates, isCompactMobile && styles.tripBoardSummaryDatesCompact]}>
+                            {rotationDashboard.snapshot.tripDates}
+                          </Text>
+                        </View>
+                        {dashboardSourceNote ? (
+                          <Text style={[styles.tripBoardSummarySource, isCompactMobile && styles.tripBoardSummarySourceCompact]}>
+                            {dashboardSourceNote}
+                          </Text>
+                        ) : null}
+                      </View>
+                      <View style={[styles.tripBoardSummaryGrid, isCompactMobile && styles.tripBoardSummaryGridCompact]}>
+                        <TripBoardSummaryCell
+                          label="Credit"
+                          compact={isCompactMobile}
+                          value={
+                            rotationDashboard.parsedRotation.missingSections.includes("total credit")
+                              ? "Needs full rotation"
+                              : rotationFormatMinutes(rotationDashboard.snapshot.totalCreditMinutes)
+                          }
+                        />
+                        <TripBoardSummaryCell
+                          label="Op block"
+                          compact={isCompactMobile}
+                          value={
+                            rotationDashboard.parsedRotation.missingSections.includes("total scheduled block")
+                              ? "Needs full rotation"
+                              : rotationFormatMinutes(rotationDashboard.snapshot.scheduledBlockMinutes)
+                          }
+                        />
+                        {rotationDashboard.parsedRotation.deadheadBlock != null &&
+                        rotationDashboard.parsedRotation.deadheadBlock > 0 ? (
+                          <TripBoardSummaryCell
+                            label="DH block"
+                            compact={isCompactMobile}
+                            value={rotationFormatMinutes(rotationDashboard.parsedRotation.deadheadBlock)}
+                          />
+                        ) : null}
+                        <TripBoardSummaryCell
+                          label="Op legs"
+                          compact={isCompactMobile}
+                          mini={isCompactMobile}
+                          value={String(rotationDashboard.parsedRotation.legs.filter((leg) => !leg.isDeadhead).length)}
+                        />
+                        {(rotationDashboard.parsedRotation.deadheadAnnotations?.length ?? 0) > 0 ||
+                        rotationDashboard.parsedRotation.legs.some((leg) => leg.isDeadhead) ? (
+                          <TripBoardSummaryCell
+                            label="DH legs"
+                            compact={isCompactMobile}
+                            mini={isCompactMobile}
+                            value={String(
+                              (rotationDashboard.parsedRotation.deadheadAnnotations?.length ?? 0) ||
+                                rotationDashboard.parsedRotation.legs.filter((leg) => leg.isDeadhead).length,
+                            )}
+                          />
+                        ) : null}
+                        <TripBoardSummaryCell
+                          label="Layovers"
+                          compact={isCompactMobile}
+                          value={rotationDashboard.snapshot.layoverCities.join(", ") || "TBD"}
+                          wide
+                        />
+                        <TripBoardSummaryCell
+                          label="Trip final"
+                          compact={isCompactMobile}
+                          mini={isCompactMobile}
+                          value={
+                            rotationDashboard.parsedRotation.finalArrivalAfterDh ??
+                            rotationDashboard.snapshot.finalArrival
+                          }
+                        />
+                      </View>
+                    </>
+                  )}
                   {dashboardSourceNote ? (
-                    <Text style={styles.resultSupportMetaText}>{dashboardSourceNote}</Text>
+                    !isCompactMobile ? <Text style={styles.resultSupportMetaText}>{dashboardSourceNote}</Text> : null
                   ) : null}
                   {rotationDashboard.note &&
                   !rotationDebugPreviewDashboard &&
@@ -4718,144 +4858,289 @@ export default function App() {
                   ) : null}
                 </View>
 
-                <View style={styles.resultPanel}>
-                  <Text style={styles.inputLabel}>Next event</Text>
-                  {rotationDashboard.nextLeg ? (
-                    <>
-                      {rotationDashboard.nextLeg.isDeadhead ? (
-                        <Text style={[styles.statusBadge, styles.deadheadBadge]}>DH</Text>
-                      ) : (
-                        <Text style={[styles.statusBadge, styles.statusBadgeResolved]}>OPERATING</Text>
-                      )}
-                      <FormRow>
-                        <ResultLine
-                          label="City pair"
-                          value={`${rotationDashboard.nextLeg.origin}-${rotationDashboard.nextLeg.destination}`}
-                          emphasis
-                        />
-                        <ResultLine
-                          label="Scheduled out / in"
-                          value={`${rotationDashboard.nextLeg.departureTime ?? "TBD"} - ${rotationDashboard.nextLeg.arrivalTime ?? "TBD"}`}
-                        />
-                      </FormRow>
-                      <FormRow>
-                        <ResultLine
-                          label={rotationDashboard.nextLeg.isDeadhead ? "DH block" : "Block"}
-                          value={rotationFormatMinutes(rotationDashboard.nextLeg.scheduledBlockMinutes)}
-                        />
-                        <ResultLine
-                          label={rotationDashboard.nextLeg.isDeadhead ? "Connection / sit" : "Turn"}
-                          value={rotationDashboard.nextLeg.turnMinutes != null ? rotationFormatMinutes(rotationDashboard.nextLeg.turnMinutes) : "TBD"}
-                        />
-                      </FormRow>
-                      <FormRow>
-                        <ResultLine
-                          label="Flight"
-                          value={formatLegFlightDisplay(rotationDashboard.nextLeg)}
-                        />
-                        <ResultLine
-                          label={rotationDashboard.nextLeg.isDeadhead ? "Carrier" : "Ship / eqp"}
-                          value={
-                            rotationDashboard.nextLeg.isDeadhead
-                              ? rotationDashboard.nextLeg.carrier ?? "Deadhead"
-                              : formatLegEquipmentDisplay(rotationDashboard.nextLeg)
-                          }
-                        />
-                      </FormRow>
-                      <FormRow>
-                        <ResultLine label="Gate" value={formatLegGateDisplay(rotationDashboard.nextLeg)} />
-                        {rotationDashboard.nextLeg.isDeadhead ? (
-                          <ResultLine label="Logbook" value="Excluded from export" />
-                        ) : null}
-                      </FormRow>
-                      {!rotationDashboard.nextLeg.isDeadhead && shouldShowLegStatus(rotationDashboard.nextLeg) ? (
-                        <ResultLine label="Status" value={rotationDashboard.nextLeg.status.replace(/_/g, " ")} />
-                      ) : null}
-                      {rotationDashboard.nextLeg.isDeadhead && rotationDashboard.nextLeg.confirmationNumber ? (
-                        <View style={styles.sectionStack}>
-                          <ResultLine label="PNR" value={rotationDashboard.nextLeg.confirmationNumber} />
-                          <TouchableOpacity
-                            style={styles.quickLinkButton}
-                            onPress={() => copyRotationConfirmationCode(rotationDashboard.nextLeg?.confirmationNumber)}
-                          >
-                            <Text style={styles.quickLinkButtonText}>
-                              {rotationCopiedConfirmation === rotationDashboard.nextLeg.confirmationNumber
-                                ? "Copied"
-                                : "Copy confirmation"}
-                            </Text>
-                          </TouchableOpacity>
+                <View style={[styles.resultPanel, isCompactMobile && styles.resultPanelCompact]}>
+                  <Text style={styles.inputLabel}>Trip timeline</Text>
+                  <View style={[styles.tripBoardTimelineStack, isCompactMobile && styles.tripBoardTimelineStackCompact]}>
+                    {mobileTimelineItems.map((item, itemIndex) => {
+                      const showDateLabel =
+                        itemIndex === 0 || mobileTimelineItems[itemIndex - 1]?.dayLabel !== item.dayLabel;
+                      const layoverDetail =
+                        item.type === "layover"
+                          ? getTimelineLayoverDetail(rotationDashboard, item.city)
+                          : null;
+                      const layoverRestLabel =
+                        layoverDetail?.restMinutes != null
+                          ? `Rest ${rotationFormatMinutes(layoverDetail.restMinutes)}`
+                          : rotationDashboard.tonightLayoverCity === item.city &&
+                              rotationDashboard.scheduledRestMinutes != null
+                            ? `Rest ${rotationFormatMinutes(rotationDashboard.scheduledRestMinutes)}`
+                            : null;
+                      return (
+                        <View key={item.key} style={[styles.tripBoardTimelineRow, isCompactMobile && styles.tripBoardTimelineRowCompact]}>
+                          <View style={[styles.tripBoardTimelineSpineColumn, isCompactMobile && styles.tripBoardTimelineSpineColumnCompact]}>
+                            {showDateLabel ? (
+                              <Text style={[styles.tripBoardTimelineDateLabel, isCompactMobile && styles.tripBoardTimelineDateLabelCompact]}>
+                                {item.dayLabel}
+                              </Text>
+                            ) : (
+                              <View style={styles.tripBoardTimelineDateSpacer} />
+                            )}
+                            <View style={styles.tripBoardTimelineSpineTrack}>
+                              <View
+                                style={[
+                                  styles.tripBoardTimelineNode,
+                                  isCompactMobile && styles.tripBoardTimelineNodeCompact,
+                                  item.type === "layover"
+                                    ? styles.tripBoardTimelineNodeLayover
+                                    : item.leg.isDeadhead
+                                      ? styles.tripBoardTimelineNodeDh
+                                      : item.leg.origin === item.leg.destination
+                                        ? styles.tripBoardTimelineNodeRtg
+                                        : styles.tripBoardTimelineNodeOperating,
+                                ]}
+                              />
+                              {itemIndex < mobileTimelineItems.length - 1 ? (
+                                <View style={[styles.tripBoardTimelineSpineLine, isCompactMobile && styles.tripBoardTimelineSpineLineCompact]} />
+                              ) : null}
+                            </View>
+                          </View>
+                          {item.type === "layover" ? (
+                            <InstrumentPanel
+                              variant="decision"
+                              tone="green"
+                              style={[styles.tripBoardLayoverCard, isCompactMobile && styles.tripBoardLayoverCardCompact]}
+                            >
+                              <View style={[styles.tripBoardTimelineHeader, isCompactMobile && styles.tripBoardTimelineHeaderCompact]}>
+                                <View style={[styles.tripBoardTimelineBadgeRow, isCompactMobile && styles.tripBoardTimelineBadgeRowCompact]}>
+                                  <Text style={[styles.statusBadge, styles.statusBadgeResolved, isCompactMobile && styles.statusBadgeCompact]}>LAYOVER</Text>
+                                  <Text style={styles.tripBoardTimelineInlineCity}>{item.city}</Text>
+                                </View>
+                                <Text style={[styles.tripBoardTimelineTime, isCompactMobile && styles.tripBoardTimelineTimeCompact]}>
+                                  {layoverRestLabel ?? "Rest TBD"}
+                                </Text>
+                              </View>
+                              <Text style={[styles.tripBoardTimelineCityPair, isCompactMobile && styles.tripBoardTimelineCityPairCompact]}>
+                                LAYOVER {item.city}
+                              </Text>
+                              {layoverDetail?.hotelName ? (
+                                <View style={[styles.tripBoardTimelineMetaRow, isCompactMobile && styles.tripBoardTimelineMetaRowCompact]}>
+                                  <Text style={[styles.tripBoardTimelineMeta, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+                                    {layoverDetail.hotelName}
+                                  </Text>
+                                  {layoverDetail.hotelPhone ? (
+                                    <Text style={[styles.tripBoardTimelineMeta, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+                                      {layoverDetail.hotelPhone}
+                                    </Text>
+                                  ) : null}
+                                </View>
+                              ) : null}
+                              {layoverDetail?.transport ? (
+                                <Text style={[styles.tripBoardTimelineMeta, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+                                  Transport: {layoverDetail.transport}
+                                </Text>
+                              ) : null}
+                              {layoverDetail?.pickup ? (
+                                <Text style={[styles.tripBoardTimelineMeta, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+                                  Pickup: {layoverDetail.pickup}
+                                </Text>
+                              ) : null}
+                              {!layoverDetail?.hotelName && !layoverDetail?.transport && !layoverDetail?.pickup && !layoverRestLabel ? (
+                                <Text style={[styles.tripBoardTimelineMeta, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+                                  Rest TBD
+                                </Text>
+                              ) : null}
+                            </InstrumentPanel>
+                          ) : (
+                            <InstrumentPanel
+                              variant={item.isHighlighted ? "elevated" : "decision"}
+                              tone={
+                                item.leg.isDeadhead
+                                  ? "cyan"
+                                  : item.leg.origin === item.leg.destination
+                                    ? "red"
+                                    : "green"
+                              }
+                              style={[
+                                styles.tripBoardTimelineCard,
+                                isCompactMobile && styles.tripBoardTimelineCardCompact,
+                                item.isHighlighted && styles.tripBoardTimelineCardHighlighted,
+                              ]}
+                            >
+                              <View style={[styles.tripBoardTimelineHeader, isCompactMobile && styles.tripBoardTimelineHeaderCompact]}>
+                                <View style={[styles.tripBoardTimelineBadgeRow, isCompactMobile && styles.tripBoardTimelineBadgeRowCompact]}>
+                                  {item.isHighlighted ? (
+                                    <Text style={[styles.statusBadge, styles.statusBadgeCaution, isCompactMobile && styles.statusBadgeCompact]}>
+                                      NEXT EVENT
+                                    </Text>
+                                  ) : null}
+                                  <Text
+                                    style={[
+                                      styles.statusBadge,
+                                      isCompactMobile && styles.statusBadgeCompact,
+                                      item.leg.isDeadhead
+                                        ? styles.deadheadBadge
+                                        : item.leg.origin === item.leg.destination
+                                          ? styles.statusBadgeWarning
+                                          : styles.statusBadgeResolved,
+                                    ]}
+                                  >
+                                    {item.leg.isDeadhead ? "DH" : item.leg.origin === item.leg.destination ? "RTG" : "OP"}
+                                  </Text>
+                                </View>
+                                <Text style={[styles.tripBoardTimelineTime, isCompactMobile && styles.tripBoardTimelineTimeCompact]}>
+                                  {(item.leg.departureTime ?? "TBD")} - {(item.leg.arrivalTime ?? "TBD")}
+                                </Text>
+                              </View>
+                              <Text style={[styles.tripBoardTimelineCityPair, isCompactMobile && styles.tripBoardTimelineCityPairCompact]}>
+                                {item.leg.origin} {"->"} {item.leg.destination}
+                              </Text>
+                              <View style={[styles.tripBoardTimelineMetaRow, isCompactMobile && styles.tripBoardTimelineMetaRowCompact]}>
+                                <Text style={[styles.tripBoardTimelineMeta, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+                                  {formatLegFlightDisplay(item.leg)}
+                                </Text>
+                                <Text style={[styles.tripBoardTimelineMeta, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+                                  {item.leg.isDeadhead ? "DH block" : "Block"} {rotationFormatMinutes(item.leg.scheduledBlockMinutes)}
+                                </Text>
+                              </View>
+                              <View style={[styles.tripBoardTimelineMetaRow, isCompactMobile && styles.tripBoardTimelineMetaRowCompact]}>
+                                {!item.leg.isDeadhead ? (
+                                  <Text style={[styles.tripBoardTimelineMeta, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+                                    Turn {item.leg.turnMinutes != null ? rotationFormatMinutes(item.leg.turnMinutes) : "TBD"}
+                                  </Text>
+                                ) : (
+                                  <Text style={[styles.tripBoardTimelineMeta, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+                                    Excluded from export
+                                  </Text>
+                                )}
+                                {!item.leg.isDeadhead && item.leg.aircraft ? (
+                                  <Text style={[styles.tripBoardTimelineMeta, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+                                    Ship/equip {item.leg.aircraft}
+                                  </Text>
+                                ) : item.leg.isDeadhead && item.leg.confirmationNumber ? (
+                                  <Text style={[styles.tripBoardTimelineMeta, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+                                    PNR {item.leg.confirmationNumber}
+                                  </Text>
+                                ) : null}
+                              </View>
+                              {item.leg.isDeadhead && !item.leg.confirmationNumber ? (
+                                <View style={styles.tripBoardTimelineHintStack}>
+                                  <Text style={[styles.tripBoardTimelineMeta, styles.tripBoardTimelineMetaMuted, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+                                    Confirmation not found
+                                  </Text>
+                                  <Text style={[styles.tripBoardTimelineMeta, styles.tripBoardTimelineMetaMuted, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+                                    Add MiCrew DH card to enable check-in actions
+                                  </Text>
+                                </View>
+                              ) : null}
+                              {item.leg.isDeadhead && item.leg.confirmationNumber ? (
+                                <View style={styles.tripBoardTimelineActionRow}>
+                                  <TouchableOpacity
+                                    style={[
+                                      styles.tripBoardTimelineActionButton,
+                                      rotationCopiedConfirmation === item.leg.confirmationNumber &&
+                                        styles.tripBoardTimelineActionButtonActive,
+                                    ]}
+                                    onPress={() => copyRotationConfirmationCode(item.leg.confirmationNumber)}
+                                  >
+                                    <Text style={styles.tripBoardTimelineActionButtonText}>
+                                      {rotationCopiedConfirmation === item.leg.confirmationNumber ? "Copied" : "Copy code"}
+                                    </Text>
+                                  </TouchableOpacity>
+                                  <TouchableOpacity
+                                    style={[styles.tripBoardTimelineActionButton, styles.tripBoardTimelineActionButtonSecondary]}
+                                    onPress={() => openRotationExternalUrl(DELTA_CHECK_IN_URL)}
+                                  >
+                                    <Text style={styles.tripBoardTimelineActionButtonText}>Check in</Text>
+                                  </TouchableOpacity>
+                                </View>
+                              ) : null}
+                              {item.leg.origin === item.leg.destination ? (
+                                <Text style={[styles.tripBoardTimelineMeta, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+                                  Return-to-gate segment
+                                </Text>
+                              ) : !item.leg.isDeadhead && !isCompactMobile ? (
+                                <Text style={styles.tripBoardTimelineMeta}>Counts toward logbook/export.</Text>
+                              ) : null}
+                            </InstrumentPanel>
+                          )}
                         </View>
-                      ) : null}
-                      {rotationDashboard.nextLeg.isDeadhead ? (
-                        <Text style={styles.resultSupportMetaText}>Excluded from logbook block/export.</Text>
-                      ) : null}
-                    </>
-                  ) : (
-                    <Text style={styles.resultBodyText}>Load a rotation to populate the next flight card.</Text>
-                  )}
+                      );
+                    })}
+                  </View>
                 </View>
 
-                <View style={styles.resultPanel}>
-                  <Text style={styles.inputLabel}>What matters right now</Text>
-                  {(rotationDashboard.whatMatters.filter((item) => item.label !== "FAR 117 watch").length > 0
-                    ? rotationDashboard.whatMatters.filter((item) => item.label !== "FAR 117 watch")
-                    : [{ label: "No major issues found", tone: "good" as const, detail: "Nothing obvious is flagged from the trip shape that is currently loaded." }])
-                    .map((item) => (
-                    <View key={item.label} style={styles.rerouteSupportCard}>
-                      <Text
-                        style={[
-                          styles.statusBadge,
-                          item.tone === "good"
-                            ? styles.statusBadgeResolved
-                            : item.tone === "watch"
-                              ? styles.statusBadgeCaution
-                              : styles.statusBadgeWarning,
-                        ]}
-                      >
-                        {item.label}
-                      </Text>
-                      <Text style={styles.resultBodyText}>
-                        {item.label === "DEADHEAD HOME"
-                          ? item.detail.replace(/^Deadhead /i, "DH home: ")
-                          : item.label === "DEADHEAD LEG"
-                            ? item.detail.replace(/^Deadhead /i, "DH leg: ")
-                            : item.detail}
-                      </Text>
-                      {item.actionCopyValue && item.actionLabel ? (
-                        <TouchableOpacity
-                          style={styles.quickLinkButton}
-                          onPress={() => copyRotationConfirmationCode(item.actionCopyValue)}
+                <View
+                  style={[
+                    styles.resultPanel,
+                    styles.tripBoardAlertsPanel,
+                    isCompactMobile && styles.resultPanelCompact,
+                    isCompactMobile && styles.tripBoardAlertsPanelCompact,
+                  ]}
+                >
+                  {!isCompactMobile ? <Text style={styles.inputLabel}>What matters right now</Text> : null}
+                  <View style={[styles.compactAlertStrip, isCompactMobile && styles.compactAlertStripCompact, isCompactMobile && styles.tripBoardAlertInlineStrip]}>
+                    {(compactWhatMatters.length > 0
+                      ? compactWhatMatters
+                      : [{ label: "No major issues", tone: "good" as const }]).map((item) => (
+                      <CompactAlertChip key={item.label} label={item.label} tone={item.tone} />
+                    ))}
+                  </View>
+                  {actionableWhatMatters.length > 0 ? (
+                    <View style={styles.tripBoardWhatMattersActionList}>
+                      {actionableWhatMatters.map((item, index) => (
+                        <InstrumentPanel
+                          key={`${item.label}-${index}`}
+                          variant="dataPlate"
+                          tone={item.tone === "good" ? "green" : item.tone === "watch" ? "cyan" : "red"}
+                          style={styles.tripBoardWhatMattersActionCard}
                         >
-                          <Text style={styles.quickLinkButtonText}>
-                            {rotationCopiedConfirmation === item.actionCopyValue ? "Copied" : item.actionLabel}
-                          </Text>
-                        </TouchableOpacity>
-                      ) : null}
+                          <Text style={styles.tripBoardWhatMattersActionLabel}>{item.label}</Text>
+                          <Text style={styles.tripBoardWhatMattersActionDetail}>{item.detail}</Text>
+                          {item.actionCopyValue || item.secondaryActionUrl ? (
+                            <View style={styles.tripBoardTimelineActionRow}>
+                              {item.actionCopyValue ? (
+                                <TouchableOpacity
+                                  style={[
+                                    styles.tripBoardTimelineActionButton,
+                                    rotationCopiedConfirmation === item.actionCopyValue &&
+                                      styles.tripBoardTimelineActionButtonActive,
+                                  ]}
+                                  onPress={() => copyRotationConfirmationCode(item.actionCopyValue)}
+                                >
+                                  <Text style={styles.tripBoardTimelineActionButtonText}>
+                                    {rotationCopiedConfirmation === item.actionCopyValue ? "Copied" : "Copy code"}
+                                  </Text>
+                                </TouchableOpacity>
+                              ) : null}
+                              {item.secondaryActionUrl ? (
+                                <TouchableOpacity
+                                  style={[styles.tripBoardTimelineActionButton, styles.tripBoardTimelineActionButtonSecondary]}
+                                  onPress={() => openRotationExternalUrl(item.secondaryActionUrl)}
+                                >
+                                  <Text style={styles.tripBoardTimelineActionButtonText}>
+                                    {item.secondaryActionLabel ?? "Check in"}
+                                  </Text>
+                                </TouchableOpacity>
+                              ) : null}
+                            </View>
+                          ) : null}
+                        </InstrumentPanel>
+                      ))}
                     </View>
-                  ))}
-                  {rotationDashboard.whatMatters.some((item) => item.label === "Tight turn") ? (
-                    <Text style={styles.resultSupportMetaText}>
-                      Tight-turn source:{" "}
-                      {rotationDashboard.parsedRotation.legs.find(
-                        (leg) =>
-                          (leg.turnSource === "verified_turn_field" || leg.turnSource === "safe_schedule_derived") &&
-                          (leg.turnAfterPreviousLeg ?? 999) < 45,
-                      )?.turnSource ?? "unknown"}
-                    </Text>
                   ) : null}
                 </View>
 
-                <View style={styles.resultPanel}>
+                <View style={[styles.resultPanel, isCompactMobile && styles.resultPanelCompact]}>
                   <Text style={styles.inputLabel}>Layover / quick actions</Text>
-                  <FormRow>
+                  <View style={[styles.formRow, isCompactMobile && styles.formRowCompact]}>
                     <ResultLine label="First layover" value={rotationDashboard.tonightLayoverCity} />
                     <ResultLine label="Tomorrow report" value={rotationDashboard.tomorrowReportTime ?? "TBD"} />
-                  </FormRow>
+                  </View>
                   <ResultLine
                     label="Scheduled rest"
                     value={rotationDashboard.scheduledRestMinutes != null ? rotationFormatMinutes(rotationDashboard.scheduledRestMinutes) : "Not found"}
                   />
-                  <View style={styles.quickActionGrid}>
+                  <View style={[styles.quickActionGrid, isCompactMobile && styles.quickActionGridCompact]}>
                     {[
                       { label: quickContacts.van ? "Call van" : "Add van", key: "van" as const },
                       { label: quickContacts.hotel ? "Call hotel" : "Add hotel", key: "hotel" as const },
@@ -4863,26 +5148,38 @@ export default function App() {
                       { label: quickContacts.crewScheduling ? "Crew Scheduling" : "Add Crew Scheduling", key: "crewScheduling" as const },
                       { label: quickContacts.dispatch ? "Dispatch" : "Add Dispatch", key: "dispatch" as const },
                     ].map((action) => (
-                      <TouchableOpacity key={action.label} style={styles.quickActionButton} onPress={() => handleQuickContactPress(action.key)}>
-                        <Text style={styles.quickActionButtonText}>{action.label}</Text>
+                      <TouchableOpacity
+                        key={action.label}
+                        style={[styles.quickActionButton, isCompactMobile && styles.quickActionButtonCompact]}
+                        onPress={() => handleQuickContactPress(action.key)}
+                      >
+                        <Text style={[styles.quickActionButtonText, isCompactMobile && styles.quickActionButtonTextCompact]}>
+                          {action.label}
+                        </Text>
                       </TouchableOpacity>
                     ))}
                   </View>
                 </View>
 
-                <View style={styles.resultPanel}>
+                <View style={[styles.resultPanel, isCompactMobile && styles.resultPanelCompact]}>
                   <Text style={styles.inputLabel}>Something changed?</Text>
                   <Text style={styles.resultBodyText}>
                     Paste a reroute, delay, or reassignment and we’ll calculate the impact.
                   </Text>
-                  <View style={styles.quickActionGrid}>
+                  <View style={[styles.quickActionGrid, isCompactMobile && styles.quickActionGridCompact]}>
                     {[
                       { label: "Analyze reroute", onPress: openRerouteCalculatorFromRotation },
                       { label: "Check pay impact", onPress: openPayImpactFromRotation },
                       { label: "Ask contract question", onPress: openContractCopilotFromRotation },
                     ].map((action) => (
-                      <TouchableOpacity key={action.label} style={styles.quickActionButton} onPress={action.onPress}>
-                        <Text style={styles.quickActionButtonText}>{action.label}</Text>
+                      <TouchableOpacity
+                        key={action.label}
+                        style={[styles.quickActionButton, isCompactMobile && styles.quickActionButtonCompact]}
+                        onPress={action.onPress}
+                      >
+                        <Text style={[styles.quickActionButtonText, isCompactMobile && styles.quickActionButtonTextCompact]}>
+                          {action.label}
+                        </Text>
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -5534,14 +5831,26 @@ export default function App() {
                     {leg.isDeadhead && leg.confirmationNumber ? (
                       <View style={styles.sectionStack}>
                         <ResultLine label="PNR" value={leg.confirmationNumber} />
-                        <TouchableOpacity
-                          style={styles.quickLinkButton}
-                          onPress={() => copyRotationConfirmationCode(leg.confirmationNumber)}
-                        >
-                          <Text style={styles.quickLinkButtonText}>
-                            {rotationCopiedConfirmation === leg.confirmationNumber ? "Copied" : "Copy confirmation"}
-                          </Text>
-                        </TouchableOpacity>
+                        <View style={styles.tripBoardTimelineActionRow}>
+                          <TouchableOpacity
+                            style={[
+                              styles.tripBoardTimelineActionButton,
+                              rotationCopiedConfirmation === leg.confirmationNumber &&
+                                styles.tripBoardTimelineActionButtonActive,
+                            ]}
+                            onPress={() => copyRotationConfirmationCode(leg.confirmationNumber)}
+                          >
+                            <Text style={styles.tripBoardTimelineActionButtonText}>
+                              {rotationCopiedConfirmation === leg.confirmationNumber ? "Copied" : "Copy code"}
+                            </Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.tripBoardTimelineActionButton, styles.tripBoardTimelineActionButtonSecondary]}
+                            onPress={() => openRotationExternalUrl(DELTA_CHECK_IN_URL)}
+                          >
+                            <Text style={styles.tripBoardTimelineActionButtonText}>Check in</Text>
+                          </TouchableOpacity>
+                        </View>
                       </View>
                     ) : null}
                     {rotationDebugEnabled ? (
@@ -8760,25 +9069,31 @@ function SectionCard({
   title,
   description,
   children,
+  hideHeader,
 }: {
   title: string;
   description: string;
   children: React.ReactNode;
+  hideHeader?: boolean;
 }) {
   const palette = getFliegerPalette();
   return (
     <InstrumentPanel style={styles.card}>
-      <Text style={[styles.cardTitle, { color: palette.label, fontFamily: fliegerTypography.familyLabel }]}>
-        {title}
-      </Text>
-      <Text
-        style={[
-          styles.cardDescription,
-          { color: palette.textSecondary, fontFamily: fliegerTypography.familyBody },
-        ]}
-      >
-        {description}
-      </Text>
+      {!hideHeader ? (
+        <>
+          <Text style={[styles.cardTitle, { color: palette.label, fontFamily: fliegerTypography.familyLabel }]}>
+            {title}
+          </Text>
+          <Text
+            style={[
+              styles.cardDescription,
+              { color: palette.textSecondary, fontFamily: fliegerTypography.familyBody },
+            ]}
+          >
+            {description}
+          </Text>
+        </>
+      ) : null}
       <View style={styles.cardBody}>{children}</View>
     </InstrumentPanel>
   );
@@ -9025,6 +9340,127 @@ function ResultLine({
       <Text style={styles.resultLabel}>{label}</Text>
       <Text style={[styles.resultValue, emphasis && styles.resultValueEmphasis]}>{value}</Text>
     </View>
+  );
+}
+
+type TodayTimelineItem =
+  | {
+      key: string;
+      type: "leg";
+      leg: RotationDashboardData["legs"][number];
+      isHighlighted: boolean;
+      dayLabel: string;
+    }
+  | {
+      key: string;
+      type: "layover";
+      city: string;
+      isHighlighted: false;
+      dayLabel: string;
+    };
+
+function buildTodayTimelineItems(dashboard: RotationDashboardData): TodayTimelineItem[] {
+  const layoverSet = new Set(
+    dashboard.snapshot.layoverCities.map((city) => city.trim().toUpperCase()).filter(Boolean),
+  );
+  const items: TodayTimelineItem[] = [];
+  dashboard.legs.forEach((leg, index) => {
+    items.push({
+      key: `leg-${leg.id}`,
+      type: "leg",
+      leg,
+      isHighlighted: index === 0,
+      dayLabel: leg.dayLabel,
+    });
+    const arrivalCity = leg.destination.trim().toUpperCase();
+    const isLastLeg = index === dashboard.legs.length - 1;
+    if (!isLastLeg && layoverSet.has(arrivalCity)) {
+      items.push({
+        key: `layover-${leg.id}-${arrivalCity}`,
+        type: "layover",
+        city: arrivalCity,
+        isHighlighted: false,
+        dayLabel: leg.dayLabel,
+      });
+    }
+  });
+  return items;
+}
+
+function getTimelineLayoverDetail(dashboard: RotationDashboardData, city: string) {
+  return (
+    dashboard.layoverDetails?.find(
+      (detail) => detail.city.trim().toUpperCase() === city.trim().toUpperCase(),
+    ) ?? null
+  );
+}
+
+function CompactAlertChip({
+  label,
+  tone,
+}: {
+  label: string;
+  tone: "good" | "watch" | "risk";
+}) {
+  return (
+    <View
+      style={[
+        styles.compactAlertChip,
+        tone === "good"
+          ? styles.compactAlertChipGood
+          : tone === "watch"
+            ? styles.compactAlertChipWatch
+            : styles.compactAlertChipRisk,
+      ]}
+    >
+      <Text style={styles.compactAlertChipText}>{label}</Text>
+    </View>
+  );
+}
+
+function TripBoardSummaryCell({
+  label,
+  value,
+  detail,
+  wide,
+  compact,
+  mini,
+}: {
+  label: string;
+  value: string;
+  detail?: string | null;
+  wide?: boolean;
+  compact?: boolean;
+  mini?: boolean;
+}) {
+  return (
+    <InstrumentPanel
+      variant="dataPlate"
+      style={[
+        styles.tripBoardSummaryCell,
+        compact ? styles.tripBoardSummaryCellCompact : null,
+        mini ? styles.tripBoardSummaryCellMini : null,
+        wide ? styles.tripBoardSummaryCellWide : null,
+      ]}
+    >
+      <Text style={[styles.tripBoardSummaryCellLabel, compact ? styles.tripBoardSummaryCellLabelCompact : null]}>
+        {label}
+      </Text>
+      <Text
+        style={[
+          styles.tripBoardSummaryCellValue,
+          compact ? styles.tripBoardSummaryCellValueCompact : null,
+          mini ? styles.tripBoardSummaryCellValueMini : null,
+        ]}
+      >
+        {value}
+      </Text>
+      {detail ? (
+        <Text style={[styles.tripBoardSummaryCellDetail, compact ? styles.tripBoardSummaryCellDetailCompact : null]}>
+          {detail}
+        </Text>
+      ) : null}
+    </InstrumentPanel>
   );
 }
 
@@ -10932,14 +11368,49 @@ const styles = StyleSheet.create({
   },
   container: {
     padding: 20,
-    paddingBottom: 228,
+    paddingBottom: 198,
     gap: 18,
+  },
+  containerCompact: {
+    padding: 12,
+    paddingBottom: 140,
+    gap: 12,
   },
   hero: {
     backgroundColor: appStylePalette.surface,
     borderRadius: 16,
     padding: 22,
     gap: 12,
+  },
+  heroCompact: {
+    padding: 14,
+    gap: 8,
+  },
+  tripBoardMobileAppBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    marginBottom: -2,
+  },
+  tripBoardMobileAppBarBrand: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  tripBoardMobileAppBarTitle: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: appStylePalette.textPrimary,
+    letterSpacing: 1,
+    textTransform: "uppercase",
+  },
+  tripBoardMobileAppBarMeta: {
+    fontSize: 10,
+    lineHeight: 13,
+    color: appStylePalette.textMuted,
+    textAlign: "right",
+    maxWidth: 120,
   },
   eyebrow: {
     fontSize: 12,
@@ -10956,12 +11427,19 @@ const styles = StyleSheet.create({
     letterSpacing: fliegerTypography.letterSpacingWordmark,
     textTransform: "uppercase",
   },
+  titleCompact: {
+    fontSize: 27,
+  },
   subtitle: {
     fontSize: 15,
     lineHeight: 22,
     color: appStylePalette.textMuted,
     letterSpacing: fliegerTypography.letterSpacingWide,
     textTransform: "uppercase",
+  },
+  subtitleCompact: {
+    fontSize: 11,
+    lineHeight: 16,
   },
   heroMetrics: {
     flexDirection: "row",
@@ -11005,8 +11483,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 8,
     paddingHorizontal: 14,
-    paddingTop: 18,
-    paddingBottom: 34,
+    paddingTop: 10,
+    paddingBottom: 18,
     backgroundColor: appStylePalette.surface,
     borderTopWidth: 1,
     borderTopColor: appStylePalette.borderStrong,
@@ -11188,10 +11666,166 @@ const styles = StyleSheet.create({
     gap: 10,
     alignSelf: "stretch",
   },
+  tripBoardSummaryPanel: {
+    padding: 12,
+    gap: 10,
+  },
+  tripBoardSummaryPanelCompact: {
+    padding: 10,
+    gap: 8,
+  },
+  tripBoardSummaryStrip: {
+    backgroundColor: appStylePalette.surfaceRaised,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: appStylePalette.borderSubtle,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 4,
+  },
+  tripBoardSummaryStripRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  tripBoardSummaryStripRotation: {
+    fontSize: 17,
+    fontWeight: "900",
+    color: appStylePalette.textPrimary,
+    letterSpacing: 0.5,
+  },
+  tripBoardSummaryStripDates: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: appStylePalette.accent,
+    textTransform: "uppercase",
+    letterSpacing: 0.7,
+  },
+  tripBoardSummaryStripLine: {
+    fontSize: 11,
+    lineHeight: 15,
+    color: appStylePalette.textSecondary,
+    fontWeight: "700",
+  },
+  tripBoardSummaryHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  tripBoardSummaryHeaderCompact: {
+    gap: 8,
+  },
+  tripBoardSummaryHeaderMain: {
+    flex: 1,
+    gap: 3,
+  },
+  tripBoardSummaryRotation: {
+    fontSize: 23,
+    fontWeight: "900",
+    color: appStylePalette.textPrimary,
+    letterSpacing: 0.6,
+  },
+  tripBoardSummaryRotationCompact: {
+    fontSize: 19,
+  },
+  tripBoardSummaryDates: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: appStylePalette.accent,
+    textTransform: "uppercase",
+    letterSpacing: fliegerTypography.letterSpacingLabel,
+  },
+  tripBoardSummaryDatesCompact: {
+    fontSize: 11,
+  },
+  tripBoardSummarySource: {
+    maxWidth: 142,
+    textAlign: "right",
+    fontSize: 11,
+    lineHeight: 16,
+    color: appStylePalette.textMuted,
+    fontWeight: "700",
+  },
+  tripBoardSummarySourceCompact: {
+    maxWidth: 112,
+    fontSize: 10,
+    lineHeight: 14,
+  },
+  tripBoardSummaryGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  tripBoardSummaryGridCompact: {
+    gap: 5,
+  },
+  tripBoardSummaryCell: {
+    flexGrow: 1,
+    minWidth: 92,
+    backgroundColor: appStylePalette.surfaceRaised,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: appStylePalette.borderSubtle,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    gap: 4,
+  },
+  tripBoardSummaryCellCompact: {
+    minWidth: 88,
+    paddingHorizontal: 8,
+    paddingVertical: 7,
+    gap: 3,
+  },
+  tripBoardSummaryCellMini: {
+    minWidth: 72,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+  tripBoardSummaryCellWide: {
+    minWidth: 156,
+  },
+  tripBoardSummaryCellLabel: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: appStylePalette.accent,
+    textTransform: "uppercase",
+    letterSpacing: 0.9,
+  },
+  tripBoardSummaryCellLabelCompact: {
+    fontSize: 9,
+    letterSpacing: 0.7,
+  },
+  tripBoardSummaryCellValue: {
+    fontSize: 18,
+    fontWeight: "900",
+    color: appStylePalette.textPrimary,
+    fontVariant: ["tabular-nums"],
+  },
+  tripBoardSummaryCellValueCompact: {
+    fontSize: 16,
+  },
+  tripBoardSummaryCellValueMini: {
+    fontSize: 15,
+  },
+  tripBoardSummaryCellDetail: {
+    fontSize: 11,
+    lineHeight: 15,
+    color: appStylePalette.textMuted,
+    fontWeight: "700",
+  },
+  tripBoardSummaryCellDetailCompact: {
+    fontSize: 10,
+    lineHeight: 13,
+  },
   formRow: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 12,
+  },
+  formRowCompact: {
+    gap: 8,
   },
   inputGroup: {
     flex: 1,
@@ -11248,6 +11882,11 @@ const styles = StyleSheet.create({
     gap: 12,
     borderWidth: 1.5,
     borderColor: appStylePalette.borderStrong,
+  },
+  resultPanelCompact: {
+    padding: 10,
+    gap: 8,
+    borderRadius: 12,
   },
   resultPanelSubtle: {
     backgroundColor: appStylePalette.surfaceRaised,
@@ -11343,6 +11982,9 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 10,
   },
+  quickActionGridCompact: {
+    gap: 8,
+  },
   quickActionButton: {
     backgroundColor: appStylePalette.surfaceRaised,
     borderRadius: 12,
@@ -11352,10 +11994,19 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     minWidth: 138,
   },
+  quickActionButtonCompact: {
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    minWidth: 112,
+    borderRadius: 10,
+  },
   quickActionButtonText: {
     fontSize: 13,
     fontWeight: "800",
     color: appStylePalette.textPrimary,
+  },
+  quickActionButtonTextCompact: {
+    fontSize: 12,
   },
   whatIfScenarioPanel: {
     flex: 1,
@@ -11540,6 +12191,11 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     textTransform: "uppercase",
   },
+  statusBadgeCompact: {
+    fontSize: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
   statusBadgeResolved: {
     backgroundColor: "rgba(52,168,83,0.14)",
     color: appStylePalette.greenBorder,
@@ -11594,6 +12250,273 @@ const styles = StyleSheet.create({
     gap: 8,
     borderWidth: 1.5,
     borderColor: appStylePalette.borderStrong,
+  },
+  tripBoardTimelineStack: {
+    gap: 8,
+  },
+  tripBoardTimelineStackCompact: {
+    gap: 6,
+  },
+  tripBoardTimelineRow: {
+    flexDirection: "row",
+    alignItems: "stretch",
+    gap: 10,
+  },
+  tripBoardTimelineRowCompact: {
+    gap: 8,
+  },
+  tripBoardTimelineSpineColumn: {
+    width: 40,
+    alignItems: "center",
+    gap: 6,
+  },
+  tripBoardTimelineSpineColumnCompact: {
+    width: 32,
+    gap: 4,
+  },
+  tripBoardTimelineDateLabel: {
+    minHeight: 16,
+    fontSize: 10,
+    fontWeight: "800",
+    color: appStylePalette.textMuted,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+  },
+  tripBoardTimelineDateLabelCompact: {
+    fontSize: 9,
+    minHeight: 14,
+  },
+  tripBoardTimelineDateSpacer: {
+    minHeight: 16,
+  },
+  tripBoardTimelineSpineTrack: {
+    flex: 1,
+    alignItems: "center",
+    gap: 4,
+  },
+  tripBoardTimelineNode: {
+    width: 14,
+    height: 14,
+    borderRadius: 999,
+    borderWidth: 2.5,
+    backgroundColor: appStylePalette.surface,
+  },
+  tripBoardTimelineNodeCompact: {
+    width: 12,
+    height: 12,
+    borderWidth: 2,
+  },
+  tripBoardTimelineNodeDh: {
+    borderColor: appStylePalette.accent,
+    shadowColor: appStylePalette.accent,
+    shadowOpacity: 0.22,
+    shadowRadius: 6,
+  },
+  tripBoardTimelineNodeLayover: {
+    borderColor: appStylePalette.greenBorder,
+    shadowColor: appStylePalette.greenBorder,
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+  },
+  tripBoardTimelineNodeOperating: {
+    borderColor: appStylePalette.greenBorder,
+  },
+  tripBoardTimelineNodeRtg: {
+    borderColor: "#D89A2B",
+  },
+  tripBoardTimelineSpineLine: {
+    width: 2,
+    flex: 1,
+    minHeight: 118,
+    borderRadius: 999,
+    backgroundColor: "rgba(105, 191, 255, 0.18)",
+  },
+  tripBoardTimelineSpineLineCompact: {
+    minHeight: 92,
+  },
+  tripBoardTimelineCard: {
+    flex: 1,
+    padding: 12,
+    gap: 8,
+  },
+  tripBoardTimelineCardCompact: {
+    padding: 9,
+    gap: 6,
+  },
+  tripBoardTimelineCardHighlighted: {
+    borderColor: appStylePalette.accent,
+  },
+  tripBoardLayoverCard: {
+    flex: 1,
+    padding: 12,
+    gap: 8,
+  },
+  tripBoardLayoverCardCompact: {
+    padding: 9,
+    gap: 6,
+  },
+  tripBoardTimelineHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 8,
+  },
+  tripBoardTimelineHeaderCompact: {
+    gap: 6,
+  },
+  tripBoardTimelineBadgeRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    alignItems: "center",
+  },
+  tripBoardTimelineBadgeRowCompact: {
+    gap: 4,
+  },
+  tripBoardTimelineCityPair: {
+    fontSize: 19,
+    fontWeight: "900",
+    color: appStylePalette.textPrimary,
+    letterSpacing: 0.2,
+  },
+  tripBoardTimelineCityPairCompact: {
+    fontSize: 17,
+  },
+  tripBoardTimelineTime: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: appStylePalette.textMuted,
+    fontVariant: ["tabular-nums"],
+  },
+  tripBoardTimelineTimeCompact: {
+    fontSize: 11,
+  },
+  tripBoardTimelineInlineCity: {
+    fontSize: 12,
+    fontWeight: "900",
+    color: appStylePalette.greenBorder,
+    letterSpacing: 0.6,
+  },
+  tripBoardTimelineMetaRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    justifyContent: "space-between",
+  },
+  tripBoardTimelineMetaRowCompact: {
+    gap: 6,
+  },
+  tripBoardTimelineMeta: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: appStylePalette.textMuted,
+    fontWeight: "700",
+  },
+  tripBoardTimelineMetaCompact: {
+    fontSize: 11,
+    lineHeight: 15,
+  },
+  tripBoardTimelineMetaMuted: {
+    color: appStylePalette.textMuted,
+    opacity: 0.88,
+  },
+  tripBoardTimelineActionRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 2,
+  },
+  tripBoardTimelineHintStack: {
+    gap: 2,
+    marginTop: 2,
+  },
+  tripBoardTimelineActionButton: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(105, 191, 255, 0.45)",
+    backgroundColor: "rgba(105, 191, 255, 0.12)",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  tripBoardTimelineActionButtonSecondary: {
+    backgroundColor: "rgba(255,255,255,0.04)",
+    borderColor: "rgba(255,255,255,0.16)",
+  },
+  tripBoardTimelineActionButtonActive: {
+    borderColor: appStylePalette.greenBorder,
+    backgroundColor: "rgba(52,168,83,0.16)",
+  },
+  tripBoardTimelineActionButtonText: {
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 0.3,
+    color: appStylePalette.textPrimary,
+    textTransform: "uppercase",
+  },
+  tripBoardAlertsPanel: {
+    paddingTop: 12,
+    paddingBottom: 12,
+  },
+  tripBoardAlertsPanelCompact: {
+    paddingTop: 8,
+    paddingBottom: 8,
+  },
+  tripBoardAlertInlineStrip: {
+    marginTop: -2,
+  },
+  tripBoardWhatMattersActionList: {
+    gap: 8,
+    marginTop: 10,
+  },
+  tripBoardWhatMattersActionCard: {
+    padding: 10,
+    gap: 6,
+  },
+  tripBoardWhatMattersActionLabel: {
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+    color: appStylePalette.label,
+  },
+  tripBoardWhatMattersActionDetail: {
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: "700",
+    color: appStylePalette.textPrimary,
+  },
+  compactAlertStrip: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  compactAlertStripCompact: {
+    gap: 6,
+  },
+  compactAlertChip: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: 1.5,
+  },
+  compactAlertChipGood: {
+    backgroundColor: "rgba(52,168,83,0.12)",
+    borderColor: appStylePalette.greenBorder,
+  },
+  compactAlertChipWatch: {
+    backgroundColor: "rgba(0,127,163,0.12)",
+    borderColor: appStylePalette.accent,
+  },
+  compactAlertChipRisk: {
+    backgroundColor: "rgba(166,25,46,0.12)",
+    borderColor: appStylePalette.redBorder,
+  },
+  compactAlertChipText: {
+    fontSize: 12,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+    color: appStylePalette.textPrimary,
   },
   auditButton: {
     alignSelf: "flex-start",

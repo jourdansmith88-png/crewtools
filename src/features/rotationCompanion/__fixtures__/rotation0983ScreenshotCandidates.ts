@@ -5,6 +5,7 @@ export const rotation0983Context = {
   layoverCities: ["DTW", "BOS", "MSP"],
   startDate: "17MAR",
   endDate: "20MAR",
+  reportTime: "1326",
 } as const;
 
 export const rotation0983Header = {

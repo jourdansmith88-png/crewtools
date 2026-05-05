@@ -42,6 +42,14 @@ export type ICrewDeadheadAnnotation = {
 export type ParsedICrewTextResult = {
   header: ICrewHeader;
   layoverCities: string[];
+  layoverDetails: Array<{
+    city: string;
+    hotelName?: string;
+    hotelPhone?: string;
+    transport?: string;
+    pickup?: string;
+    restMinutes?: number;
+  }>;
   normalizedCandidates: RotationChainCandidate[];
   allTripSegments: RotationChainLeg[];
   visibleOperatingLegs: RotationChainLeg[];
@@ -496,6 +504,100 @@ function parseICrewLayoverCities(rawText: string) {
   return Array.from(new Set(layovers));
 }
 
+function parseICrewLayoverDetails(rawText: string) {
+  const detailsByCity = new Map<
+    string,
+    {
+      city: string;
+      hotelName?: string;
+      hotelPhone?: string;
+      transport?: string;
+      pickup?: string;
+      restMinutes?: number;
+    }
+  >();
+  const lines = splitRawLines(rawText);
+  let currentCity: string | null = null;
+
+  const upsert = (city: string) => {
+    const normalizedCity = city.toUpperCase();
+    const existing = detailsByCity.get(normalizedCity) ?? { city: normalizedCity };
+    detailsByCity.set(normalizedCity, existing);
+    currentCity = normalizedCity;
+    return existing;
+  };
+
+  for (const line of lines) {
+    const rawLine = line.trimEnd();
+    const normalizedLine = normalizeICrewLine(rawLine);
+    const compactLayoverMatch = rawLine.match(/^([A-Z]{3})\s+(\d{1,2}[.:]\d{2})\s*\/\s*(.+)$/i);
+    if (compactLayoverMatch?.[1] && compactLayoverMatch?.[2]) {
+      const detail = upsert(compactLayoverMatch[1]);
+      const parsedRest = parseDotDurationToMinutes(compactLayoverMatch[2]);
+      if (parsedRest > 0) {
+        detail.restMinutes = parsedRest;
+      }
+      const compactHotelName = compactLayoverMatch[3]?.trim();
+      if (compactHotelName && !detail.hotelName) {
+        detail.hotelName = compactHotelName;
+      }
+      continue;
+    }
+
+    const hotelHeaderMatch = rawLine.match(
+      /^([A-Z]{3})\s*-\s*HOTEL\s*-\s*(.+?)(?:\s{2,}(\d{3}-\d{3}-\d{4}))?$/i,
+    );
+    if (hotelHeaderMatch?.[1]) {
+      const detail = upsert(hotelHeaderMatch[1]);
+      const hotelName = hotelHeaderMatch[2]?.trim();
+      const hotelPhone = hotelHeaderMatch[3]?.trim();
+      if (hotelName) {
+        detail.hotelName = hotelName;
+      }
+      if (hotelPhone) {
+        detail.hotelPhone = hotelPhone;
+      }
+      continue;
+    }
+
+    if (!currentCity) {
+      continue;
+    }
+
+    const activeDetail = detailsByCity.get(currentCity);
+    if (!activeDetail) {
+      continue;
+    }
+
+    const hotelPhoneMatch = normalizedLine.match(/\b(\d{3}-\d{3}-\d{4})\b/);
+    if (!activeDetail.hotelPhone && hotelPhoneMatch?.[1]) {
+      activeDetail.hotelPhone = hotelPhoneMatch[1];
+    }
+
+    const transportMatch = rawLine.match(/^\s*TRANSPORTATION\s*-\s*(.+)$/i);
+    if (transportMatch?.[1]) {
+      activeDetail.transport = transportMatch[1].trim();
+      continue;
+    }
+
+    const ccarMatch = rawLine.match(/^\s*CCAR\s+(.+)$/i);
+    if (ccarMatch?.[1]) {
+      activeDetail.transport = activeDetail.transport
+        ? `${activeDetail.transport} / CCAR ${ccarMatch[1].trim()}`
+        : `CCAR ${ccarMatch[1].trim()}`;
+      continue;
+    }
+
+    const pickupMatch = rawLine.match(/^\s*(?:CREW\s+PICK\s*UP|PICK\s*UP)\s*-\s*(.+)$/i);
+    if (pickupMatch?.[1]) {
+      activeDetail.pickup = pickupMatch[1].trim();
+      continue;
+    }
+  }
+
+  return Array.from(detailsByCity.values());
+}
+
 function applyRegionalDeadheadInference(args: {
   segments: Array<
     RotationChainCandidate & {
@@ -827,6 +929,7 @@ function parseICrewTextInternal(rawText: string): ParsedICrewTextResult {
 
   let header = parseICrewHeader(rawText, parsedSegments);
   const layoverCities = parseICrewLayoverCities(rawText);
+  const layoverDetails = parseICrewLayoverDetails(rawText);
   const dayTotals = parseDayLevelDhdTotals(rawText);
   const summedDayDeadheadMinutes = Array.from(dayTotals.values()).reduce(
     (sum, totals) => sum + totals.deadheadBlockMinutes,
@@ -1045,6 +1148,7 @@ function parseICrewTextInternal(rawText: string): ParsedICrewTextResult {
   return {
     header,
     layoverCities,
+    layoverDetails,
     normalizedCandidates: segmentsWithKinds,
     allTripSegments,
     visibleOperatingLegs,
