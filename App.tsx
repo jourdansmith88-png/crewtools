@@ -5295,95 +5295,116 @@ export default function App() {
           })() : (
             <SectionCard
               title="Rotation Companion"
-              description="Mobile-first trip intake that turns pasted MiCrew / iCrew details into a live rotation dashboard."
+              description="Parse MiCrew / iCrew details into your live rotation."
+              hideHeader
             >
-              <View style={styles.rotationHeroCard}>
-                <View style={styles.rotationHeroTextBlock}>
-                  <Text style={styles.rotationHeroTitle}>Load your rotation</Text>
-                  <Text style={styles.rotationHeroBody}>
-                    Paste or upload your MiCrew / iCrew trip details. We’ll turn it into a live trip dashboard.
-                  </Text>
-                </View>
-                <View style={styles.rotationHeroButtonRow}>
-                  <TouchableOpacity
-                    style={[styles.auditButton, rotationAnalyzeBusy && styles.auditButtonDisabled]}
-                    disabled={rotationAnalyzeBusy}
-                    onPress={analyzeRotationCompanion}
-                  >
-                    <Text style={styles.auditButtonText}>
-                      {rotationAnalyzeBusy ? "Analyzing..." : "Analyze Rotation"}
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.secondaryActionButton} onPress={useSampleRotation}>
-                    <Text style={styles.secondaryActionButtonText}>Use sample rotation</Text>
-                  </TouchableOpacity>
-                </View>
-                {rotationAnalyzeBusy && rotationScreenshots.length > 0 ? (
-                  <Text style={styles.resultSupportMetaText}>Reading screenshots...</Text>
-                ) : null}
-                <Text style={styles.insightText}>Where are we flying today?</Text>
-              </View>
-
               <View style={styles.sectionStack}>
-                <Text style={styles.inputLabel}>Paste rotation</Text>
-                <TextInput
-                  multiline
-                  value={rotationPasteInput}
-                  onChangeText={(value) => {
-                    setRotationPasteInput(value);
-                    setRotationICrewDebugError("");
-                    setRotationCopiedICrewDebugJson(false);
-                    setRotationICrewDebugDiagnostics(null);
-                  }}
-                  placeholder="Paste MiCrew / iCrew rotation rows, block lines, layovers, report / release times, and credit."
-                  placeholderTextColor={flieger.label}
-                  style={[styles.auditTextarea, styles.rotationPasteTextarea]}
-                  autoCapitalize="characters"
-                />
-                <Text style={styles.resultSupportMetaText}>
-                  Paste trip text, upload screenshots, or combine both. If screenshots only show part of the trip, the dashboard will stay partial on purpose.
-                </Text>
-                {rotationDebugEnabled ? (
-                  <View style={styles.sectionStack}>
-                    <Text style={styles.resultSupportMetaText}>iCrew debug parser</Text>
-                    <Text style={styles.resultSupportMetaText}>
-                      These buttons use the same Paste rotation textarea above. They bypass the legacy Analyze Rotation text path.
-                    </Text>
-                    <View style={styles.quickActionGrid}>
-                      <TouchableOpacity style={styles.quickLinkButton} onPress={parseRotationICrewDebugText}>
-                        <Text style={styles.quickLinkButtonText}>Parse pasted text as iCrew</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity style={styles.quickLinkButton} onPress={copyICrewDebugJson}>
-                        <Text style={styles.quickLinkButtonText}>
-                          {rotationCopiedICrewDebugJson ? "Copied iCrew debug JSON" : "Copy iCrew debug JSON"}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                    {rotationICrewDebugError ? (
-                      <Text style={styles.inlineValidationText}>{rotationICrewDebugError}</Text>
-                    ) : null}
-                    {rotationICrewDebugDiagnostics && !rotationICrewDebugResult ? (
-                      <Text style={styles.resultSupportMetaText}>
-                        iCrew debug failure: raw lines {rotationICrewDebugDiagnostics.rawLineCount} • header candidates {rotationICrewDebugDiagnostics.headerCandidateLines.length} • totals candidates {rotationICrewDebugDiagnostics.totalsCandidateLines.length} • leg candidates {rotationICrewDebugDiagnostics.legCandidateLines.length} • failed stage {rotationICrewDebugDiagnostics.parserStageFailed ?? "unknown"}
-                      </Text>
-                    ) : null}
-                    {rotationICrewDebugResult ? (
-                      <Text style={styles.resultSupportMetaText}>
-                        iCrew parsed: Rotation #{rotationICrewDebugResult.header.rotationNumber} • Dates {rotationICrewDebugResult.header.tripDates} • Operating legs {rotationICrewDebugResult.visibleOperatingLegs.length} • DH legs {rotationICrewDebugResult.deadheadAnnotations.length} • Scheduled block {rotationFormatMinutes(rotationICrewDebugResult.operatingScheduledBlockMinutes)}
-                      </Text>
-                    ) : null}
+                <View style={styles.rotationIntakeAppBar}>
+                  <View style={styles.rotationIntakeAppBarBrand}>
+                    <FliegerMarker color={flieger.textPrimary} dotSize={isCompactMobile ? 5 : 6} triangleWidth={isCompactMobile ? 10 : 12} triangleHeight={isCompactMobile ? 8 : 10} />
+                    <Text style={styles.rotationIntakeAppBarTitle}>FLIGHTCREWTOOLS</Text>
                   </View>
-                ) : null}
-              </View>
+                  <View style={styles.rotationIntakeAppBarModePill}>
+                    <Text style={styles.rotationIntakeAppBarModeText}>MiCrew / iCrew</Text>
+                  </View>
+                </View>
 
-              <View style={styles.rotationInlineUtilityRow}>
-                <TouchableOpacity style={styles.secondaryActionButton} onPress={pickRotationEvidence}>
-                  <Text style={styles.secondaryActionButtonText}>Upload screenshots</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.secondaryActionButton} onPress={clearRotationCompanion}>
-                  <Text style={styles.secondaryActionButtonText}>Clear</Text>
-                </TouchableOpacity>
-              </View>
+                <View style={[styles.resultPanel, styles.rotationIntakeIntroPanel, isCompactMobile && styles.resultPanelCompact]}>
+                  <Text style={styles.rotationIntakeTitle}>Rotation Companion</Text>
+                  <Text style={styles.rotationIntakeSubtitle}>Parse MiCrew / iCrew details into your live rotation.</Text>
+                </View>
+
+                <View style={[styles.resultPanel, styles.rotationIntakePanel, isCompactMobile && styles.resultPanelCompact]}>
+                  <Text style={styles.inputLabel}>Paste rotation</Text>
+                  <TextInput
+                    multiline
+                    value={rotationPasteInput}
+                    onChangeText={(value) => {
+                      setRotationPasteInput(value);
+                      setRotationICrewDebugError("");
+                      setRotationCopiedICrewDebugJson(false);
+                      setRotationICrewDebugDiagnostics(null);
+                    }}
+                    placeholder="Paste MiCrew / iCrew rotation rows, block lines, layovers, report / release times, and credit."
+                    placeholderTextColor={flieger.label}
+                    style={styles.rotationIntakeTextarea}
+                    autoCapitalize="characters"
+                  />
+                  <Text style={styles.resultSupportMetaText}>
+                    Paste full MiCrew / iCrew text or attach screenshots.
+                  </Text>
+
+                  <View style={styles.rotationIntakeButtonStack}>
+                    <TouchableOpacity
+                      style={[styles.rotationIntakePrimaryButton, rotationAnalyzeBusy && styles.auditButtonDisabled]}
+                      disabled={rotationAnalyzeBusy}
+                      onPress={analyzeRotationCompanion}
+                    >
+                      <Text style={styles.rotationIntakePrimaryButtonText}>
+                        {rotationAnalyzeBusy ? "Analyzing..." : "Analyze Rotation"}
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={styles.rotationIntakeSecondaryButton} onPress={pickRotationEvidence}>
+                      <Text style={styles.rotationIntakeSecondaryButtonText}>Attach MiCrew screenshots</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={styles.rotationIntakeSecondaryButton} onPress={useSampleRotation}>
+                      <Text style={styles.rotationIntakeSecondaryButtonText}>Use sample rotation</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity style={styles.rotationIntakeGhostButton} onPress={clearRotationCompanion}>
+                      <Text style={styles.rotationIntakeGhostButtonText}>Clear</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {rotationAnalyzeBusy && rotationScreenshots.length > 0 ? (
+                    <Text style={styles.resultSupportMetaText}>Reading screenshots...</Text>
+                  ) : null}
+
+                  {rotationDebugEnabled ? (
+                    <View style={styles.sectionStack}>
+                      <Text style={styles.resultSupportMetaText}>iCrew debug parser</Text>
+                      <Text style={styles.resultSupportMetaText}>
+                        These buttons use the same Paste rotation textarea above. They bypass the legacy Analyze Rotation text path.
+                      </Text>
+                      <View style={styles.quickActionGrid}>
+                        <TouchableOpacity style={styles.quickLinkButton} onPress={parseRotationICrewDebugText}>
+                          <Text style={styles.quickLinkButtonText}>Parse pasted text as iCrew</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.quickLinkButton} onPress={copyICrewDebugJson}>
+                          <Text style={styles.quickLinkButtonText}>
+                            {rotationCopiedICrewDebugJson ? "Copied iCrew debug JSON" : "Copy iCrew debug JSON"}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                      {rotationICrewDebugError ? (
+                        <Text style={styles.inlineValidationText}>{rotationICrewDebugError}</Text>
+                      ) : null}
+                      {rotationICrewDebugDiagnostics && !rotationICrewDebugResult ? (
+                        <Text style={styles.resultSupportMetaText}>
+                          iCrew debug failure: raw lines {rotationICrewDebugDiagnostics.rawLineCount} • header candidates {rotationICrewDebugDiagnostics.headerCandidateLines.length} • totals candidates {rotationICrewDebugDiagnostics.totalsCandidateLines.length} • leg candidates {rotationICrewDebugDiagnostics.legCandidateLines.length} • failed stage {rotationICrewDebugDiagnostics.parserStageFailed ?? "unknown"}
+                        </Text>
+                      ) : null}
+                      {rotationICrewDebugResult ? (
+                        <Text style={styles.resultSupportMetaText}>
+                          iCrew parsed: Rotation #{rotationICrewDebugResult.header.rotationNumber} • Dates {rotationICrewDebugResult.header.tripDates} • Operating legs {rotationICrewDebugResult.visibleOperatingLegs.length} • DH legs {rotationICrewDebugResult.deadheadAnnotations.length} • Scheduled block {rotationFormatMinutes(rotationICrewDebugResult.operatingScheduledBlockMinutes)}
+                        </Text>
+                      ) : null}
+                    </View>
+                  ) : null}
+                </View>
+
+                <View style={[styles.resultPanel, styles.rotationInputOptionsPanel, isCompactMobile && styles.resultPanelCompact]}>
+                  <Text style={styles.inputLabel}>Input options</Text>
+                  <View style={styles.rotationInputOptionsRow}>
+                    {["MiCrew", "iCrew", "Screenshots", "Text"].map((option) => (
+                      <View key={option} style={styles.rotationInputOptionChip}>
+                        <Text style={styles.rotationInputOptionChipText}>{option}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
 
               {rotationScreenshots.length > 0 ? (
                 <View style={styles.resultPanel}>
@@ -5404,11 +5425,14 @@ export default function App() {
                       </View>
                     ))}
                   </View>
-                  <TouchableOpacity style={styles.secondaryActionButton} onPress={clearRotationScreenshots}>
-                    <Text style={styles.secondaryActionButtonText}>Clear screenshots</Text>
+                  <TouchableOpacity
+                    style={styles.rotationIntakeGhostButton}
+                    onPress={clearRotationScreenshots}
+                  >
+                    <Text style={styles.rotationIntakeGhostButtonText}>Clear screenshots</Text>
                   </TouchableOpacity>
                   <Text style={styles.resultSupportMetaText}>
-                    Uploaded screenshots now flow through screenshot extraction before we hand the trip into the existing rotation parser.
+                    Uploaded screenshots will flow through screenshot extraction before the trip board loads.
                   </Text>
                 </View>
               ) : null}
@@ -5422,6 +5446,7 @@ export default function App() {
                   </TouchableOpacity>
                 </View>
               ) : null}
+              </View>
 
               {rotationDebugEnabled && (rotationScreenshots.length > 0 || rotationScreenshotParseResult) ? (
                 <View style={styles.resultPanel}>
@@ -12161,6 +12186,145 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 12,
     alignItems: "center",
+  },
+  rotationIntakeAppBar: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: appStylePalette.surface,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: appStylePalette.borderStrong,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  rotationIntakeAppBarBrand: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  rotationIntakeAppBarTitle: {
+    fontSize: 14,
+    fontWeight: "900",
+    letterSpacing: 1,
+    color: appStylePalette.textPrimary,
+  },
+  rotationIntakeAppBarModePill: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: appStylePalette.borderSubtle,
+    backgroundColor: appStylePalette.surfaceRaised,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  rotationIntakeAppBarModeText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: appStylePalette.accent,
+  },
+  rotationIntakeIntroPanel: {
+    gap: 6,
+    paddingTop: 14,
+    paddingBottom: 14,
+  },
+  rotationIntakeTitle: {
+    fontSize: 28,
+    fontWeight: "900",
+    color: appStylePalette.accent,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+  },
+  rotationIntakeSubtitle: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: appStylePalette.textSecondary,
+    fontWeight: "600",
+  },
+  rotationIntakePanel: {
+    gap: 10,
+  },
+  rotationIntakeTextarea: {
+    minHeight: 188,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: appStylePalette.borderStrong,
+    backgroundColor: appStylePalette.surfaceRecessed,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    lineHeight: 21,
+    color: appStylePalette.textPrimary,
+    textAlignVertical: "top",
+  },
+  rotationIntakeButtonStack: {
+    gap: 10,
+  },
+  rotationIntakePrimaryButton: {
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: appStylePalette.surfaceRaised,
+    borderRadius: 14,
+    paddingHorizontal: 18,
+    paddingVertical: 13,
+    borderWidth: 1.5,
+    borderColor: appStylePalette.accent,
+  },
+  rotationIntakePrimaryButtonText: {
+    fontSize: 15,
+    fontWeight: "900",
+    color: appStylePalette.textPrimary,
+  },
+  rotationIntakeSecondaryButton: {
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: appStylePalette.surfaceRaised,
+    borderRadius: 14,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderWidth: 1.5,
+    borderColor: appStylePalette.borderStrong,
+  },
+  rotationIntakeSecondaryButtonText: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: appStylePalette.textPrimary,
+  },
+  rotationIntakeGhostButton: {
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 14,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: appStylePalette.borderSubtle,
+    backgroundColor: "rgba(255,255,255,0.02)",
+  },
+  rotationIntakeGhostButtonText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: appStylePalette.textMuted,
+  },
+  rotationInputOptionsPanel: {
+    gap: 8,
+  },
+  rotationInputOptionsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  rotationInputOptionChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: appStylePalette.borderSubtle,
+    backgroundColor: appStylePalette.surfaceRaised,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  rotationInputOptionChipText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: appStylePalette.textSecondary,
   },
   rotationPasteTextarea: {
     minHeight: 170,
