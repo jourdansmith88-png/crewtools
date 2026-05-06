@@ -17,3 +17,7 @@ Delta data/parsed/
 .env.*.local
 .expo/
 *.traineddata
+
+.env
+.env.local
+.env.*.local
