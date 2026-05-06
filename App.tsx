@@ -4551,19 +4551,58 @@ export default function App() {
             const rotationDashboard = displayedRotationDashboard;
             const timelineItems = buildTodayTimelineItems(rotationDashboard);
             const mobileTimelineItems = timelineItems.slice(0, isCompactMobile ? 5 : 7);
+            const firstTimelineLeg = rotationDashboard.legs[0];
+            const firstTimelineDeadheadIdentity = firstTimelineLeg?.isDeadhead
+              ? getTripBriefIdentityFromLeg(firstTimelineLeg)
+              : null;
             const compactWhatMatters = [
-              ...rotationDashboard.whatMatters.filter((item) => item.label !== "FAR 117 watch"),
+              ...(firstTimelineLeg?.isDeadhead
+                ? [{
+                    label: "DH FIRST",
+                    tone: "watch" as const,
+                    detail: `${firstTimelineLeg.origin}-${firstTimelineLeg.destination} ${formatLegFlightDisplay(firstTimelineLeg)}${firstTimelineLeg.departureTime ? ` departs ${firstTimelineLeg.departureTime}.` : "."}${firstTimelineLeg.confirmationNumber ? ` PNR ${firstTimelineLeg.confirmationNumber}.` : " Confirmation not found. Add MiCrew DH card for check-in actions."}`,
+                    actionCopyValue: firstTimelineLeg.confirmationNumber,
+                    secondaryActionLabel: firstTimelineLeg.confirmationNumber ? "Check in" : undefined,
+                    secondaryActionUrl: firstTimelineLeg.confirmationNumber ? DELTA_CHECK_IN_URL : undefined,
+                    eventIdentity: firstTimelineDeadheadIdentity ?? undefined,
+                  }]
+                : []),
+              ...rotationDashboard.whatMatters
+                .filter((item) => item.label !== "FAR 117 watch")
+                .map((item) => ({
+                  ...item,
+                  label:
+                    item.label === "DEADHEAD" &&
+                    firstTimelineDeadheadIdentity &&
+                    isSameTripBriefIdentity(getTripBriefIdentityFromItem(item), firstTimelineDeadheadIdentity)
+                      ? "DH FIRST"
+                      : item.label,
+                  eventIdentity: getTripBriefIdentityFromItem(item),
+                }))
+                .filter((item, index, items) => {
+                  if (!item.eventIdentity) return true;
+                  return items.findIndex((candidate) => isSameTripBriefIdentity(candidate.eventIdentity, item.eventIdentity)) === index;
+                }),
               ...rotationDashboard.legs
                 .filter((leg) => isReturnToGateLeg(leg))
                 .map((leg) => ({
                   label: "RTG",
                   tone: "watch" as const,
                   detail: `Return-to-gate segment: ${leg.origin}-${leg.destination} on ${formatLegFlightDisplay(leg)} from ${leg.departureTime ?? "TBD"} to ${leg.arrivalTime ?? "TBD"}.`,
+                  eventIdentity: getTripBriefIdentityFromLeg(leg, "RTG"),
                 })),
             ];
-            const actionableWhatMatters = compactWhatMatters.filter(
-              (item) => item.detail || item.actionCopyValue || item.secondaryActionUrl,
-            );
+            const tripBriefItems = (compactWhatMatters.length > 0
+              ? compactWhatMatters
+              : [{ label: "No major issues found", tone: "good" as const, detail: "No major issues found" }]
+            )
+              .filter((item, index, items) => {
+                const eventIdentity = "eventIdentity" in item ? item.eventIdentity : undefined;
+                if (!eventIdentity) return true;
+                return items.findIndex((candidate) => isSameTripBriefIdentity(("eventIdentity" in candidate ? candidate.eventIdentity : undefined), eventIdentity)) === index;
+              })
+              .filter((item) => item.detail || item.actionCopyValue || item.secondaryActionUrl || item.label)
+              .sort((left, right) => getTripBriefPriority(left) - getTripBriefPriority(right));
             return (
             <SectionCard
               title="Trip Board"
@@ -5202,57 +5241,45 @@ export default function App() {
                     isCompactMobile && styles.tripBoardAlertsPanelCompact,
                   ]}
                 >
-                  {!isCompactMobile ? <Text style={styles.inputLabel}>What matters right now</Text> : null}
-                  <View style={[styles.compactAlertStrip, isCompactMobile && styles.compactAlertStripCompact, isCompactMobile && styles.tripBoardAlertInlineStrip]}>
-                    {(compactWhatMatters.length > 0
-                      ? compactWhatMatters
-                      : [{ label: "No major issues", tone: "good" as const }]).map((item) => (
-                      <CompactAlertChip key={item.label} label={item.label} tone={item.tone} />
+                  <Text style={styles.inputLabel}>Trip Brief</Text>
+                  <View style={styles.tripBriefList}>
+                    {tripBriefItems.map((item, index) => (
+                      <View key={`${item.label}-${index}`} style={styles.tripBriefRow}>
+                        <View style={styles.tripBriefRowMain}>
+                          <CompactAlertChip label={item.label} tone={item.tone} />
+                          <Text style={styles.tripBriefRowDetail}>{item.detail}</Text>
+                        </View>
+                        {item.actionCopyValue || item.secondaryActionUrl ? (
+                          <View style={styles.tripBoardTimelineActionRow}>
+                            {item.actionCopyValue ? (
+                              <TouchableOpacity
+                                style={[
+                                  styles.tripBoardTimelineActionButton,
+                                  rotationCopiedConfirmation === item.actionCopyValue &&
+                                    styles.tripBoardTimelineActionButtonActive,
+                                ]}
+                                onPress={() => copyRotationConfirmationCode(item.actionCopyValue)}
+                              >
+                                <Text style={styles.tripBoardTimelineActionButtonText}>
+                                  {rotationCopiedConfirmation === item.actionCopyValue ? "Copied" : "Copy"}
+                                </Text>
+                              </TouchableOpacity>
+                            ) : null}
+                            {item.secondaryActionUrl ? (
+                              <TouchableOpacity
+                                style={[styles.tripBoardTimelineActionButton, styles.tripBoardTimelineActionButtonSecondary]}
+                                onPress={() => openRotationExternalUrl(item.secondaryActionUrl)}
+                              >
+                                <Text style={styles.tripBoardTimelineActionButtonText}>
+                                  {item.secondaryActionLabel ?? "Check in"}
+                                </Text>
+                              </TouchableOpacity>
+                            ) : null}
+                          </View>
+                        ) : null}
+                      </View>
                     ))}
                   </View>
-                  {actionableWhatMatters.length > 0 ? (
-                    <View style={styles.tripBoardWhatMattersActionList}>
-                      {actionableWhatMatters.map((item, index) => (
-                        <InstrumentPanel
-                          key={`${item.label}-${index}`}
-                          variant="dataPlate"
-                          tone={item.tone === "good" ? "green" : item.tone === "watch" ? "cyan" : "red"}
-                          style={styles.tripBoardWhatMattersActionCard}
-                        >
-                          <Text style={styles.tripBoardWhatMattersActionLabel}>{item.label}</Text>
-                          <Text style={styles.tripBoardWhatMattersActionDetail}>{item.detail}</Text>
-                          {item.actionCopyValue || item.secondaryActionUrl ? (
-                            <View style={styles.tripBoardTimelineActionRow}>
-                              {item.actionCopyValue ? (
-                                <TouchableOpacity
-                                  style={[
-                                    styles.tripBoardTimelineActionButton,
-                                    rotationCopiedConfirmation === item.actionCopyValue &&
-                                      styles.tripBoardTimelineActionButtonActive,
-                                  ]}
-                                  onPress={() => copyRotationConfirmationCode(item.actionCopyValue)}
-                                >
-                                  <Text style={styles.tripBoardTimelineActionButtonText}>
-                                    {rotationCopiedConfirmation === item.actionCopyValue ? "Copied" : "Copy code"}
-                                  </Text>
-                                </TouchableOpacity>
-                              ) : null}
-                              {item.secondaryActionUrl ? (
-                                <TouchableOpacity
-                                  style={[styles.tripBoardTimelineActionButton, styles.tripBoardTimelineActionButtonSecondary]}
-                                  onPress={() => openRotationExternalUrl(item.secondaryActionUrl)}
-                                >
-                                  <Text style={styles.tripBoardTimelineActionButtonText}>
-                                    {item.secondaryActionLabel ?? "Check in"}
-                                  </Text>
-                                </TouchableOpacity>
-                              ) : null}
-                            </View>
-                          ) : null}
-                        </InstrumentPanel>
-                      ))}
-                    </View>
-                  ) : null}
                 </View>
 
                 <View style={[styles.resultPanel, isCompactMobile && styles.resultPanelCompact]}>
@@ -9626,6 +9653,118 @@ function isReturnToGateLeg(leg: RotationDashboardData["legs"][number]) {
   return !leg.isDeadhead && leg.origin === leg.destination;
 }
 
+type TripBriefIdentity = {
+  category?: string;
+  carrier: string;
+  flightNumber: string;
+  origin: string;
+  destination: string;
+  departureTimeKey: string;
+  departureDateKey: string | null;
+};
+
+function normalizeBriefTimeKey(value?: string | null) {
+  if (!value) return "";
+  const hhmmMatch = value.match(/\b(\d{1,2}):(\d{2})\b/);
+  if (hhmmMatch) {
+    return `${hhmmMatch[1].padStart(2, "0")}${hhmmMatch[2]}`;
+  }
+  const compactMatch = value.match(/\b(\d{4})\b/);
+  return compactMatch?.[1] ?? "";
+}
+
+function normalizeBriefDateKey(value?: string | null) {
+  if (!value) return null;
+  const dateMatch = value.toUpperCase().match(/\b(\d{2}[A-Z]{3})(?:\d{2,4})?\b/);
+  return dateMatch?.[1] ?? null;
+}
+
+function normalizeTripBriefFlightIdentity(carrier?: string | null, flightNumber?: string | null) {
+  const combined = `${carrier ?? ""}${flightNumber ?? ""}`.toUpperCase().trim();
+  const prefixedMatch = combined.match(/^([A-Z0-9]{2,3})(\d{1,4})$/);
+  if (prefixedMatch) {
+    return {
+      carrier: prefixedMatch[1],
+      flightNumber: prefixedMatch[2],
+    };
+  }
+  return {
+    carrier: (carrier ?? "DL").toUpperCase(),
+    flightNumber: (flightNumber ?? "").replace(/^[A-Z]+/i, ""),
+  };
+}
+
+function getTripBriefIdentityFromLeg(
+  leg: RotationDashboardData["legs"][number],
+  category?: string,
+): TripBriefIdentity {
+  const normalizedFlight = normalizeTripBriefFlightIdentity(leg.carrier, leg.flightNumber);
+  return {
+    category,
+    carrier: normalizedFlight.carrier,
+    flightNumber: normalizedFlight.flightNumber,
+    origin: leg.origin.toUpperCase(),
+    destination: leg.destination.toUpperCase(),
+    departureTimeKey: normalizeBriefTimeKey(leg.departureTime),
+    departureDateKey: normalizeBriefDateKey(leg.sourceText),
+  };
+}
+
+function getTripBriefIdentityFromItem(item: {
+  label: string;
+  detail?: string;
+  actionCopyValue?: string;
+}) {
+  const detail = item.detail ?? "";
+  const carrierFlightMatch = detail.match(/\b([A-Z0-9]{2,3})(\d{1,4})\b/);
+  const cityPairMatch = detail.match(/\b([A-Z]{3}-[A-Z]{3})\b/);
+  const departureMatch = detail.match(/(?:departs|from)\s+([0-9]{1,2}:\d{2}|[0-9]{4})(?:\s+([0-9]{2}[A-Z]{3}(?:\d{2,4})?))?/i);
+  if (!carrierFlightMatch || !cityPairMatch) return null;
+  const [origin, destination] = cityPairMatch[1].split("-");
+  return {
+    category: item.label.toUpperCase().startsWith("RTG") ? "RTG" : undefined,
+    carrier: carrierFlightMatch[1].toUpperCase(),
+    flightNumber: carrierFlightMatch[2],
+    origin,
+    destination,
+    departureTimeKey: normalizeBriefTimeKey(departureMatch?.[1] ?? ""),
+    departureDateKey: normalizeBriefDateKey(departureMatch?.[2] ?? detail),
+  };
+}
+
+function isSameTripBriefIdentity(left?: TripBriefIdentity | null, right?: TripBriefIdentity | null) {
+  if (!left || !right) return false;
+  const sameCore =
+    (left.category ?? "") === (right.category ?? "") &&
+    left.carrier === right.carrier &&
+    left.flightNumber === right.flightNumber &&
+    left.origin === right.origin &&
+    left.destination === right.destination &&
+    left.departureTimeKey === right.departureTimeKey;
+  if (!sameCore) return false;
+  if (left.departureDateKey && right.departureDateKey) {
+    return left.departureDateKey === right.departureDateKey;
+  }
+  return true;
+}
+
+function getTripBriefPriority(item: {
+  label: string;
+  detail?: string;
+  actionCopyValue?: string;
+}) {
+  const label = item.label.toUpperCase();
+  const detail = (item.detail ?? "").toUpperCase();
+  if (label.includes("PARTIAL")) return 1;
+  if ((label.includes("DEADHEAD") || label === "DH FIRST") && item.actionCopyValue) return 2;
+  if (label.includes("DEADHEAD") || label === "DH FIRST") return 3;
+  if (label === "RTG") return 4;
+  if (label.includes("TIGHT")) return 5;
+  if (label.includes("REST") || label.includes("PRESSURE") || detail.includes("LAYOVER")) return 6;
+  if (label.includes("NO MAJOR ISSUES")) return 7;
+  return 6;
+}
+
 function CompactAlertChip({
   label,
   tone,
@@ -12908,24 +13047,24 @@ const styles = StyleSheet.create({
   tripBoardAlertInlineStrip: {
     marginTop: -2,
   },
-  tripBoardWhatMattersActionList: {
-    gap: 8,
-    marginTop: 10,
-  },
-  tripBoardWhatMattersActionCard: {
-    padding: 10,
+  tripBriefList: {
     gap: 6,
   },
-  tripBoardWhatMattersActionLabel: {
-    fontSize: 11,
-    fontWeight: "900",
-    letterSpacing: 0.8,
-    textTransform: "uppercase",
-    color: appStylePalette.label,
+  tripBriefRow: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: appStylePalette.borderSubtle,
+    backgroundColor: appStylePalette.surfaceRaised,
+    paddingHorizontal: 9,
+    paddingVertical: 7,
+    gap: 6,
   },
-  tripBoardWhatMattersActionDetail: {
-    fontSize: 12,
-    lineHeight: 18,
+  tripBriefRowMain: {
+    gap: 5,
+  },
+  tripBriefRowDetail: {
+    fontSize: 11,
+    lineHeight: 16,
     fontWeight: "700",
     color: appStylePalette.textPrimary,
   },
