@@ -3161,6 +3161,10 @@ export default function App() {
     setActiveTab("schedule");
   };
 
+  const openFar117FromRotation = () => {
+    setActiveTab("far117");
+  };
+
   const activeBottomTabKey: Extract<TabKey, "today" | "far117" | "logbook" | "tools"> =
     activeTab === "today" || activeTab === "far117" || activeTab === "logbook" || activeTab === "tools"
       ? activeTab
@@ -3191,6 +3195,17 @@ export default function App() {
         }));
       }
     }
+  };
+
+  const openLayoverHotelMap = (detail: RotationLayoverDetail | null) => {
+    if (!detail?.hotelName) {
+      return;
+    }
+    const query = [detail.hotelName, detail.city].filter(Boolean).join(" ");
+    if (!query) {
+      return;
+    }
+    openRotationExternalUrl(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`);
   };
 
   const currentPilot = useMemo(
@@ -4551,6 +4566,18 @@ export default function App() {
             const rotationDashboard = displayedRotationDashboard;
             const timelineItems = buildTodayTimelineItems(rotationDashboard);
             const mobileTimelineItems = timelineItems.slice(0, isCompactMobile ? 5 : 7);
+            const timelineHasLayoverActions = mobileTimelineItems.some((item) => {
+              if (item.type !== "layover") {
+                return false;
+              }
+              const detail = getTimelineLayoverDetail(rotationDashboard, item.city);
+              return Boolean(
+                detail?.hotelPhone ||
+                getLayoverDisplayTransportPhone(detail) ||
+                detail?.transportType === "skyhop" ||
+                detail?.hotelName,
+              );
+            });
             const firstTimelineLeg = rotationDashboard.legs[0];
             const firstTimelineDeadheadIdentity = firstTimelineLeg?.isDeadhead
               ? getTripBriefIdentityFromLeg(firstTimelineLeg)
@@ -4954,9 +4981,15 @@ export default function App() {
                           ? getTimelineLayoverDetail(rotationDashboard, item.city)
                           : null;
                       const layoverTransportDisplay = getLayoverTransportDisplay(layoverDetail);
-                      const layoverTransportPhone = getLayoverActionableTransportPhone(layoverDetail);
+                      const layoverDisplayTransportPhone = getLayoverDisplayTransportPhone(layoverDetail);
+                      const layoverActionableTransportPhone = getLayoverActionableTransportPhone(layoverDetail);
                       const layoverTransportPhoneLabel = getLayoverTransportPhoneLabel(layoverDetail);
                       const showSkyHopAction = layoverDetail?.transportType === "skyhop";
+                      const showHotelAction = Boolean(layoverDetail?.hotelPhone);
+                      const showTransportAction = Boolean(
+                        layoverActionableTransportPhone && layoverDetail?.transportType !== "ccar",
+                      );
+                      const showOpenHotelAction = Boolean(layoverDetail?.hotelName);
                       const layoverRestLabel =
                         layoverDetail?.restMinutes != null
                           ? `Rest ${rotationFormatMinutes(layoverDetail.restMinutes)}`
@@ -5036,12 +5069,12 @@ export default function App() {
                                   Transport: {layoverTransportDisplay}
                                 </Text>
                               ) : null}
-                              {layoverTransportPhone ? (
+                              {layoverDisplayTransportPhone ? (
                                 <View style={[styles.tripBoardTimelineMetaRow, isCompactMobile && styles.tripBoardTimelineMetaRowCompact]}>
                                   <Text style={[styles.tripBoardTimelineMeta, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
                                     {layoverTransportPhoneLabel}:
                                   </Text>
-                                  <TouchableOpacity onPress={() => openRotationExternalUrl(`tel:${layoverTransportPhone}`)}>
+                                  <TouchableOpacity onPress={() => openRotationExternalUrl(`tel:${layoverDisplayTransportPhone}`)}>
                                     <Text
                                       style={[
                                         styles.tripBoardTimelineMeta,
@@ -5049,43 +5082,47 @@ export default function App() {
                                         isCompactMobile && styles.tripBoardTimelineMetaCompact,
                                       ]}
                                     >
-                                      {layoverTransportPhone}
+                                      {layoverDisplayTransportPhone}
                                     </Text>
                                   </TouchableOpacity>
                                 </View>
                               ) : null}
-                              {showSkyHopAction ? (
+                              {showHotelAction || showTransportAction || showSkyHopAction || showOpenHotelAction ? (
                                 <View style={styles.tripBoardTimelineActionRow}>
-                                  {layoverTransportPhone ? (
+                                  {showHotelAction ? (
                                     <TouchableOpacity
                                       style={[styles.tripBoardTimelineActionButton, styles.tripBoardTimelineActionButtonSecondary]}
-                                      onPress={() => openRotationExternalUrl(`tel:${layoverTransportPhone}`)}
+                                      onPress={() => openRotationExternalUrl(`tel:${layoverDetail?.hotelPhone}`)}
                                     >
-                                      <Text
-                                        style={[
-                                          styles.tripBoardTimelineActionButtonText,
-                                        ]}
-                                      >
-                                        Call van
+                                      <Text style={styles.tripBoardTimelineActionButtonText}>Call hotel</Text>
+                                    </TouchableOpacity>
+                                  ) : null}
+                                  {showTransportAction ? (
+                                    <TouchableOpacity
+                                      style={[styles.tripBoardTimelineActionButton, styles.tripBoardTimelineActionButtonSecondary]}
+                                      onPress={() => openRotationExternalUrl(`tel:${layoverActionableTransportPhone}`)}
+                                    >
+                                      <Text style={styles.tripBoardTimelineActionButtonText}>
+                                        {layoverDetail?.transportType === "limo" ? "Call limo" : "Call transport"}
                                       </Text>
                                     </TouchableOpacity>
                                   ) : null}
-                                  <TouchableOpacity
-                                    style={[styles.tripBoardTimelineActionButton, styles.tripBoardTimelineActionButtonSecondary]}
-                                    onPress={() => openRotationExternalUrl(SKYHOP_URL)}
-                                  >
-                                    <Text style={styles.tripBoardTimelineActionButtonText}>Open SkyHop</Text>
-                                  </TouchableOpacity>
-                                </View>
-                              ) : null}
-                              {layoverDetail?.transportType === "ccar" && layoverDetail?.hotelPhone ? (
-                                <View style={styles.tripBoardTimelineActionRow}>
-                                  <TouchableOpacity
-                                    style={[styles.tripBoardTimelineActionButton, styles.tripBoardTimelineActionButtonSecondary]}
-                                    onPress={() => openRotationExternalUrl(`tel:${layoverDetail.hotelPhone}`)}
-                                  >
-                                    <Text style={styles.tripBoardTimelineActionButtonText}>Call hotel</Text>
-                                  </TouchableOpacity>
+                                  {showOpenHotelAction ? (
+                                    <TouchableOpacity
+                                      style={[styles.tripBoardTimelineActionButton, styles.tripBoardTimelineActionButtonSecondary]}
+                                      onPress={() => openLayoverHotelMap(layoverDetail)}
+                                    >
+                                      <Text style={styles.tripBoardTimelineActionButtonText}>Open hotel</Text>
+                                    </TouchableOpacity>
+                                  ) : null}
+                                  {showSkyHopAction ? (
+                                    <TouchableOpacity
+                                      style={[styles.tripBoardTimelineActionButton, styles.tripBoardTimelineActionButtonSecondary]}
+                                      onPress={() => openRotationExternalUrl(SKYHOP_URL)}
+                                    >
+                                      <Text style={styles.tripBoardTimelineActionButtonText}>Open SkyHop</Text>
+                                    </TouchableOpacity>
+                                  ) : null}
                                 </View>
                               ) : null}
                               {layoverDetail?.pickup ? (
@@ -5160,10 +5197,6 @@ export default function App() {
                                 {!item.leg.isDeadhead && item.leg.turnMinutes != null ? (
                                   <Text style={[styles.tripBoardTimelineMeta, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
                                     Turn {rotationFormatMinutes(item.leg.turnMinutes)}
-                                  </Text>
-                                ) : item.leg.isDeadhead ? (
-                                  <Text style={[styles.tripBoardTimelineMeta, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
-                                    Excluded from export
                                   </Text>
                                 ) : null}
                                 {!item.leg.isDeadhead && item.leg.aircraft ? (
@@ -5282,28 +5315,54 @@ export default function App() {
                   </View>
                 </View>
 
-                <View style={[styles.resultPanel, isCompactMobile && styles.resultPanelCompact]}>
-                  <Text style={styles.inputLabel}>Layover / quick actions</Text>
-                  <View style={[styles.formRow, isCompactMobile && styles.formRowCompact]}>
-                    <ResultLine label="First layover" value={rotationDashboard.tonightLayoverCity} />
-                    <ResultLine label="Tomorrow report" value={rotationDashboard.tomorrowReportTime ?? "TBD"} />
+                {!timelineHasLayoverActions ? (
+                  <View style={[styles.resultPanel, isCompactMobile && styles.resultPanelCompact]}>
+                    <Text style={styles.inputLabel}>Layover support</Text>
+                    <View style={[styles.formRow, isCompactMobile && styles.formRowCompact]}>
+                      <ResultLine label="First layover" value={rotationDashboard.tonightLayoverCity} />
+                      <ResultLine label="Tomorrow report" value={rotationDashboard.tomorrowReportTime ?? "TBD"} />
+                    </View>
+                    <ResultLine
+                      label="Scheduled rest"
+                      value={rotationDashboard.scheduledRestMinutes != null ? rotationFormatMinutes(rotationDashboard.scheduledRestMinutes) : "Not found"}
+                    />
+                    <View style={[styles.quickActionGrid, isCompactMobile && styles.quickActionGridCompact]}>
+                      {[
+                        { label: quickContacts.van ? "Call van" : "Add van", key: "van" as const },
+                        { label: quickContacts.hotel ? "Call hotel" : "Add hotel", key: "hotel" as const },
+                        { label: quickContacts.crewScheduling ? "Crew Scheduling" : "Add Crew Scheduling", key: "crewScheduling" as const },
+                        { label: quickContacts.dispatch ? "Dispatch" : "Add Dispatch", key: "dispatch" as const },
+                      ].map((action) => (
+                        <TouchableOpacity
+                          key={action.label}
+                          style={[styles.quickActionButton, isCompactMobile && styles.quickActionButtonCompact]}
+                          onPress={() => handleQuickContactPress(action.key)}
+                        >
+                          <Text style={[styles.quickActionButtonText, isCompactMobile && styles.quickActionButtonTextCompact]}>
+                            {action.label}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
                   </View>
-                  <ResultLine
-                    label="Scheduled rest"
-                    value={rotationDashboard.scheduledRestMinutes != null ? rotationFormatMinutes(rotationDashboard.scheduledRestMinutes) : "Not found"}
-                  />
+                ) : null}
+
+                <View style={[styles.resultPanel, isCompactMobile && styles.resultPanelCompact]}>
+                  <Text style={styles.inputLabel}>Trip Watch</Text>
+                  <Text style={styles.resultBodyText}>
+                    Paste a reroute, delay, or reassignment to check pay, 117, and contract impact.
+                  </Text>
                   <View style={[styles.quickActionGrid, isCompactMobile && styles.quickActionGridCompact]}>
                     {[
-                      { label: quickContacts.van ? "Call van" : "Add van", key: "van" as const },
-                      { label: quickContacts.hotel ? "Call hotel" : "Add hotel", key: "hotel" as const },
-                      { label: "Open hotel", key: "hotel" as const },
-                      { label: quickContacts.crewScheduling ? "Crew Scheduling" : "Add Crew Scheduling", key: "crewScheduling" as const },
-                      { label: quickContacts.dispatch ? "Dispatch" : "Add Dispatch", key: "dispatch" as const },
+                      { label: "Analyze reroute", onPress: openRerouteCalculatorFromRotation },
+                      { label: "Check pay impact", onPress: openPayImpactFromRotation },
+                      { label: "Ask contract question", onPress: openContractCopilotFromRotation },
+                      { label: "Check 117", onPress: openFar117FromRotation },
                     ].map((action) => (
                       <TouchableOpacity
                         key={action.label}
                         style={[styles.quickActionButton, isCompactMobile && styles.quickActionButtonCompact]}
-                        onPress={() => handleQuickContactPress(action.key)}
+                        onPress={action.onPress}
                       >
                         <Text style={[styles.quickActionButtonText, isCompactMobile && styles.quickActionButtonTextCompact]}>
                           {action.label}
@@ -5311,23 +5370,15 @@ export default function App() {
                       </TouchableOpacity>
                     ))}
                   </View>
-                </View>
-
-                <View style={[styles.resultPanel, isCompactMobile && styles.resultPanelCompact]}>
-                  <Text style={styles.inputLabel}>Something changed?</Text>
-                  <Text style={styles.resultBodyText}>
-                    Paste a reroute, delay, or reassignment and we’ll calculate the impact.
-                  </Text>
                   <View style={[styles.quickActionGrid, isCompactMobile && styles.quickActionGridCompact]}>
                     {[
-                      { label: "Analyze reroute", onPress: openRerouteCalculatorFromRotation },
-                      { label: "Check pay impact", onPress: openPayImpactFromRotation },
-                      { label: "Ask contract question", onPress: openContractCopilotFromRotation },
+                      { label: quickContacts.crewScheduling ? "Crew Scheduling" : "Add Crew Scheduling", key: "crewScheduling" as const },
+                      { label: quickContacts.dispatch ? "Dispatch" : "Add Dispatch", key: "dispatch" as const },
                     ].map((action) => (
                       <TouchableOpacity
                         key={action.label}
                         style={[styles.quickActionButton, isCompactMobile && styles.quickActionButtonCompact]}
-                        onPress={action.onPress}
+                        onPress={() => handleQuickContactPress(action.key)}
                       >
                         <Text style={[styles.quickActionButtonText, isCompactMobile && styles.quickActionButtonTextCompact]}>
                           {action.label}
@@ -9649,6 +9700,17 @@ function getLayoverActionableTransportPhone(detail: RotationLayoverDetail | null
   return transportPhone;
 }
 
+function getLayoverDisplayTransportPhone(detail: RotationLayoverDetail | null) {
+  if (!detail) {
+    return null;
+  }
+  const transportPhone = !isPlaceholderPhoneValue(detail.transportPhone) ? detail.transportPhone : null;
+  if (detail.transportType === "ccar") {
+    return transportPhone;
+  }
+  return transportPhone;
+}
+
 function isReturnToGateLeg(leg: RotationDashboardData["legs"][number]) {
   return !leg.isDeadhead && leg.origin === leg.destination;
 }
@@ -13048,23 +13110,23 @@ const styles = StyleSheet.create({
     marginTop: -2,
   },
   tripBriefList: {
-    gap: 6,
+    gap: 5,
   },
   tripBriefRow: {
-    borderRadius: 12,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: appStylePalette.borderSubtle,
-    backgroundColor: appStylePalette.surfaceRaised,
-    paddingHorizontal: 9,
-    paddingVertical: 7,
-    gap: 6,
+    borderColor: "rgba(105, 191, 255, 0.12)",
+    backgroundColor: "rgba(255,255,255,0.025)",
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    gap: 5,
   },
   tripBriefRowMain: {
-    gap: 5,
+    gap: 4,
   },
   tripBriefRowDetail: {
     fontSize: 11,
-    lineHeight: 16,
+    lineHeight: 15,
     fontWeight: "700",
     color: appStylePalette.textPrimary,
   },
