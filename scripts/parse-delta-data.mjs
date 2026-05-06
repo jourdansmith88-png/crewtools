@@ -258,6 +258,53 @@ function latestFile(files) {
     .sort((a, b) => b.extractedDate - a.extractedDate)[0]?.filePath ?? null;
 }
 
+function extractMonthKeyFromFilename(filePath) {
+  const extractedDate = extractDateFromFilename(filePath);
+  if (!extractedDate) {
+    return null;
+  }
+  const date = new Date(extractedDate);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function buildLatestFileByMonth(files) {
+  return files.reduce((acc, filePath) => {
+    const monthKey = extractMonthKeyFromFilename(filePath);
+    if (!monthKey) {
+      return acc;
+    }
+    const current = acc.get(monthKey);
+    if (!current || extractDateFromFilename(filePath) > extractDateFromFilename(current)) {
+      acc.set(monthKey, filePath);
+    }
+    return acc;
+  }, new Map());
+}
+
+function selectLatestSharedMonthFiles(primaryFiles, secondaryFiles) {
+  const primaryByMonth = buildLatestFileByMonth(primaryFiles);
+  const secondaryByMonth = buildLatestFileByMonth(secondaryFiles);
+  const sharedMonthKeys = [...primaryByMonth.keys()]
+    .filter((monthKey) => secondaryByMonth.has(monthKey))
+    .sort()
+    .reverse();
+
+  if (sharedMonthKeys.length === 0) {
+    return {
+      monthKey: null,
+      primaryFile: latestFile(primaryFiles),
+      secondaryFile: latestFile(secondaryFiles),
+    };
+  }
+
+  const monthKey = sharedMonthKeys[0];
+  return {
+    monthKey,
+    primaryFile: primaryByMonth.get(monthKey) ?? null,
+    secondaryFile: secondaryByMonth.get(monthKey) ?? null,
+  };
+}
+
 function sortFilesByDate(files) {
   return [...files].sort(
     (a, b) => extractDateFromFilename(a) - extractDateFromFilename(b)
@@ -272,8 +319,12 @@ const categoryRows = categoryFiles.flatMap(parseCategoryList);
 const seniorityRows = seniorityFiles.flatMap(parseSeniorityList);
 const aeRows = aeFiles.flatMap(parseAePosting);
 
-const latestCategoryFile = latestFile(categoryFiles)?.split("/").pop() ?? null;
-const latestSeniorityFile = latestFile(seniorityFiles)?.split("/").pop() ?? null;
+const latestSharedOperationalMonth = selectLatestSharedMonthFiles(
+  categoryFiles,
+  seniorityFiles
+);
+const latestCategoryFile = latestSharedOperationalMonth.primaryFile?.split("/").pop() ?? null;
+const latestSeniorityFile = latestSharedOperationalMonth.secondaryFile?.split("/").pop() ?? null;
 const latestAeFile = latestFile(aeFiles)?.split("/").pop() ?? null;
 const sortedCategoryFiles = sortFilesByDate(categoryFiles).map((filePath) =>
   path.basename(filePath)
@@ -376,6 +427,10 @@ const outputs = {
     category: latestCategoryFile,
     seniority: latestSeniorityFile,
     ae: latestAeFile,
+  },
+  activeMonths: {
+    seniorityCategory: latestSharedOperationalMonth.monthKey,
+    ae: extractMonthKeyFromFilename(latestAeFile ?? "") ?? null,
   },
 };
 
@@ -770,6 +825,7 @@ const deltaSnapshotModule = `export const deltaSnapshot = ${JSON.stringify(
   {
     generatedAt: outputs.generatedAt,
     latestFiles: outputs.latestFiles,
+    activeMonths: outputs.activeMonths,
     counts: outputs.counts,
     bases: baseSnapshot,
     operationalBases,
@@ -810,6 +866,7 @@ writeJson("import-manifest.json", outputs);
 writeJson("app-snapshot.json", {
   generatedAt: outputs.generatedAt,
   latestFiles: outputs.latestFiles,
+  activeMonths: outputs.activeMonths,
   counts: outputs.counts,
   bases: baseSnapshot,
   operationalBases,

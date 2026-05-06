@@ -1,5 +1,5 @@
 export const deltaCharts = {
-  "generatedAt": "2026-04-16T15:27:20.676Z",
+  "generatedAt": "2026-05-06T21:30:06.688Z",
   "monthlyPilotCounts": [
     {
       "sourceFile": "January 2025 Seniority List.pdf",
@@ -80,6 +80,11 @@ export const deltaCharts = {
       "sourceFile": "April 2026 Seniority List.pdf",
       "monthKey": "April 2026 Seniority List",
       "pilotCount": 17249
+    },
+    {
+      "sourceFile": "May 2026 Seniority List.pdf",
+      "monthKey": "May 2026 Seniority List",
+      "pilotCount": 17398
     }
   ],
   "pilotHistoryByEmployee": [],
