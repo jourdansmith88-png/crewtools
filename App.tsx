@@ -6002,7 +6002,7 @@ export default function App() {
             return (
             <SectionCard
               title="Logbook"
-              description="Leg-by-leg trip view with placeholders ready for actual out/in and block deltas."
+              description="Review operating, DH, and RTG legs before logbook export."
             >
               <View style={styles.sectionStack}>
                     {rotationDashboard.legs.map((leg) => (
@@ -6022,63 +6022,45 @@ export default function App() {
                         {leg.isDeadhead ? "DH" : isReturnToGateLeg(leg) ? "RTG" : "Operating"}
                       </Text>
                     </View>
-                    <FormRow>
-                      <ResultLine label="City pair" value={`${leg.origin}-${leg.destination}`} emphasis />
-                      <ResultLine
-                        label="Flight"
-                        value={formatLegFlightDisplay(leg)}
-                      />
-                    </FormRow>
-                    <FormRow>
-                      <ResultLine label="Scheduled out / in" value={`${leg.departureTime ?? "TBD"} - ${leg.arrivalTime ?? "TBD"}`} />
-                      <ResultLine label={leg.isDeadhead ? "DH block" : "Block"} value={rotationFormatMinutes(leg.scheduledBlockMinutes)} />
-                    </FormRow>
-                    <FormRow>
-                      <ResultLine label="Actual out / in" value={`${leg.actualOut ?? "—"} - ${leg.actualIn ?? "—"}`} />
-                      <ResultLine label="Actual block" value={rotationFormatMinutes(leg.actualBlockMinutes)} />
-                    </FormRow>
-                    {leg.isDeadhead ? (
-                      <ResultLine label="Connection time" value="De-emphasized" />
-                    ) : !shouldShowLegStatus(leg) ? (
-                      leg.turnMinutes != null ? (
-                        <ResultLine label="Turn time" value={rotationFormatMinutes(leg.turnMinutes)} />
-                      ) : null
-                    ) : (
-                      <FormRow>
+                    <Text style={styles.tripBoardTimelineCityPair}>
+                      {leg.origin} {"→"} {leg.destination}
+                    </Text>
+                    <View style={styles.tripBoardTimelineMetaRow}>
+                      <Text style={styles.tripBoardTimelineMeta}>{formatLegFlightDisplay(leg)}</Text>
+                      <Text style={styles.tripBoardTimelineMeta}>
+                        {(leg.departureTime ?? "TBD")}–{(leg.arrivalTime ?? "TBD")}
+                      </Text>
+                      <Text style={styles.tripBoardTimelineMeta}>
+                        {leg.isDeadhead ? "DH block" : "Block"} {rotationFormatMinutes(leg.scheduledBlockMinutes)}
+                      </Text>
+                    </View>
+                    {!leg.isDeadhead && (leg.turnMinutes != null || leg.aircraft || (leg.gate && leg.gate !== "TBD")) ? (
+                      <View style={styles.tripBoardTimelineMetaRow}>
                         {leg.turnMinutes != null ? (
-                          <ResultLine label="Turn time" value={rotationFormatMinutes(leg.turnMinutes)} />
-                        ) : (
-                          <ResultLine label="Turn time" value="Not shown" />
-                        )}
-                        <ResultLine label="Status" value={leg.status.replace(/_/g, " ")} />
-                      </FormRow>
-                    )}
-                    <FormRow>
-                      <ResultLine
-                        label={leg.isDeadhead ? "Carrier" : "Ship / eqp"}
-                        value={leg.isDeadhead ? leg.carrier ?? "Deadhead" : leg.aircraft ? formatLegEquipmentDisplay(leg) : "Not shown"}
-                      />
-                      <ResultLine label="Gate" value={leg.gate && leg.gate !== "TBD" ? formatLegGateDisplay(leg) : "Not shown"} />
-                    </FormRow>
-                    <FormRow>
-                      <ResultLine label="Logbook export" value={leg.excludeFromLogbookExport ? "Exclude" : "Include"} />
-                      <ResultLine
-                        label={leg.isDeadhead ? "Timeline" : "Status"}
-                        value={
-                          leg.isDeadhead
-                            ? "DH / visible"
-                            : isReturnToGateLeg(leg)
-                              ? "Return-to-gate"
-                              : leg.status.replace(/_/g, " ")
-                        }
-                      />
-                    </FormRow>
+                          <Text style={styles.tripBoardTimelineMeta}>
+                            Turn {rotationFormatMinutes(leg.turnMinutes)}
+                          </Text>
+                        ) : null}
+                        {leg.aircraft ? (
+                          <Text style={styles.tripBoardTimelineMeta}>
+                            Ship/equip {formatLegEquipmentDisplay(leg)}
+                          </Text>
+                        ) : null}
+                        {leg.gate && leg.gate !== "TBD" ? (
+                          <Text style={styles.tripBoardTimelineMeta}>
+                            Gate {formatLegGateDisplay(leg)}
+                          </Text>
+                        ) : null}
+                      </View>
+                    ) : null}
+                    {leg.isDeadhead && leg.confirmationNumber ? (
+                      <Text style={styles.tripBoardTimelineMeta}>PNR {leg.confirmationNumber}</Text>
+                    ) : null}
                     {isReturnToGateLeg(leg) ? (
-                      <Text style={styles.resultSupportMetaText}>Return-to-gate segment</Text>
+                      <Text style={styles.tripBoardTimelineMeta}>Return-to-gate segment</Text>
                     ) : null}
                     {leg.isDeadhead && leg.confirmationNumber ? (
                       <View style={styles.sectionStack}>
-                        <ResultLine label="PNR" value={leg.confirmationNumber} />
                         <View style={styles.tripBoardTimelineActionRow}>
                           <TouchableOpacity
                             style={[
@@ -6102,7 +6084,19 @@ export default function App() {
                       </View>
                     ) : null}
                     {leg.isDeadhead && !leg.confirmationNumber ? (
-                      <Text style={styles.resultSupportMetaText}>Confirmation not found</Text>
+                      <View style={styles.tripBoardTimelineHintStack}>
+                        <Text style={[styles.tripBoardTimelineMeta, styles.tripBoardTimelineMetaMuted]}>
+                          Confirmation not found
+                        </Text>
+                      </View>
+                    ) : null}
+                    <Text style={styles.tripBoardTimelineMeta}>
+                      {leg.excludeFromLogbookExport ? "Excluded from logbook export" : "Include in logbook export"}
+                    </Text>
+                    {leg.isDeadhead && !leg.confirmationNumber ? (
+                      <Text style={[styles.tripBoardTimelineMeta, styles.tripBoardTimelineMetaMuted]}>
+                        Add MiCrew DH card to enable check-in actions
+                      </Text>
                     ) : null}
                     {rotationDebugEnabled ? (
                       <Text style={styles.resultSupportMetaText}>
