@@ -75,6 +75,16 @@ import {
   parseICrewTextWithDiagnostics,
   type ICrewParserDiagnostics,
 } from "./src/features/rotationCompanion/parseICrewText";
+import {
+  buildTripWatchRotationSnapshot,
+  compareRotationSnapshots,
+  formatTripWatchDelta,
+  parseTripWatchUpdatedInput,
+  type TripWatchComparisonResult,
+  type TripWatchRotationSnapshot,
+  type TripWatchScreenshotAttachment,
+  type TripWatchScreenshotParseResponse,
+} from "./src/features/rotationCompanion/tripWatchComparison";
 import type { RotationChainCandidate } from "./src/features/rotationCompanion/rotationChainBuilder";
 import { fliegerTypography, getFliegerPalette } from "./src/theme/flieger";
 import type {
@@ -2003,6 +2013,11 @@ export default function App() {
     useState<ICrewParserDiagnostics | null>(null);
   const [rotationICrewDebugError, setRotationICrewDebugError] = useState("");
   const [rotationCopiedICrewDebugJson, setRotationCopiedICrewDebugJson] = useState(false);
+  const [tripWatchExpanded, setTripWatchExpanded] = useState(false);
+  const [tripWatchInput, setTripWatchInput] = useState("");
+  const [tripWatchUpdatedScreenshots, setTripWatchUpdatedScreenshots] = useState<RotationScreenshotAttachment[]>([]);
+  const [tripWatchAnalyzeBusy, setTripWatchAnalyzeBusy] = useState(false);
+  const [tripWatchResult, setTripWatchResult] = useState<TripWatchComparisonResult | null>(null);
   const [rotationToolBanner, setRotationToolBanner] = useState<RotationToolBanner | null>(null);
   const [contractCopilotStarterQuestion, setContractCopilotStarterQuestion] = useState("");
   const [quickContacts, setQuickContacts] = useState<QuickContacts>({
@@ -2080,6 +2095,10 @@ export default function App() {
     rotationScreenshots.length,
     rotationScreenshotParseResult,
   ]);
+  const tripWatchBaselineSnapshot = useMemo(
+    () => (displayedRotationDashboard ? buildTripWatchRotationSnapshot(displayedRotationDashboard) : null),
+    [displayedRotationDashboard],
+  );
 
   const formatLegFlightDisplay = (leg: RotationDashboardData["legs"][number]) => {
     const carrierPrefix =
@@ -2178,6 +2197,11 @@ export default function App() {
     setRotationParseTraceOpen({});
     setRotationToolBanner(null);
     setContractCopilotStarterQuestion("");
+    setTripWatchExpanded(false);
+    setTripWatchInput("");
+    setTripWatchUpdatedScreenshots([]);
+    setTripWatchAnalyzeBusy(false);
+    setTripWatchResult(null);
     setActiveTab("today");
   };
 
@@ -2232,7 +2256,7 @@ export default function App() {
     setRerouteSupportOpen(false);
   };
 
-  const pickRotationEvidence = () => {
+  const pickScreenshotAttachments = (onLoaded: (attachments: RotationScreenshotAttachment[]) => void) => {
     if (Platform.OS !== "web" || typeof document === "undefined") {
       setRotationAnalyzeError("Screenshot upload is currently available on web only in this pass.");
       return;
@@ -2271,18 +2295,30 @@ export default function App() {
           }),
       );
       Promise.all(readers)
-        .then((attachments) => {
-          rotationActiveRunIdRef.current = null;
-          setRotationScreenshotParseResult(null);
-          setRotationCopiedDebugJson(false);
-          setRotationScreenshots((current) => [...current, ...attachments]);
-          setRotationAnalyzeError("");
-        })
+        .then((attachments) => onLoaded(attachments))
         .catch((error) => {
           setRotationAnalyzeError(error instanceof Error ? error.message : "Unable to attach screenshots.");
         });
     };
     input.click();
+  };
+
+  const pickRotationEvidence = () => {
+    pickScreenshotAttachments((attachments) => {
+      rotationActiveRunIdRef.current = null;
+      setRotationScreenshotParseResult(null);
+      setRotationCopiedDebugJson(false);
+      setRotationScreenshots((current) => [...current, ...attachments]);
+      setRotationAnalyzeError("");
+    });
+  };
+
+  const pickTripWatchEvidence = () => {
+    pickScreenshotAttachments((attachments) => {
+      setTripWatchUpdatedScreenshots((current) => [...current, ...attachments]);
+      setTripWatchResult(null);
+      setRotationAnalyzeError("");
+    });
   };
 
   const removeRotationScreenshot = (index: number) => {
@@ -2297,6 +2333,16 @@ export default function App() {
     setRotationScreenshotParseResult(null);
     setRotationCopiedDebugJson(false);
     setRotationScreenshots([]);
+  };
+
+  const removeTripWatchScreenshot = (index: number) => {
+    setTripWatchUpdatedScreenshots((current) => current.filter((_, currentIndex) => currentIndex !== index));
+    setTripWatchResult(null);
+  };
+
+  const clearTripWatchScreenshots = () => {
+    setTripWatchUpdatedScreenshots([]);
+    setTripWatchResult(null);
   };
 
   const toggleRotationParseTrace = (key: string) => {
@@ -2455,7 +2501,10 @@ export default function App() {
     }
   };
 
-  const parseRotationScreenshots = async (analysisRunId: number): Promise<RotationScreenshotParseResponse> => {
+  const parseRotationScreenshots = async (
+    analysisRunId: number,
+    screenshots: RotationScreenshotAttachment[] = rotationScreenshots,
+  ): Promise<RotationScreenshotParseResponse> => {
     const response = await fetch("/api/ai/rotation-companion/parse-screenshots", {
       method: "POST",
       headers: {
@@ -2463,7 +2512,7 @@ export default function App() {
       },
       body: JSON.stringify({
         input: {
-          screenshots: rotationScreenshots.map((item) => ({
+          screenshots: screenshots.map((item) => ({
             name: item.name,
             dataUrl: item.dataUrl,
           })),
@@ -2500,6 +2549,10 @@ export default function App() {
     setRotationICrewDebugDiagnostics(null);
     setRotationICrewDebugError("");
     setRotationCopiedICrewDebugJson(false);
+    setTripWatchExpanded(false);
+    setTripWatchInput("");
+    setTripWatchUpdatedScreenshots([]);
+    setTripWatchResult(null);
     try {
       const trimmedText = rotationPasteInput.trim();
       const hasText = trimmedText.length > 0;
@@ -2639,11 +2692,100 @@ export default function App() {
     }
   };
 
+  const analyzeTripWatchComparison = async () => {
+    setTripWatchExpanded(true);
+    if (!tripWatchBaselineSnapshot) {
+      setTripWatchResult({
+        status: "no_loaded_rotation",
+        title: "Load a rotation first",
+        summary: "Trip Watch compares an updated rotation against the trip currently loaded in your dashboard.",
+        comparisonConfidence: "low",
+        addedLegs: [],
+        removedLegs: [],
+        changedLegs: [],
+        changedLayovers: [],
+        changedReportTimes: [],
+        watchItems: [],
+        recommendedActions: [],
+      });
+      return;
+    }
+
+    setTripWatchAnalyzeBusy(true);
+    try {
+      const updatedResult = await parseTripWatchUpdatedInput({
+        inputText: tripWatchInput,
+        updatedScreenshots: tripWatchUpdatedScreenshots,
+        buildICrewDashboard: buildICrewParsedDashboard,
+        parseRotationIntoDashboard,
+        parseScreenshots: async (screenshots): Promise<TripWatchScreenshotParseResponse> =>
+          parseRotationScreenshots(Date.now(), screenshots),
+      });
+      if (updatedResult.status !== "ok") {
+        setTripWatchResult({
+          status: updatedResult.status,
+          title: updatedResult.title,
+          summary: updatedResult.summary,
+          comparisonConfidence: updatedResult.comparisonConfidence,
+          parserPathUsed: updatedResult.parserPathUsed ?? null,
+          addedLegs: [],
+          removedLegs: [],
+          changedLegs: [],
+          changedLayovers: [],
+          changedReportTimes: [],
+          watchItems: updatedResult.watchItems ?? [],
+          recommendedActions: updatedResult.recommendedActions ?? [],
+          baselineSnapshot: tripWatchBaselineSnapshot,
+          updatedSnapshot: null,
+          baselineLegCount: tripWatchBaselineSnapshot.legs.length,
+          updatedParsedLegCount: updatedResult.updatedParsedLegCount ?? 0,
+          debug: {
+            baselineLegCount: tripWatchBaselineSnapshot.legs.length,
+            updatedParsedLegCount: updatedResult.updatedParsedLegCount ?? 0,
+            parserPathUsed: updatedResult.parserPathUsed ?? null,
+            candidateCityPairCount: updatedResult.candidateCityPairCount ?? 0,
+            sufficiencyReason: updatedResult.sufficiencyReason ?? "unknown",
+            normalizedAddedCount: 0,
+            normalizedRemovedCount: 0,
+            normalizedChangedCount: 0,
+          },
+        });
+        return;
+      }
+      const comparison = compareRotationSnapshots(tripWatchBaselineSnapshot, updatedResult.snapshot);
+      setTripWatchResult(comparison);
+    } catch (error) {
+      setTripWatchResult({
+        status: "unparseable",
+        title: "Need more information",
+        summary: error instanceof Error ? error.message : "We could not compare that updated rotation yet.",
+        comparisonConfidence: "low",
+        addedLegs: [],
+        removedLegs: [],
+        changedLegs: [],
+        changedLayovers: [],
+        changedReportTimes: [],
+        watchItems: [],
+        recommendedActions: ["Paste the full updated iCrew/MiCrew or attach clearer screenshots."],
+        baselineSnapshot: tripWatchBaselineSnapshot,
+        updatedSnapshot: null,
+        baselineLegCount: tripWatchBaselineSnapshot.legs.length,
+        updatedParsedLegCount: 0,
+      });
+    } finally {
+      setTripWatchAnalyzeBusy(false);
+    }
+  };
+
   const useSampleRotation = () => {
     setRotationPasteInput(SAMPLE_ROTATION_TEXT);
     setRotationAnalyzeError("");
     setRotationScreenshotParseResult(null);
     setRotationCopiedDebugJson(false);
+    setTripWatchExpanded(false);
+    setTripWatchInput("");
+    setTripWatchUpdatedScreenshots([]);
+    setTripWatchResult(null);
     const sampleDashboard = buildRotationDashboardData(SAMPLE_ROTATION_TEXT);
     setRotationDashboard(sampleDashboard);
     setActiveTab("today");
@@ -5350,11 +5492,11 @@ export default function App() {
                 <View style={[styles.resultPanel, isCompactMobile && styles.resultPanelCompact]}>
                   <Text style={styles.inputLabel}>Trip Watch</Text>
                   <Text style={styles.resultBodyText}>
-                    Paste a reroute, delay, or reassignment to check pay, 117, and contract impact.
+                    Got rerouted? Paste the updated rotation or attach changed MiCrew screenshots to compare against your loaded trip.
                   </Text>
                   <View style={[styles.quickActionGrid, isCompactMobile && styles.quickActionGridCompact]}>
                     {[
-                      { label: "Analyze reroute", onPress: openRerouteCalculatorFromRotation },
+                      { label: "Analyze change", onPress: () => setTripWatchExpanded(true) },
                       { label: "Check pay impact", onPress: openPayImpactFromRotation },
                       { label: "Ask contract question", onPress: openContractCopilotFromRotation },
                       { label: "Check 117", onPress: openFar117FromRotation },
@@ -5386,6 +5528,166 @@ export default function App() {
                       </TouchableOpacity>
                     ))}
                   </View>
+                  {tripWatchExpanded ? (
+                    <View style={styles.sectionStack}>
+                      <View style={styles.inputGroup}>
+                        <InstrumentField
+                          label="Updated rotation / reroute text"
+                          value={tripWatchInput}
+                          onChangeText={(value) => {
+                            setTripWatchInput(value);
+                            setTripWatchResult(null);
+                          }}
+                          placeholder="Paste updated iCrew, MiCrew text, scheduler message, delay, reassignment, or reroute details…"
+                          multiline
+                          minHeight={150}
+                          autoCapitalize="characters"
+                        />
+                      </View>
+                      <View style={[styles.quickActionGrid, isCompactMobile && styles.quickActionGridCompact]}>
+                        <TouchableOpacity
+                          style={[styles.quickActionButton, isCompactMobile && styles.quickActionButtonCompact]}
+                          onPress={analyzeTripWatchComparison}
+                        >
+                          <Text style={[styles.quickActionButtonText, isCompactMobile && styles.quickActionButtonTextCompact]}>
+                            {tripWatchAnalyzeBusy ? "Comparing..." : "Compare to loaded trip"}
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.quickActionButton, isCompactMobile && styles.quickActionButtonCompact]}
+                          onPress={pickTripWatchEvidence}
+                        >
+                          <Text style={[styles.quickActionButtonText, isCompactMobile && styles.quickActionButtonTextCompact]}>
+                            Attach updated MiCrew screenshots
+                          </Text>
+                        </TouchableOpacity>
+                        {tripWatchInput || tripWatchUpdatedScreenshots.length > 0 ? (
+                          <TouchableOpacity
+                            style={[styles.quickActionButton, isCompactMobile && styles.quickActionButtonCompact]}
+                            onPress={() => {
+                              setTripWatchInput("");
+                              clearTripWatchScreenshots();
+                              setTripWatchResult(null);
+                            }}
+                          >
+                            <Text style={[styles.quickActionButtonText, isCompactMobile && styles.quickActionButtonTextCompact]}>
+                              Clear update
+                            </Text>
+                          </TouchableOpacity>
+                        ) : null}
+                      </View>
+                      {tripWatchUpdatedScreenshots.length > 0 ? (
+                        <View style={styles.sectionStack}>
+                          {tripWatchUpdatedScreenshots.map((item, index) => (
+                            <View key={`tripwatch-shot-${item.name}-${index}`} style={styles.screenshotAttachmentRow}>
+                              {item.previewUri ? <Image source={{ uri: item.previewUri }} style={styles.screenshotAttachmentThumb} /> : null}
+                              <View style={styles.screenshotAttachmentMeta}>
+                                <Text style={styles.resultBodyText}>{item.name}</Text>
+                              </View>
+                              <TouchableOpacity
+                                style={styles.screenshotRemoveButton}
+                                onPress={() => removeTripWatchScreenshot(index)}
+                              >
+                                <Text style={styles.screenshotRemoveButtonText}>Remove</Text>
+                              </TouchableOpacity>
+                            </View>
+                          ))}
+                        </View>
+                      ) : null}
+                      {tripWatchResult ? (
+                        <View style={[styles.resultPanel, isCompactMobile && styles.resultPanelCompact]}>
+                          <Text style={styles.inputLabel}>{tripWatchResult.title}</Text>
+                          <Text style={styles.resultBodyText}>{tripWatchResult.summary}</Text>
+                          {tripWatchResult.status === "ok" && tripWatchResult.addedLegs.length === 0 && tripWatchResult.removedLegs.length === 0 && tripWatchResult.changedLegs.length === 0 && tripWatchResult.changedLayovers.length === 0 && tripWatchResult.changedReportTimes.length === 0 && !tripWatchResult.changedReleaseTime && !tripWatchResult.finalArrivalChange && !tripWatchResult.creditDeltaMinutes && !tripWatchResult.operatingBlockDeltaMinutes && !tripWatchResult.dhBlockDeltaMinutes && !tripWatchResult.tafbDeltaMinutes ? null : (
+                            <View style={styles.sectionStack}>
+                              {tripWatchResult.addedLegs.length > 0 ? (
+                                <View style={styles.sectionStack}>
+                                  <Text style={styles.resultSupportMetaText}>Added legs</Text>
+                                  {tripWatchResult.addedLegs.map((item) => (
+                                    <Text key={`tripwatch-added-${item}`} style={styles.tripBoardTimelineMeta}>• {item}</Text>
+                                  ))}
+                                </View>
+                              ) : null}
+                              {tripWatchResult.removedLegs.length > 0 ? (
+                                <View style={styles.sectionStack}>
+                                  <Text style={styles.resultSupportMetaText}>Removed legs</Text>
+                                  {tripWatchResult.removedLegs.map((item) => (
+                                    <Text key={`tripwatch-removed-${item}`} style={styles.tripBoardTimelineMeta}>• {item}</Text>
+                                  ))}
+                                </View>
+                              ) : null}
+                              {tripWatchResult.changedLegs.length > 0 ? (
+                                <View style={styles.sectionStack}>
+                                  <Text style={styles.resultSupportMetaText}>Changed legs</Text>
+                                  {tripWatchResult.changedLegs.map((item) => (
+                                    <Text key={`tripwatch-changed-${item}`} style={styles.tripBoardTimelineMeta}>• {item}</Text>
+                                  ))}
+                                </View>
+                              ) : null}
+                              {(tripWatchResult.creditDeltaMinutes || tripWatchResult.operatingBlockDeltaMinutes || tripWatchResult.dhBlockDeltaMinutes || tripWatchResult.tafbDeltaMinutes) ? (
+                                <View style={styles.sectionStack}>
+                                  <Text style={styles.resultSupportMetaText}>Totals changed</Text>
+                                  {[
+                                    formatTripWatchDelta("Credit", 0, tripWatchResult.creditDeltaMinutes == null ? null : tripWatchResult.creditDeltaMinutes),
+                                    formatTripWatchDelta("Operating block", 0, tripWatchResult.operatingBlockDeltaMinutes == null ? null : tripWatchResult.operatingBlockDeltaMinutes),
+                                    formatTripWatchDelta("DH block", 0, tripWatchResult.dhBlockDeltaMinutes == null ? null : tripWatchResult.dhBlockDeltaMinutes),
+                                    formatTripWatchDelta("TAFB", 0, tripWatchResult.tafbDeltaMinutes == null ? null : tripWatchResult.tafbDeltaMinutes),
+                                  ]
+                                    .filter(Boolean)
+                                    .map((item) => (
+                                      <Text key={`tripwatch-total-${item}`} style={styles.tripBoardTimelineMeta}>• {item}</Text>
+                                    ))}
+                                </View>
+                              ) : null}
+                              {tripWatchResult.changedLayovers.length > 0 || tripWatchResult.finalArrivalChange ? (
+                                <View style={styles.sectionStack}>
+                                  <Text style={styles.resultSupportMetaText}>Layovers / final arrival</Text>
+                                  {tripWatchResult.changedLayovers.map((item) => (
+                                    <Text key={`tripwatch-layover-${item}`} style={styles.tripBoardTimelineMeta}>• {item}</Text>
+                                  ))}
+                                  {tripWatchResult.finalArrivalChange ? (
+                                    <Text style={styles.tripBoardTimelineMeta}>• {tripWatchResult.finalArrivalChange}</Text>
+                                  ) : null}
+                                </View>
+                              ) : null}
+                              {tripWatchResult.changedReportTimes.length > 0 || tripWatchResult.changedReleaseTime ? (
+                                <View style={styles.sectionStack}>
+                                  <Text style={styles.resultSupportMetaText}>Report / release</Text>
+                                  {tripWatchResult.changedReportTimes.map((item) => (
+                                    <Text key={`tripwatch-report-${item}`} style={styles.tripBoardTimelineMeta}>• {item}</Text>
+                                  ))}
+                                  {tripWatchResult.changedReleaseTime ? (
+                                    <Text style={styles.tripBoardTimelineMeta}>• {tripWatchResult.changedReleaseTime}</Text>
+                                  ) : null}
+                                </View>
+                              ) : null}
+                              {tripWatchResult.watchItems.length > 0 ? (
+                                <View style={styles.sectionStack}>
+                                  <Text style={styles.resultSupportMetaText}>Watch items</Text>
+                                  {tripWatchResult.watchItems.map((item) => (
+                                    <Text key={`tripwatch-watch-${item}`} style={styles.tripBoardTimelineMeta}>• {item}</Text>
+                                  ))}
+                                </View>
+                              ) : null}
+                              {tripWatchResult.recommendedActions.length > 0 ? (
+                                <View style={styles.sectionStack}>
+                                  <Text style={styles.resultSupportMetaText}>Recommended next action</Text>
+                                  {tripWatchResult.recommendedActions.map((item) => (
+                                    <Text key={`tripwatch-action-${item}`} style={styles.tripBoardTimelineMeta}>• {item}</Text>
+                                  ))}
+                                </View>
+                              ) : null}
+                            </View>
+                          )}
+                          {rotationDebugEnabled && tripWatchResult.debug ? (
+                            <Text style={styles.resultSupportMetaText}>
+                              baselineLegCount={tripWatchResult.debug.baselineLegCount} • updatedParsedLegCount={tripWatchResult.debug.updatedParsedLegCount} • parserPathUsed={tripWatchResult.debug.parserPathUsed ?? "unknown"} • candidateCityPairCount={tripWatchResult.debug.candidateCityPairCount ?? 0} • sufficiencyReason={tripWatchResult.debug.sufficiencyReason ?? "unknown"} • confidence={tripWatchResult.comparisonConfidence} • added={tripWatchResult.debug.normalizedAddedCount} • removed={tripWatchResult.debug.normalizedRemovedCount} • changed={tripWatchResult.debug.normalizedChangedCount}
+                            </Text>
+                          ) : null}
+                        </View>
+                      ) : null}
+                    </View>
+                  ) : null}
                 </View>
               </View>
             </SectionCard>
@@ -5502,6 +5804,14 @@ export default function App() {
                       </View>
                     ))}
                   </View>
+                </View>
+
+                <View style={[styles.resultPanel, isCompactMobile && styles.resultPanelCompact]}>
+                  <Text style={styles.inputLabel}>Trip Watch</Text>
+                  <Text style={styles.resultBodyText}>
+                    Trip Watch compares an updated rotation against the trip currently loaded in your dashboard.
+                  </Text>
+                  <Text style={styles.resultSupportMetaText}>Load a rotation first.</Text>
                 </View>
 
               {rotationScreenshots.length > 0 ? (
