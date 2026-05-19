@@ -85,6 +85,7 @@ import {
   type TripWatchScreenshotAttachment,
   type TripWatchScreenshotParseResponse,
 } from "./src/features/rotationCompanion/tripWatchComparison";
+import { buildPayWatchSummary } from "./src/features/rotationCompanion/payWatch";
 import type { RotationChainCandidate } from "./src/features/rotationCompanion/rotationChainBuilder";
 import { fliegerTypography, getFliegerPalette } from "./src/theme/flieger";
 import type {
@@ -2320,6 +2321,17 @@ export default function App() {
         tripWatchTotalsChanged.length > 0
       ),
   );
+  const tripWatchPayWatchSummary = useMemo(
+    () =>
+      tripWatchResult?.status === "ok"
+        ? buildPayWatchSummary(
+            tripWatchResult.baselineSnapshot,
+            tripWatchResult.updatedSnapshot,
+            tripWatchResult,
+          )
+        : null,
+    [tripWatchResult],
+  );
 
   const formatLegFlightDisplay = (leg: RotationDashboardData["legs"][number]) => {
     const carrierPrefix =
@@ -3592,6 +3604,11 @@ export default function App() {
 
   const rotationFormatMinutes = (value?: number) =>
     value == null ? "TBD" : `${Math.floor(value / 60)}:${String(value % 60).padStart(2, "0")}`;
+
+  const formatCompactDuration = (value?: number | null) =>
+    value == null || !Number.isFinite(value)
+      ? "TBD"
+      : `${Math.floor(value / 60)}:${String(Math.abs(value % 60)).padStart(2, "0")}`;
 
   const rotationCompanionContext = useMemo<RotationCompanionContext | null>(
     () =>
@@ -6007,6 +6024,41 @@ export default function App() {
                                   </View>
                                 </View>
                               ) : null}
+                              {tripWatchPayWatchSummary?.hasContent ? (
+                                <View style={[styles.resultPanelSubtle, styles.tripWatchSectionCard]}>
+                                  <Text style={styles.resultSupportMetaText}>Pay Watch</Text>
+                                  {tripWatchPayWatchSummary.summaryItems.length > 0 ? (
+                                    <View style={styles.tripWatchChipRow}>
+                                      {tripWatchPayWatchSummary.summaryItems.map((item) => (
+                                        <View key={`tripwatch-pay-diff-${item}`} style={styles.tripWatchDeltaChip}>
+                                          <Text style={styles.tripWatchDeltaChipText}>{item}</Text>
+                                        </View>
+                                      ))}
+                                    </View>
+                                  ) : null}
+                                  {tripWatchPayWatchSummary.rtgAddedItems.map((item) => (
+                                    <Text key={`tripwatch-pay-rtg-${item}`} style={styles.tripBoardTimelineMeta}>• {item}</Text>
+                                  ))}
+                                  {tripWatchPayWatchSummary.dailyRows.length > 0 ? (
+                                    <View style={styles.sectionStack}>
+                                      {tripWatchPayWatchSummary.dailyRows.map((row) => (
+                                        <Text key={`tripwatch-pay-day-${row.dateKey}`} style={styles.tripBoardTimelineMeta}>
+                                          {row.dateKey} • Original protected {formatCompactDuration(row.protectedBaselineMinutes)} • Updated block {formatCompactDuration(row.updatedBlockMinutes)} • Delta +{formatCompactDuration(row.estimatedDayDeltaMinutes)}
+                                        </Text>
+                                      ))}
+                                    </View>
+                                  ) : null}
+                                  {tripWatchPayWatchSummary.recommendedItems.length > 0 ? (
+                                    <View style={styles.tripWatchChipRow}>
+                                      {tripWatchPayWatchSummary.recommendedItems.map((item) => (
+                                        <View key={`tripwatch-pay-note-${item}`} style={styles.tripWatchActionChip}>
+                                          <Text style={styles.tripWatchActionChipText}>{item}</Text>
+                                        </View>
+                                      ))}
+                                    </View>
+                                  ) : null}
+                                </View>
+                              ) : null}
                               {tripWatchResult.recommendedActions.length > 0 ? (
                                 <View style={[styles.resultPanelSubtle, styles.tripWatchSectionCard]}>
                                   <Text style={styles.resultSupportMetaText}>Recommended next action</Text>
@@ -6032,6 +6084,41 @@ export default function App() {
                                       </View>
                                     ))}
                                   </View>
+                                </View>
+                              ) : null}
+                              {tripWatchPayWatchSummary?.hasContent ? (
+                                <View style={[styles.resultPanelSubtle, styles.tripWatchSectionCard]}>
+                                  <Text style={styles.resultSupportMetaText}>Pay Watch</Text>
+                                  {tripWatchPayWatchSummary.summaryItems.length > 0 ? (
+                                    <View style={styles.tripWatchChipRow}>
+                                      {tripWatchPayWatchSummary.summaryItems.map((item) => (
+                                        <View key={`tripwatch-pay-${item}`} style={styles.tripWatchDeltaChip}>
+                                          <Text style={styles.tripWatchDeltaChipText}>{item}</Text>
+                                        </View>
+                                      ))}
+                                    </View>
+                                  ) : null}
+                                  {tripWatchPayWatchSummary.rtgAddedItems.map((item) => (
+                                    <Text key={`tripwatch-pay-rtg-${item}`} style={styles.tripBoardTimelineMeta}>• {item}</Text>
+                                  ))}
+                                  {tripWatchPayWatchSummary.dailyRows.length > 0 ? (
+                                    <View style={styles.sectionStack}>
+                                      {tripWatchPayWatchSummary.dailyRows.map((row) => (
+                                        <Text key={`tripwatch-pay-day-${row.dateKey}`} style={styles.tripBoardTimelineMeta}>
+                                          {row.dateKey} • Original protected {formatCompactDuration(row.protectedBaselineMinutes)} • Updated block {formatCompactDuration(row.updatedBlockMinutes)} • Delta +{formatCompactDuration(row.estimatedDayDeltaMinutes)}
+                                        </Text>
+                                      ))}
+                                    </View>
+                                  ) : null}
+                                  {tripWatchPayWatchSummary.recommendedItems.length > 0 ? (
+                                    <View style={styles.tripWatchChipRow}>
+                                      {tripWatchPayWatchSummary.recommendedItems.map((item) => (
+                                        <View key={`tripwatch-pay-note-${item}`} style={styles.tripWatchActionChip}>
+                                          <Text style={styles.tripWatchActionChipText}>{item}</Text>
+                                        </View>
+                                      ))}
+                                    </View>
+                                  ) : null}
                                 </View>
                               ) : null}
                               {tripWatchResult.addedLegs.length > 0 ? (
