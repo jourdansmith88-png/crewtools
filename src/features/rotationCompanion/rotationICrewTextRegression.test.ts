@@ -18,6 +18,8 @@ import { rotation0983ICrewRawText } from "./fixtures/rotation0983ICrewText.ts";
 import { rotation0613ICrewRawText } from "./fixtures/rotation0613ICrewText.ts";
 import { rotation7942ICrewRawText } from "./fixtures/rotation7942ICrewText.ts";
 import { rotation0118ICrewRawText } from "./fixtures/rotation0118ICrewText.ts";
+import { rotation7707ICrewBeforeText } from "./fixtures/rotation7707ICrewBeforeText.ts";
+import { rotation7707ICrewAfterText } from "./fixtures/rotation7707ICrewAfterText.ts";
 
 function assert(condition: unknown, message: string) {
   if (!condition) {
@@ -635,6 +637,124 @@ runICrewAssertions("rotation0233 iCrew live-paste fixture", rotation0233ICrewLiv
         operatingScheduledBlockMinutes: parsed.operatingScheduledBlockMinutes,
         deadheadScheduledBlockMinutes: parsed.deadheadScheduledBlockMinutes,
         diagnostics: debugResult.diagnostics,
+      },
+      null,
+      2,
+    ),
+  );
+}
+
+{
+  const label = "rotation7707 iCrew standalone DHD + RTG fixtures";
+  const beforeDebug = parseICrewTextWithDiagnostics(rotation7707ICrewBeforeText);
+  const beforeParsed = parseICrewText(rotation7707ICrewBeforeText);
+  const afterDebug = parseICrewTextWithDiagnostics(rotation7707ICrewAfterText);
+  const afterParsed = parseICrewText(rotation7707ICrewAfterText);
+
+  assert(beforeDebug.parserSucceeded === true, `[${label}] Expected before parserSucceeded true, got ${JSON.stringify(beforeDebug.diagnostics)}`);
+  assert(afterDebug.parserSucceeded === true, `[${label}] Expected after parserSucceeded true, got ${JSON.stringify(afterDebug.diagnostics)}`);
+
+  const beforeDhLeg = beforeParsed.allTripSegments.find(
+    (leg) => leg.departureAirport === "SLC" && leg.arrivalAirport === "IDA",
+  );
+  assert(
+    beforeDhLeg?.isDeadhead === true &&
+      beforeDhLeg.segmentType === "deadhead" &&
+      beforeDhLeg.scheduledBlock === "0:54",
+    `[${label}] Expected 7707 before SLC-IDA to be DH 0:54, got ${JSON.stringify(beforeDhLeg)}`,
+  );
+  assert(
+    beforeParsed.deadheadAnnotations[0]?.reason === "attached_from_standalone_dhd_line",
+    `[${label}] Expected 7707 before DH reason attached_from_standalone_dhd_line, got ${JSON.stringify(beforeParsed.deadheadAnnotations[0])}`,
+  );
+  assert(
+    beforeParsed.standaloneDhdAttachments[0]?.attachedToRoute === "SLC-IDA" &&
+      beforeParsed.standaloneDhdAttachments[0]?.normalizedBlock === "0:54",
+    `[${label}] Expected 7707 before standalone DHD attachment to SLC-IDA 0:54, got ${JSON.stringify(beforeParsed.standaloneDhdAttachments)}`,
+  );
+  assert(beforeParsed.header.totalDeadheadBlockMinutes === 54, `[${label}] Expected 7707 before totalDeadheadBlockMinutes 54, got ${beforeParsed.header.totalDeadheadBlockMinutes}`);
+  assert(beforeParsed.operatingScheduledBlockMinutes === 531, `[${label}] Expected 7707 before operatingScheduledBlockMinutes 531, got ${beforeParsed.operatingScheduledBlockMinutes}`);
+  assert(beforeParsed.deadheadScheduledBlockMinutes === 54, `[${label}] Expected 7707 before deadheadScheduledBlockMinutes 54, got ${beforeParsed.deadheadScheduledBlockMinutes}`);
+  assert(
+    beforeDebug.diagnostics.standaloneDhdLines.some((item) => item.attachedToRoute === "SLC-IDA" && item.normalizedBlock === "0:54"),
+    `[${label}] Expected before diagnostics standalone DHD attachment, got ${JSON.stringify(beforeDebug.diagnostics.standaloneDhdLines)}`,
+  );
+
+  const afterDhLeg = afterParsed.allTripSegments.find(
+    (leg) => leg.departureAirport === "SLC" && leg.arrivalAirport === "IDA",
+  );
+  assert(
+    afterDhLeg?.isDeadhead === true &&
+      afterDhLeg.segmentType === "deadhead" &&
+      afterDhLeg.scheduledBlock === "1:06",
+    `[${label}] Expected 7707 after SLC-IDA to be DH 1:06, got ${JSON.stringify(afterDhLeg)}`,
+  );
+  assert(afterParsed.header.totalDeadheadBlockMinutes === 66, `[${label}] Expected 7707 after totalDeadheadBlockMinutes 66, got ${afterParsed.header.totalDeadheadBlockMinutes}`);
+  assert(afterParsed.deadheadScheduledBlockMinutes === 66, `[${label}] Expected 7707 after deadheadScheduledBlockMinutes 66, got ${afterParsed.deadheadScheduledBlockMinutes}`);
+  const afterRtgLeg = afterParsed.allTripSegments.find(
+    (leg) => leg.departureAirport === "DFW" && leg.arrivalAirport === "DFW",
+  );
+  assert(
+    afterRtgLeg?.segmentType === "return_to_gate" && afterRtgLeg.isDeadhead === false,
+    `[${label}] Expected 7707 after DFW-DFW RTG to stay non-DH, got ${JSON.stringify(afterRtgLeg)}`,
+  );
+  assert(
+    afterRtgLeg?.flightNumber === "2798" &&
+      afterRtgLeg?.scheduledOut?.includes("1219") &&
+      afterRtgLeg?.scheduledIn?.includes("1238") &&
+      afterRtgLeg?.scheduledBlock === "0:19",
+    `[${label}] Expected 7707 after glued RTG continuation row to parse as DFW-DFW DL2798 1219-1238 block 0:19, got ${JSON.stringify(afterRtgLeg)}`,
+  );
+  assert(
+    afterDebug.diagnostics.attemptedLegParseResults.some(
+      (result) =>
+        result.line.includes("*DFW*1219 DFW.1238 0.19 0.36 2") &&
+        result.matched === true &&
+        result.parsedTokens?.segmentType === "return_to_gate",
+    ),
+    `[${label}] Expected attemptedLegParseResults to match glued RTG row, got ${JSON.stringify(afterDebug.diagnostics.attemptedLegParseResults)}`,
+  );
+  assert(
+    afterDebug.diagnostics.legCandidateLines.some((line) => line.includes("*DFW*1219 DFW.1238 0.19 0.36 2")),
+    `[${label}] Expected legCandidateLines to include glued RTG continuation row, got ${JSON.stringify(afterDebug.diagnostics.legCandidateLines)}`,
+  );
+  assert(
+    afterDebug.diagnostics.parsedSegments.some(
+      (segment) =>
+        segment.route === "DFW-DFW" &&
+        segment.flightNumber === "2798" &&
+        segment.scheduledOut?.includes("1219") &&
+        segment.scheduledIn?.includes("1238") &&
+        segment.scheduledBlock === "0:19" &&
+        segment.segmentType === "return_to_gate" &&
+        segment.isDeadhead === false,
+    ),
+    `[${label}] Expected diagnostics parsedSegments to include glued RTG row, got ${JSON.stringify(afterDebug.diagnostics.parsedSegments)}`,
+  );
+  assert(
+    afterDebug.diagnostics.standaloneDhdLines.some((item) => item.attachedToRoute === "SLC-IDA" && item.normalizedBlock === "1:06"),
+    `[${label}] Expected after diagnostics standalone DHD attachment, got ${JSON.stringify(afterDebug.diagnostics.standaloneDhdLines)}`,
+  );
+
+  console.log(`${label} passed`);
+  console.log(
+    `${label} parsed:`,
+    JSON.stringify(
+      {
+        before: {
+          header: beforeParsed.header,
+          standaloneDhdAttachments: beforeParsed.standaloneDhdAttachments,
+          deadheadAnnotations: beforeParsed.deadheadAnnotations,
+          allTripSegments: beforeParsed.allTripSegments,
+          diagnostics: beforeDebug.diagnostics,
+        },
+        after: {
+          header: afterParsed.header,
+          standaloneDhdAttachments: afterParsed.standaloneDhdAttachments,
+          deadheadAnnotations: afterParsed.deadheadAnnotations,
+          allTripSegments: afterParsed.allTripSegments,
+          diagnostics: afterDebug.diagnostics,
+        },
       },
       null,
       2,

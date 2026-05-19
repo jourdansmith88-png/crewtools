@@ -13,6 +13,7 @@ export type ParsedRotationLeg = {
   status: "normal" | "tight_turn" | "watch" | "placeholder";
   isDeadhead?: boolean;
   legKind?: "operating" | "deadhead";
+  segmentType?: "operating" | "deadhead" | "return_to_gate";
   gate?: string;
   equipmentShip?: string;
   confirmationNumber?: string;
@@ -88,6 +89,7 @@ export type RotationLeg = {
   gate?: string;
   isDeadhead?: boolean;
   legKind?: "operating" | "deadhead";
+  segmentType?: "operating" | "deadhead" | "return_to_gate";
   deadheadSource?: ParsedRotationLeg["deadheadSource"];
   confirmationNumber?: string;
   carrier?: string;

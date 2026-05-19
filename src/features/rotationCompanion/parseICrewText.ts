@@ -36,7 +36,24 @@ export type ICrewDeadheadAnnotation = {
   scheduledBlockMinutes: number;
   confirmationCode?: string;
   marker?: "D" | "O";
-  reason: "explicit_D_marker" | "inferred_from_dhd_totals_and_regional_carrier";
+  reason:
+    | "explicit_D_marker"
+    | "attached_from_standalone_dhd_line"
+    | "inferred_from_dhd_totals_and_regional_carrier";
+};
+
+export type ICrewStandaloneDhdAttachment = {
+  line: string;
+  minutes: number;
+  normalizedBlock: string;
+  dayToken: string | null;
+  attachedToRoute: string | null;
+  attachedToFlight: string | null;
+  attachedToBlock: string | null;
+  reason:
+    | "immediate_preceding_leg_block_match"
+    | "nearest_matching_prior_leg"
+    | "no_matching_leg";
 };
 
 export type ParsedICrewTextResult = {
@@ -58,6 +75,7 @@ export type ParsedICrewTextResult = {
   visibleOperatingLegs: RotationChainLeg[];
   logbookLegs: RotationChainLeg[];
   deadheadAnnotations: ICrewDeadheadAnnotation[];
+  standaloneDhdAttachments: ICrewStandaloneDhdAttachment[];
   incompleteFragments: string[];
   parserNotes: string[];
   partialStatus: boolean;
@@ -95,6 +113,20 @@ export type ICrewParserDiagnostics = {
     failureReason: string | null;
     parsedTokens?: Record<string, string | null>;
   }>;
+  parsedSegments: Array<{
+    dayToken: string;
+    route: string;
+    carrier: string | null;
+    flightNumber: string | null;
+    scheduledOut: string | null;
+    scheduledIn: string | null;
+    scheduledBlock: string | null;
+    isDeadhead: boolean;
+    segmentType: "operating" | "deadhead" | "return_to_gate";
+    sourceText: string | null;
+  }>;
+  standaloneDhdLines: ICrewStandaloneDhdAttachment[];
+  resultingDeadheadLegs: string[];
   parserStageFailed: "header" | "totals" | "legs" | "displayModel" | null;
   parserError: string | null;
 };
@@ -206,6 +238,12 @@ function isFlightTokenLike(token?: string | null) {
   );
 }
 
+function looksLikePotentialICrewLegLine(line: string) {
+  return /(?:\*?[A-Z]{3}\*?\d{4}\s+\*?[A-Z]{3}\.\d{4}|\*?[A-Z]{3}\s+\d{4}\s+\*?[A-Z]{3}\.\d{4}|\b(?:D|DL|9E|OO|YX)\d{2,5}\b|\b\d{1,2}\s+\d?(?:D\d{2,5}|DL\d{2,5}|9E\d{2,5}|OO\d{2,5}|YX\d{2,5}|\d{3,5})\b)/i.test(
+    line,
+  );
+}
+
 export function parseICrewFlightToken(dayToken: string, rawToken: string) {
   const normalizedDay = String(Number(dayToken));
   const compactDayPrefixedToken = new RegExp(
@@ -215,21 +253,24 @@ export function parseICrewFlightToken(dayToken: string, rawToken: string) {
   const withoutDayPrefix = compactDayPrefixedToken.test(rawToken)
     ? rawToken.replace(new RegExp(`^(?:${dayToken}|${normalizedDay})`, "i"), "")
     : rawToken;
-  if (/^\d{2,5}$/i.test(withoutDayPrefix)) {
+  const withoutDutySequencePrefix = /^\d(?:D\d{2,5}|DL\d{2,5}|9E\d{2,5}|OO\d{2,5}|YX\d{2,5})$/i.test(withoutDayPrefix)
+    ? withoutDayPrefix.slice(1)
+    : withoutDayPrefix;
+  if (/^\d{2,5}$/i.test(withoutDutySequencePrefix)) {
     return {
       marker: null,
       carrier: "DL",
-      flightNumber: normalizeCarrierFlight("DL", withoutDayPrefix).flightNumber,
+      flightNumber: normalizeCarrierFlight("DL", withoutDutySequencePrefix).flightNumber,
     };
   }
-  if (/^D\d+$/i.test(withoutDayPrefix)) {
+  if (/^D\d+$/i.test(withoutDutySequencePrefix)) {
     return {
       marker: "D" as const,
       carrier: "DL",
-      flightNumber: normalizeCarrierFlight("DL", withoutDayPrefix.slice(1)).flightNumber,
+      flightNumber: normalizeCarrierFlight("DL", withoutDutySequencePrefix.slice(1)).flightNumber,
     };
   }
-  const tokenMatch = withoutDayPrefix.match(/^([A-Z0-9]{2})(\d{2,5})$/i);
+  const tokenMatch = withoutDutySequencePrefix.match(/^([A-Z0-9]{2})(\d{2,5})$/i);
   if (tokenMatch?.[1] && tokenMatch?.[2]) {
     const normalized = normalizeCarrierFlight(tokenMatch[1].toUpperCase(), tokenMatch[2]);
     return {
@@ -241,7 +282,7 @@ export function parseICrewFlightToken(dayToken: string, rawToken: string) {
       flightNumber: normalized.flightNumber,
     };
   }
-  const normalized = normalizeCarrierFlight("DL", withoutDayPrefix);
+  const normalized = normalizeCarrierFlight("DL", withoutDutySequencePrefix);
   return {
     marker: null,
     carrier: normalized.carrier || "DL",
@@ -359,12 +400,13 @@ function buildICrewParserDiagnostics(
     totalsCandidateLines: normalizedLines.filter((line) =>
       /(REGULAR-|RESERVE-|TBL|TDHD|TAFB|TAFBCR|TAFBELP|TL)/i.test(line),
     ),
-    legCandidateLines: normalizedLines.filter((line) =>
-      /(SLC|SJC|CLE|LGA|MCI|D2903|9E5045|1272|1254|2855|563)/i.test(line),
-    ),
+    legCandidateLines: normalizedLines.filter((line) => looksLikePotentialICrewLegLine(line)),
     parsedHeader: extra?.parsedHeader ?? null,
     parsedTotals: extra?.parsedTotals ?? null,
     attemptedLegParseResults: extra?.attemptedLegParseResults ?? [],
+    parsedSegments: extra?.parsedSegments ?? [],
+    standaloneDhdLines: extra?.standaloneDhdLines ?? [],
+    resultingDeadheadLegs: extra?.resultingDeadheadLegs ?? [],
     parserStageFailed,
     parserError,
   };
@@ -711,6 +753,7 @@ function applyRegionalDeadheadInference(args: {
     }
     segment.isDeadhead = true;
     segment.segmentType = "deadhead";
+    segment.deadheadSource = "inferred_from_dhd_totals_and_regional_carrier";
   });
 }
 
@@ -720,20 +763,75 @@ function parseICrewSegments(rawText: string) {
       dayToken: string;
       marker?: "D" | "O" | null;
       confirmationCode?: string | null;
+      isDeadhead?: boolean;
+      deadheadSource?:
+        | "explicit_D_marker"
+        | "standalone_dhd_line"
+        | "inferred_from_dhd_totals_and_regional_carrier";
       segmentType?: "operating" | "deadhead" | "return_to_gate";
       makeUp?: string | null;
       mealMarker?: string | null;
       equipmentShip?: string | null;
+      sourceLineIndex: number;
     }
   > = [];
   const attemptedLegParseResults: ICrewParserDiagnostics["attemptedLegParseResults"] = [];
+  const standaloneDhdLines: ICrewStandaloneDhdAttachment[] = [];
   let currentDayToken: string | null = null;
   let lastSegment: (typeof segments)[number] | null = null;
   let lastRawFlightToken: string | null = null;
   const effectiveMonth = extractEffectiveMonth(rawText);
 
-  for (const line of splitRawLines(rawText)) {
+  for (const [lineIndex, line] of splitRawLines(rawText).entries()) {
     const normalizedLine = normalizeICrewLine(line);
+    const standaloneDhdMatch = normalizedLine.match(/^(\d{1,2}[.:]\d{2})DHD\b/i);
+    if (standaloneDhdMatch?.[1]) {
+      const minutes = parseDotDurationToMinutes(standaloneDhdMatch[1]);
+      const normalizedBlock = formatDurationString(standaloneDhdMatch[1]);
+      const activeDayToken = currentDayToken ?? lastSegment?.dayToken ?? null;
+      let attachedSegment: (typeof segments)[number] | null = null;
+      let reason: ICrewStandaloneDhdAttachment["reason"] = "no_matching_leg";
+
+      if (
+        lastSegment &&
+        (!activeDayToken || lastSegment.dayToken === activeDayToken) &&
+        parseDotDurationToMinutes(lastSegment.scheduledBlock) === minutes
+      ) {
+        attachedSegment = lastSegment;
+        reason = "immediate_preceding_leg_block_match";
+      } else {
+        attachedSegment =
+          [...segments]
+            .reverse()
+            .find(
+              (segment) =>
+                (!activeDayToken || segment.dayToken === activeDayToken) &&
+                parseDotDurationToMinutes(segment.scheduledBlock) === minutes,
+            ) ?? null;
+        if (attachedSegment) {
+          reason = "nearest_matching_prior_leg";
+        }
+      }
+
+      if (attachedSegment) {
+        attachedSegment.isDeadhead = true;
+        attachedSegment.segmentType = "deadhead";
+        attachedSegment.deadheadSource = "standalone_dhd_line";
+      }
+
+      standaloneDhdLines.push({
+        line: normalizedLine,
+        minutes,
+        normalizedBlock,
+        dayToken: activeDayToken,
+        attachedToRoute: attachedSegment ? `${attachedSegment.departureAirport}-${attachedSegment.arrivalAirport}` : null,
+        attachedToFlight: attachedSegment ? `${attachedSegment.carrier ?? "DL"}${attachedSegment.flightNumber ?? ""}` : null,
+        attachedToBlock: attachedSegment?.scheduledBlock ?? null,
+        reason,
+      });
+      continue;
+    }
+
     if (!/(?:[A-Z]{3}\.?\d{4}|\bD\d{3,5}\b|\b9E\d{3,5}\b|\bOO\d{3,5}\b|\b\d{3,5}\b)/i.test(normalizedLine)) {
       continue;
     }
@@ -760,13 +858,24 @@ function parseICrewSegments(rawText: string) {
     let dayToken = currentDayToken;
     let rawFlightToken: string | null = null;
 
+    const leadingGluedContinuationMatch = tokens[0]?.match(/^(\*?[A-Z]{3})\*?(\d{4})$/i);
     const startsLikeContinuationRow =
-      tokens[0] &&
-      isAirportToken(tokens[0]) &&
-      /^\d{4}$/.test(tokens[1] ?? "") &&
-      ((isArrivalToken(tokens[2]) as boolean) ||
-        (isArrivalAirportToken(tokens[2]) && /^\d{4}$/.test(tokens[3] ?? ""))) &&
-      lastRawFlightToken;
+      Boolean(lastRawFlightToken) &&
+      Boolean(
+        (
+          tokens[0] &&
+          isAirportToken(tokens[0]) &&
+          /^\d{4}$/.test(tokens[1] ?? "") &&
+          ((isArrivalToken(tokens[2]) as boolean) ||
+            (isArrivalAirportToken(tokens[2]) && /^\d{4}$/.test(tokens[3] ?? "")))
+        ) ||
+          (
+            leadingGluedContinuationMatch?.[1] &&
+            leadingGluedContinuationMatch?.[2] &&
+            ((isArrivalToken(tokens[1]) as boolean) ||
+              (isArrivalAirportToken(tokens[1]) && /^\d{4}$/.test(tokens[2] ?? "")))
+          ),
+      );
 
     if (tokens[0] && isDayOnlyToken(tokens[0]) && tokens[1] && isFlightTokenLike(tokens[1])) {
       dayToken = tokens[0].padStart(2, "0");
@@ -917,6 +1026,7 @@ function parseICrewSegments(rawText: string) {
       confirmationCode,
       marker: token.marker,
       segmentType,
+      sourceLineIndex: lineIndex,
     };
     segments.push(parsedSegment);
     lastSegment = parsedSegment;
@@ -945,7 +1055,7 @@ function parseICrewSegments(rawText: string) {
     });
   }
 
-  return { segments, attemptedLegParseResults };
+  return { segments, attemptedLegParseResults, standaloneDhdLines };
 }
 
 function collectICrewIncompleteFragments(
@@ -986,11 +1096,15 @@ function parseICrewTextInternal(rawText: string): ParsedICrewTextResult {
     (sum, totals) => sum + totals.deadheadBlockMinutes,
     0,
   );
+  const summedStandaloneDeadheadMinutes = parsedSegmentAttempt.standaloneDhdLines.reduce(
+    (sum, entry) => sum + entry.minutes,
+    0,
+  );
   if (header.totalDeadheadBlockMinutes == null) {
-    if (summedDayDeadheadMinutes > 0) {
+    if (summedDayDeadheadMinutes > 0 || summedStandaloneDeadheadMinutes > 0) {
       header = {
         ...header,
-        totalDeadheadBlockMinutes: summedDayDeadheadMinutes,
+        totalDeadheadBlockMinutes: summedDayDeadheadMinutes > 0 ? summedDayDeadheadMinutes : summedStandaloneDeadheadMinutes,
         totalDeadheadBlockSource: "summedDhdLines",
       };
     }
@@ -1018,6 +1132,11 @@ function parseICrewTextInternal(rawText: string): ParsedICrewTextResult {
   if (header.totalDeadheadBlockSource === "summedDhdLines") {
     parserNotes.push("Deadhead total recovered from day-level DHD lines.");
   }
+  if (parsedSegmentAttempt.standaloneDhdLines.length > 0) {
+    parserNotes.push(
+      `Attached ${parsedSegmentAttempt.standaloneDhdLines.length} standalone DHD line${parsedSegmentAttempt.standaloneDhdLines.length === 1 ? "" : "s"} to matching leg block evidence.`,
+    );
+  }
   if (incompleteFragments.length > 0) {
     parserNotes.push(
       `iCrew partial text ended with ${incompleteFragments.length} incomplete leg row${incompleteFragments.length === 1 ? "" : "s"}.`,
@@ -1025,10 +1144,11 @@ function parseICrewTextInternal(rawText: string): ParsedICrewTextResult {
   }
   const segmentsWithKinds = parsedSegments.map((segment) => {
     const explicitDeadhead = segment.marker === "D";
+    const standaloneDeadhead = segment.isDeadhead === true;
     return {
       ...segment,
-      isDeadhead: explicitDeadhead,
-      segmentType: explicitDeadhead
+      isDeadhead: explicitDeadhead || standaloneDeadhead,
+      segmentType: explicitDeadhead || standaloneDeadhead
         ? ("deadhead" as const)
         : segment.segmentType ?? ("operating" as const),
     };
@@ -1126,6 +1246,8 @@ function parseICrewTextInternal(rawText: string): ParsedICrewTextResult {
       reason:
         segment.marker === "D"
           ? "explicit_D_marker"
+          : segment.deadheadSource === "standalone_dhd_line"
+            ? "attached_from_standalone_dhd_line"
           : "inferred_from_dhd_totals_and_regional_carrier",
     }));
 
@@ -1205,6 +1327,7 @@ function parseICrewTextInternal(rawText: string): ParsedICrewTextResult {
     visibleOperatingLegs,
     logbookLegs: visibleOperatingLegs,
     deadheadAnnotations,
+    standaloneDhdAttachments: parsedSegmentAttempt.standaloneDhdLines,
     incompleteFragments,
     parserNotes,
     partialStatus,
@@ -1226,6 +1349,10 @@ export function parseICrewTextWithDiagnostics(rawText: string): ICrewParseDebugR
       (sum, totals) => sum + totals.deadheadBlockMinutes,
       0,
     );
+    const summedStandaloneDeadheadMinutes = parsedSegmentAttempt.standaloneDhdLines.reduce(
+      (sum, entry) => sum + entry.minutes,
+      0,
+    );
     const partialHeader = {
       fleetCategory: parsedHeaderParts.fleetCategory ?? undefined,
       base: parsedHeaderParts.base ?? undefined,
@@ -1243,11 +1370,15 @@ export function parseICrewTextWithDiagnostics(rawText: string): ICrewParseDebugR
         ? parseDotDurationToMinutes(parsedHeaderParts.totalDeadheadToken)
         : summedDayDeadheadMinutes > 0
           ? summedDayDeadheadMinutes
+          : summedStandaloneDeadheadMinutes > 0
+            ? summedStandaloneDeadheadMinutes
           : null,
       totalDeadheadBlockSource: parsedHeaderParts.totalDeadheadToken
         ? "tdhdSummary"
         : summedDayDeadheadMinutes > 0
           ? "summedDhdLines"
+          : summedStandaloneDeadheadMinutes > 0
+            ? "summedDhdLines"
           : "none",
       tafbCredit: parsedHeaderParts.tafbCreditToken ? parsedHeaderParts.tafbCreditToken.replace(".", ":") : null,
       tafbElapsed: parsedHeaderParts.tafbElapsedToken ? parsedHeaderParts.tafbElapsedToken.replace(".", ":") : null,
@@ -1264,6 +1395,19 @@ export function parseICrewTextWithDiagnostics(rawText: string): ICrewParseDebugR
             parsedHeader: partialHeader,
             parsedTotals: partialTotals,
             attemptedLegParseResults: parsedSegmentAttempt.attemptedLegParseResults,
+            parsedSegments: parsedSegmentAttempt.segments.map((segment) => ({
+              dayToken: segment.dayToken,
+              route: `${segment.departureAirport}-${segment.arrivalAirport}`,
+              carrier: segment.carrier ?? null,
+              flightNumber: segment.flightNumber ?? null,
+              scheduledOut: segment.scheduledOut ?? null,
+              scheduledIn: segment.scheduledIn ?? null,
+              scheduledBlock: segment.scheduledBlock ?? null,
+              isDeadhead: Boolean(segment.isDeadhead),
+              segmentType: segment.isDeadhead ? "deadhead" : segment.segmentType ?? "operating",
+              sourceText: segment.sourceText ?? null,
+            })),
+            standaloneDhdLines: parsedSegmentAttempt.standaloneDhdLines,
           },
         ),
       };
@@ -1289,19 +1433,49 @@ export function parseICrewTextWithDiagnostics(rawText: string): ICrewParseDebugR
           parsedHeader: partialHeader,
           parsedTotals: partialTotals,
           attemptedLegParseResults: parsedSegmentAttempt.attemptedLegParseResults,
+          parsedSegments: parsedSegmentAttempt.segments.map((segment) => ({
+            dayToken: segment.dayToken,
+            route: `${segment.departureAirport}-${segment.arrivalAirport}`,
+            carrier: segment.carrier ?? null,
+            flightNumber: segment.flightNumber ?? null,
+            scheduledOut: segment.scheduledOut ?? null,
+            scheduledIn: segment.scheduledIn ?? null,
+            scheduledBlock: segment.scheduledBlock ?? null,
+            isDeadhead: Boolean(segment.isDeadhead),
+            segmentType: segment.isDeadhead ? "deadhead" : segment.segmentType ?? "operating",
+            sourceText: segment.sourceText ?? null,
+          })),
+          standaloneDhdLines: parsedSegmentAttempt.standaloneDhdLines,
         }),
       };
     }
 
     return {
       parserSucceeded: true,
-      parsed,
-      diagnostics: buildICrewParserDiagnostics(rawText, null, null, {
-        parsedHeader: partialHeader,
-        parsedTotals: partialTotals,
-        attemptedLegParseResults: parsedSegmentAttempt.attemptedLegParseResults,
-      }),
-    };
+        parsed,
+        diagnostics: buildICrewParserDiagnostics(rawText, null, null, {
+          parsedHeader: partialHeader,
+          parsedTotals: partialTotals,
+          attemptedLegParseResults: parsedSegmentAttempt.attemptedLegParseResults,
+          parsedSegments: parsed.allTripSegments.map((segment) => ({
+            dayToken: segment.date?.match(/^(\d{2}[A-Z]{3})$/i)?.[1]?.slice(0, 2) ?? "??",
+            route: `${segment.departureAirport}-${segment.arrivalAirport}`,
+            carrier: segment.carrier ?? null,
+            flightNumber: segment.flightNumber ?? null,
+            scheduledOut: segment.scheduledOut ?? null,
+            scheduledIn: segment.scheduledIn ?? null,
+            scheduledBlock: segment.scheduledBlock ?? null,
+            isDeadhead: Boolean(segment.isDeadhead),
+            segmentType: segment.segmentType ?? (segment.isDeadhead ? "deadhead" : "operating"),
+            sourceText: segment.sourceText ?? null,
+          })),
+          standaloneDhdLines: parsed.standaloneDhdAttachments,
+          resultingDeadheadLegs: parsed.deadheadAnnotations.map(
+            (annotation) =>
+              `${annotation.cityPair} ${annotation.carrier}${annotation.flightNumber} ${annotation.scheduledBlock} ${annotation.reason}`,
+          ),
+        }),
+      };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to parse iCrew text.";
     return {

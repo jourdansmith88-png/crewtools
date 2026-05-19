@@ -1,4 +1,4 @@
-import { parseICrewTextWithDiagnostics } from "./parseICrewText.ts";
+import { parseICrewTextWithDiagnostics, type ICrewParserDiagnostics } from "./parseICrewText.ts";
 import type { RotationDashboardData } from "../../utils/rotationCompanion.ts";
 
 export type TripWatchParserPath =
@@ -61,9 +61,22 @@ export type TripWatchComparisonResult = {
     parserPathUsed?: TripWatchParserPath | null;
     candidateCityPairCount?: number;
     sufficiencyReason?: string;
+    comparisonSkipped?: boolean;
     normalizedAddedCount: number;
     normalizedRemovedCount: number;
     normalizedChangedCount: number;
+    baselineRotationNumber?: string;
+    updatedRotationNumber?: string;
+    baselineDeadheadBlockMinutes?: number;
+    updatedDeadheadBlockMinutes?: number;
+    resultDeadheadBlockDeltaMinutes?: number | null;
+    updatedSameAirportNonDhLegs?: string[];
+    updatedAllLegs?: string[];
+    updatedLegsWithSegmentType?: string[];
+    updatedRtgLegs?: string[];
+    resultAddedLegs?: string[];
+    resultChangedLegs?: string[];
+    resultWatchItems?: string[];
   };
 };
 
@@ -74,6 +87,15 @@ export type TripWatchUpdatedParseResult =
       snapshot: TripWatchRotationSnapshot;
       parserPathUsed: TripWatchParserPath | null;
       updatedParsedLegCount: number;
+      debugArtifacts?: {
+        rawICrewParse?: {
+          parserSucceeded: boolean;
+          parsed: NonNullable<ReturnType<typeof parseICrewTextWithDiagnostics>["parsed"]> | null;
+          diagnostics: ICrewParserDiagnostics | null;
+        } | null;
+        updatedDashboard?: RotationDashboardData | null;
+        updatedSnapshot?: TripWatchRotationSnapshot | null;
+      };
     }
   | {
       status: "needs_more_info" | "unparseable";
@@ -152,6 +174,11 @@ function normalizeTripWatchCarrier(value?: string | null) {
   return value?.replace(/\s+/g, "").toUpperCase() ?? "";
 }
 
+function isTripWatchReturnToGateLeg(leg: RotationDashboardData["legs"][number]) {
+  const segmentType = (leg as RotationDashboardData["legs"][number] & { segmentType?: string }).segmentType;
+  return segmentType === "return_to_gate" || (!leg.isDeadhead && leg.origin === leg.destination);
+}
+
 function extractTripWatchLegDate(leg: RotationDashboardData["legs"][number]) {
   return (
     normalizeTripWatchDateKey(leg.dayLabel) ||
@@ -190,7 +217,8 @@ export function formatTripWatchLegSummary(leg: RotationDashboardData["legs"][num
   const normalizedFlight = normalizeTripWatchFlightNumber(leg.flightNumber);
   const flightCode = `${carrierCode && !normalizedFlight.startsWith(carrierCode) ? carrierCode : ""}${normalizedFlight || "TBD"}`;
   const timeBits = [leg.departureTime, leg.arrivalTime].filter(Boolean);
-  return `${leg.origin}-${leg.destination} ${flightCode}${timeBits.length === 2 ? ` ${timeBits[0]}-${timeBits[1]}` : ""}`;
+  const prefix = leg.isDeadhead ? "DH " : isTripWatchReturnToGateLeg(leg) ? "RTG " : "";
+  return `${prefix}${leg.origin}-${leg.destination} ${flightCode}${timeBits.length === 2 ? ` ${timeBits[0]}-${timeBits[1]}` : ""}`;
 }
 
 function parseTafbMinutes(value?: string | null) {
@@ -214,9 +242,16 @@ function formatTripWatchMinutes(value?: number | null) {
 export function buildTripWatchRotationSnapshot(dashboard: RotationDashboardData): TripWatchRotationSnapshot {
   const operatingLegs = dashboard.legs.filter((leg) => !leg.isDeadhead);
   const deadheadLegs = dashboard.legs.filter((leg) => leg.isDeadhead);
+  const parsedDeadheadLegs = dashboard.parsedRotation.legs.filter((leg) => leg.isDeadhead || leg.segmentType === "deadhead");
+  const fallbackDeadheadMinutesFromVisibleLegs = deadheadLegs.reduce((sum, leg) => sum + (leg.scheduledBlockMinutes ?? 0), 0);
+  const fallbackDeadheadMinutesFromParsedLegs = parsedDeadheadLegs.reduce((sum, leg) => sum + (leg.scheduledBlock ?? 0), 0);
   const deadheadBlockMinutes =
-    dashboard.parsedRotation.deadheadBlock ??
-    deadheadLegs.reduce((sum, leg) => sum + (leg.scheduledBlockMinutes ?? 0), 0);
+    typeof dashboard.parsedRotation.deadheadBlock === "number" &&
+    (dashboard.parsedRotation.deadheadBlock > 0 || deadheadLegs.length === 0)
+      ? dashboard.parsedRotation.deadheadBlock
+      : fallbackDeadheadMinutesFromVisibleLegs > 0
+        ? fallbackDeadheadMinutesFromVisibleLegs
+        : fallbackDeadheadMinutesFromParsedLegs;
   const finalOperatingArrival = operatingLegs.at(-1)?.destination ?? dashboard.snapshot.finalArrival;
   const finalArrivalAfterDh =
     dashboard.parsedRotation.finalArrivalAfterDh ??
@@ -370,6 +405,38 @@ function buildTripWatchSnapshotFromParsedDashboard(dashboard: RotationDashboardD
   };
 }
 
+function looksLikeTripWatchTailFragment(rawText: string) {
+  const normalized = rawText
+    .toUpperCase()
+    .replace(/[^\S\r\n]+/g, " ")
+    .trim();
+  if (!normalized) {
+    return false;
+  }
+
+  const tailMarkers = [
+    "CREW ACCOMMODATIONS PHONE NUMBER",
+    "OUTSIDE ATL CALL",
+    "IN ATL PLEASE CALL",
+    "CREW PICK UP",
+    "TRANSPORTATION -",
+    "HOTEL -",
+    "END ",
+  ];
+  const hasTailMarker = tailMarkers.some((marker) => normalized.includes(marker));
+  if (!hasTailMarker) {
+    return false;
+  }
+
+  const hasLegLikeRoute = /\b[A-Z]{3}\s*(?:-|->|→)\s*[A-Z]{3}\b/.test(normalized);
+  const hasTotals = /\b(TL|TBL|TDHD|TAFB|BL)\b/.test(normalized);
+  const hasHeader = /\b(POS-|CHECK IN AT|TRIP DATES|ROTATION OPER|DAY\s+FLT)\b/.test(normalized);
+  const hasReportRelease = /\b(REPORT TIME|RELEASE)\b/.test(normalized);
+  const hasFlightLine = /\b(?:DL|OO|9E|YX|AS|WN|AA|UA)\d{2,4}\b/.test(normalized);
+
+  return !hasLegLikeRoute && !hasTotals && !hasHeader && !hasReportRelease && !hasFlightLine;
+}
+
 export function compareRotationSnapshots(
   originalSnapshot: TripWatchRotationSnapshot,
   updatedSnapshot: TripWatchRotationSnapshot,
@@ -463,6 +530,8 @@ export function compareRotationSnapshots(
     Boolean(updatedSnapshot.rotationNumber) &&
     originalSnapshot.rotationNumber !== updatedSnapshot.rotationNumber;
 
+  const addedRtgLegs = Array.from(remainingUpdated.values()).filter((leg) => isTripWatchReturnToGateLeg(leg));
+
   const hasChanges =
     isDifferentRotation ||
     addedLegs.length > 0 ||
@@ -487,6 +556,9 @@ export function compareRotationSnapshots(
     if (addedLegs.length || removedLegs.length || changedLegs.length) {
       watchItems.push("Schedule changed; review the updated leg sequence.");
       recommendedActions.push("Review the updated trip timeline before accepting new assignments.");
+    }
+    if (addedRtgLegs.length > 0) {
+      watchItems.push("RTG segment added.");
     }
     if (
       (creditDeltaMinutes != null && creditDeltaMinutes !== 0) ||
@@ -516,12 +588,12 @@ export function compareRotationSnapshots(
 
   return {
     status: "ok",
-    title: !hasChanges ? "No major changes detected" : isDifferentRotation ? "Different rotation detected" : "Change detected",
+    title: !hasChanges ? "No major changes detected" : isDifferentRotation ? "Different rotation detected" : "Rotation updated",
     summary: !hasChanges
       ? "The updated input matches the loaded trip based on legs, times, and totals we could compare."
       : isDifferentRotation
         ? `Loaded rotation ${originalSnapshot.rotationNumber ?? "unknown"}, updated input appears to be ${updatedSnapshot.rotationNumber ?? "a different rotation"}. This may be a different trip, not a reroute.`
-        : "The updated input differs from the loaded trip based on the legs, times, or totals we could compare.",
+        : `Rotation ${updatedSnapshot.rotationNumber ?? originalSnapshot.rotationNumber ?? "unknown"} changed after update.`,
     comparisonConfidence: confidence,
     parserPathUsed: updatedSnapshot.parserPath ?? null,
     addedLegs,
@@ -547,9 +619,26 @@ export function compareRotationSnapshots(
       parserPathUsed: updatedSnapshot.parserPath ?? null,
       candidateCityPairCount: 0,
       sufficiencyReason: isDifferentRotation ? "different_rotation_number" : hasChanges ? "comparable_changes_found" : "comparable_match",
+      comparisonSkipped: false,
       normalizedAddedCount: addedLegs.length,
       normalizedRemovedCount: removedLegs.length,
       normalizedChangedCount: changedLegs.length,
+      baselineRotationNumber: originalSnapshot.rotationNumber,
+      updatedRotationNumber: updatedSnapshot.rotationNumber,
+      baselineDeadheadBlockMinutes: originalSnapshot.deadheadBlockMinutes,
+      updatedDeadheadBlockMinutes: updatedSnapshot.deadheadBlockMinutes,
+      resultDeadheadBlockDeltaMinutes: dhBlockDeltaMinutes,
+      updatedSameAirportNonDhLegs: updatedSnapshot.legs
+        .filter((leg) => !leg.isDeadhead && leg.origin === leg.destination)
+        .map(formatTripWatchLegSummary),
+      updatedAllLegs: updatedSnapshot.legs.map(formatTripWatchLegSummary),
+      updatedLegsWithSegmentType: updatedSnapshot.legs
+        .filter((leg) => Boolean(leg.segmentType))
+        .map((leg) => `${formatTripWatchLegSummary(leg)} [${leg.segmentType ?? "operating"}]`),
+      updatedRtgLegs: updatedSnapshot.legs.filter((leg) => isTripWatchReturnToGateLeg(leg)).map(formatTripWatchLegSummary),
+      resultAddedLegs: addedLegs,
+      resultChangedLegs: changedLegs,
+      resultWatchItems: watchItems,
     },
   };
 }
@@ -571,6 +660,20 @@ export async function parseTripWatchUpdatedInput(
   let screenshotParse: TripWatchScreenshotParseResponse | null = null;
   if (hasScreenshots) {
     screenshotParse = await args.parseScreenshots(args.updatedScreenshots);
+  }
+
+  if (hasText && !hasScreenshots && looksLikeTripWatchTailFragment(trimmedText)) {
+    return buildNeedsMoreInfoResult({
+      summary: "We found text, but not enough flight or rotation details to compare against the loaded trip.",
+      comparisonConfidence: "low",
+      parserPathUsed: "plain_text_partial",
+      updatedParsedLegCount: 0,
+      candidateCityPairCount: 0,
+      sufficiencyReason: "tail_fragment_only",
+      recommendedActions: [
+        "Paste the full updated iCrew/MiCrew, or include the changed leg lines, report/release times, and totals.",
+      ],
+    });
   }
 
   if (hasText && !hasScreenshots && looksLikeTripWatchICrewRotationText(trimmedText)) {
@@ -615,6 +718,15 @@ export async function parseTripWatchUpdatedInput(
       snapshot,
       parserPathUsed: "icrew_printout_parser",
       updatedParsedLegCount: dashboard.legs.length,
+      debugArtifacts: {
+        rawICrewParse: {
+          parserSucceeded: debugResult.parserSucceeded,
+          parsed: debugResult.parsed,
+          diagnostics: debugResult.diagnostics,
+        },
+        updatedDashboard: dashboard,
+        updatedSnapshot: snapshot,
+      },
     };
   }
 
@@ -645,6 +757,10 @@ export async function parseTripWatchUpdatedInput(
         snapshot,
         parserPathUsed: parsed.parsedRotation.parserPath,
         updatedParsedLegCount: parsed.dashboard.legs.length,
+        debugArtifacts: {
+          updatedDashboard: parsed.dashboard,
+          updatedSnapshot: snapshot,
+        },
       };
     }
   }
