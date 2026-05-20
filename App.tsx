@@ -2277,6 +2277,14 @@ export default function App() {
       loadedDeadheadLegs: summarizeDeadheadLegs(rotationDashboard),
     };
   }, [displayedRotationDashboard, rotationDashboard]);
+  function rotationFormatMinutes(value?: number | null) {
+    return value == null ? "TBD" : `${Math.floor(value / 60)}:${String(value % 60).padStart(2, "0")}`;
+  }
+  function formatCompactDuration(value?: number | null) {
+    return value == null || !Number.isFinite(value)
+      ? "TBD"
+      : `${Math.floor(value / 60)}:${String(Math.abs(value % 60)).padStart(2, "0")}`;
+  }
   const tripWatchTotalsChanged = useMemo(
     () =>
       tripWatchResult
@@ -2289,15 +2297,82 @@ export default function App() {
         : [],
     [tripWatchResult],
   );
+  const [tripWatchExpandedChangedLegs, setTripWatchExpandedChangedLegs] = useState(false);
+  const tripWatchHeaderComparisonItems = useMemo(() => {
+    if (
+      !tripWatchResult ||
+      tripWatchResult.status !== "ok" ||
+      tripWatchResult.title === "Different rotation detected" ||
+      !tripWatchResult.baselineSnapshot ||
+      !tripWatchResult.updatedSnapshot
+    ) {
+      return [];
+    }
+    const sameRotation =
+      Boolean(tripWatchResult.baselineSnapshot.rotationNumber) &&
+      tripWatchResult.baselineSnapshot.rotationNumber === tripWatchResult.updatedSnapshot.rotationNumber;
+    if (!sameRotation) {
+      return [];
+    }
+    const buildItem = (
+      label: string,
+      originalValue?: number | null,
+      updatedValue?: number | null,
+      deltaValue?: number | null,
+    ) => {
+      if (
+        originalValue == null ||
+        updatedValue == null ||
+        !Number.isFinite(originalValue) ||
+        !Number.isFinite(updatedValue) ||
+        deltaValue == null ||
+        !Number.isFinite(deltaValue) ||
+        deltaValue === 0
+      ) {
+        return null;
+      }
+      return {
+        label,
+        originalValue: rotationFormatMinutes(originalValue),
+        updatedValue: rotationFormatMinutes(updatedValue),
+        deltaValue: formatTripWatchDeltaValue("", deltaValue)?.trim() ?? "",
+      };
+    };
+    return [
+      buildItem(
+        "Credit",
+        tripWatchResult.baselineSnapshot.totalCreditMinutes,
+        tripWatchResult.updatedSnapshot.totalCreditMinutes,
+        tripWatchResult.creditDeltaMinutes,
+      ),
+      buildItem(
+        "Op block",
+        tripWatchResult.baselineSnapshot.operatingBlockMinutes,
+        tripWatchResult.updatedSnapshot.operatingBlockMinutes,
+        tripWatchResult.operatingBlockDeltaMinutes,
+      ),
+      buildItem(
+        "DH block",
+        tripWatchResult.baselineSnapshot.deadheadBlockMinutes,
+        tripWatchResult.updatedSnapshot.deadheadBlockMinutes,
+        tripWatchResult.dhBlockDeltaMinutes,
+      ),
+    ].filter((item): item is { label: string; originalValue: string; updatedValue: string; deltaValue: string } => Boolean(item));
+  }, [tripWatchResult]);
+  const showTripWatchHeaderComparison = tripWatchHeaderComparisonItems.length > 0;
+  const tripWatchChangedLegLimit = isCompactMobile ? 3 : 6;
   const tripWatchVisibleChangedLegs = useMemo(
     () =>
       tripWatchResult
-        ? tripWatchResult.changedLegs.slice(0, isCompactMobile ? 3 : 6)
+        ? tripWatchResult.changedLegs.slice(
+            0,
+            tripWatchExpandedChangedLegs ? tripWatchResult.changedLegs.length : tripWatchChangedLegLimit,
+          )
         : [],
-    [isCompactMobile, tripWatchResult],
+    [tripWatchChangedLegLimit, tripWatchExpandedChangedLegs, tripWatchResult],
   );
   const tripWatchHiddenChangedLegCount = tripWatchResult
-    ? Math.max(0, tripWatchResult.changedLegs.length - tripWatchVisibleChangedLegs.length)
+    ? Math.max(0, tripWatchResult.changedLegs.length - tripWatchChangedLegLimit)
     : 0;
   const tripWatchDifferentRotationExamples = useMemo(() => {
     if (!tripWatchResult || tripWatchResult.title !== "Different rotation detected") {
@@ -2332,6 +2407,21 @@ export default function App() {
         : null,
     [tripWatchResult],
   );
+  const tripWatchPayWatchVisibleSummaryItems = useMemo(() => {
+    if (!tripWatchPayWatchSummary) {
+      return [];
+    }
+    return isCompactMobile && showTripWatchHeaderComparison ? [] : tripWatchPayWatchSummary.summaryItems;
+  }, [isCompactMobile, showTripWatchHeaderComparison, tripWatchPayWatchSummary]);
+  const tripWatchPayWatchVisibleRecommendedItems = useMemo(() => {
+    if (!tripWatchPayWatchSummary) {
+      return [];
+    }
+    if (isCompactMobile && showTripWatchHeaderComparison) {
+      return tripWatchPayWatchSummary.recommendedItems.filter((item) => /Review Pay Audit/i.test(item));
+    }
+    return tripWatchPayWatchSummary.recommendedItems;
+  }, [isCompactMobile, showTripWatchHeaderComparison, tripWatchPayWatchSummary]);
 
   const formatLegFlightDisplay = (leg: RotationDashboardData["legs"][number]) => {
     const carrierPrefix =
@@ -2384,6 +2474,10 @@ export default function App() {
     useState<RerouteAnalyzerChoice>("unknown");
   const [rerouteBidPeriodCrossover, setRerouteBidPeriodCrossover] =
     useState<RerouteAnalyzerChoice>("unknown");
+
+  useEffect(() => {
+    setTripWatchExpandedChangedLegs(false);
+  }, [tripWatchResult?.summary, tripWatchResult?.title]);
   const [rerouteOriginalScreenshots, setRerouteOriginalScreenshots] = useState<RerouteScreenshotAttachment[]>([]);
   const [rerouteChangedScreenshots, setRerouteChangedScreenshots] = useState<RerouteScreenshotAttachment[]>([]);
   const [rerouteAnalyzeBusy, setRerouteAnalyzeBusy] = useState(false);
@@ -3601,14 +3695,6 @@ export default function App() {
 
   const rerouteFormatMinutes = (value?: number) =>
     value == null ? "" : `${Math.floor(value / 60)}:${String(value % 60).padStart(2, "0")}`;
-
-  const rotationFormatMinutes = (value?: number) =>
-    value == null ? "TBD" : `${Math.floor(value / 60)}:${String(value % 60).padStart(2, "0")}`;
-
-  const formatCompactDuration = (value?: number | null) =>
-    value == null || !Number.isFinite(value)
-      ? "TBD"
-      : `${Math.floor(value / 60)}:${String(Math.abs(value % 60)).padStart(2, "0")}`;
 
   const rotationCompanionContext = useMemo<RotationCompanionContext | null>(
     () =>
@@ -5274,33 +5360,50 @@ export default function App() {
                         <Text style={styles.tripBoardSummaryStripRotation}>ROT {rotationDashboard.snapshot.rotationNumber}</Text>
                         <Text style={styles.tripBoardSummaryStripDates}>{rotationDashboard.snapshot.tripDates}</Text>
                       </View>
-                      <View style={styles.tripBoardSummaryStripChipRow}>
-                        <View style={[styles.tripBoardSummaryInlineChip, styles.tripBoardSummaryInlineChipPrimary]}>
-                          <Text style={styles.tripBoardSummaryInlineChipLabel}>Credit</Text>
-                          <Text style={styles.tripBoardSummaryInlineChipValue}>
-                            {rotationDashboard.parsedRotation.missingSections.includes("total credit")
-                              ? "Needs full"
-                              : rotationFormatMinutes(rotationDashboard.snapshot.totalCreditMinutes)}
-                          </Text>
+                      {showTripWatchHeaderComparison ? (
+                        <View style={styles.tripBoardSummaryStripComparisonStack}>
+                          <Text style={styles.tripBoardSummaryStripComparisonLabel}>Trip change</Text>
+                          <View style={styles.tripBoardSummaryStripChipRow}>
+                            {tripWatchHeaderComparisonItems.map((item) => (
+                              <View key={`trip-change-mobile-${item.label}`} style={[styles.tripBoardSummaryInlineChip, styles.tripBoardSummaryInlineChipPrimary]}>
+                                <Text style={styles.tripBoardSummaryInlineChipLabel}>{item.label}</Text>
+                                <Text style={styles.tripBoardSummaryInlineChipComparisonValue}>
+                                  {item.originalValue} {"->"} {item.updatedValue}
+                                </Text>
+                                <Text style={styles.tripBoardSummaryInlineChipComparisonDelta}>{item.deltaValue}</Text>
+                              </View>
+                            ))}
+                          </View>
                         </View>
-                        <View style={[styles.tripBoardSummaryInlineChip, styles.tripBoardSummaryInlineChipPrimary]}>
-                          <Text style={styles.tripBoardSummaryInlineChipLabel}>Op block</Text>
-                          <Text style={styles.tripBoardSummaryInlineChipValue}>
-                            {rotationDashboard.parsedRotation.missingSections.includes("total scheduled block")
-                              ? "Needs full"
-                              : rotationFormatMinutes(rotationDashboard.snapshot.scheduledBlockMinutes)}
-                          </Text>
-                        </View>
-                        {rotationDashboard.parsedRotation.deadheadBlock != null &&
-                        rotationDashboard.parsedRotation.deadheadBlock > 0 ? (
+                      ) : (
+                        <View style={styles.tripBoardSummaryStripChipRow}>
                           <View style={[styles.tripBoardSummaryInlineChip, styles.tripBoardSummaryInlineChipPrimary]}>
-                            <Text style={styles.tripBoardSummaryInlineChipLabel}>DH block</Text>
+                            <Text style={styles.tripBoardSummaryInlineChipLabel}>Credit</Text>
                             <Text style={styles.tripBoardSummaryInlineChipValue}>
-                              {rotationFormatMinutes(rotationDashboard.parsedRotation.deadheadBlock)}
+                              {rotationDashboard.parsedRotation.missingSections.includes("total credit")
+                                ? "Needs full"
+                                : rotationFormatMinutes(rotationDashboard.snapshot.totalCreditMinutes)}
                             </Text>
                           </View>
-                        ) : null}
-                      </View>
+                          <View style={[styles.tripBoardSummaryInlineChip, styles.tripBoardSummaryInlineChipPrimary]}>
+                            <Text style={styles.tripBoardSummaryInlineChipLabel}>Op block</Text>
+                            <Text style={styles.tripBoardSummaryInlineChipValue}>
+                              {rotationDashboard.parsedRotation.missingSections.includes("total scheduled block")
+                                ? "Needs full"
+                                : rotationFormatMinutes(rotationDashboard.snapshot.scheduledBlockMinutes)}
+                            </Text>
+                          </View>
+                          {rotationDashboard.parsedRotation.deadheadBlock != null &&
+                          rotationDashboard.parsedRotation.deadheadBlock > 0 ? (
+                            <View style={[styles.tripBoardSummaryInlineChip, styles.tripBoardSummaryInlineChipPrimary]}>
+                              <Text style={styles.tripBoardSummaryInlineChipLabel}>DH block</Text>
+                              <Text style={styles.tripBoardSummaryInlineChipValue}>
+                                {rotationFormatMinutes(rotationDashboard.parsedRotation.deadheadBlock)}
+                              </Text>
+                            </View>
+                          ) : null}
+                        </View>
+                      )}
                       <View style={styles.tripBoardSummaryStripChipRow}>
                         <View style={styles.tripBoardSummaryInlineChipMini}>
                           <Text style={styles.tripBoardSummaryInlineChipMiniLabel}>Op</Text>
@@ -5350,32 +5453,47 @@ export default function App() {
                         ) : null}
                       </View>
                       <View style={[styles.tripBoardSummaryGrid, isCompactMobile && styles.tripBoardSummaryGridCompact]}>
-                        <TripBoardSummaryCell
-                          label="Credit"
-                          compact={isCompactMobile}
-                          value={
-                            rotationDashboard.parsedRotation.missingSections.includes("total credit")
-                              ? "Needs full rotation"
-                              : rotationFormatMinutes(rotationDashboard.snapshot.totalCreditMinutes)
-                          }
-                        />
-                        <TripBoardSummaryCell
-                          label="Op block"
-                          compact={isCompactMobile}
-                          value={
-                            rotationDashboard.parsedRotation.missingSections.includes("total scheduled block")
-                              ? "Needs full rotation"
-                              : rotationFormatMinutes(rotationDashboard.snapshot.scheduledBlockMinutes)
-                          }
-                        />
-                        {rotationDashboard.parsedRotation.deadheadBlock != null &&
-                        rotationDashboard.parsedRotation.deadheadBlock > 0 ? (
-                          <TripBoardSummaryCell
-                            label="DH block"
-                            compact={isCompactMobile}
-                            value={rotationFormatMinutes(rotationDashboard.parsedRotation.deadheadBlock)}
-                          />
-                        ) : null}
+                        {showTripWatchHeaderComparison ? (
+                          tripWatchHeaderComparisonItems.map((item) => (
+                            <TripBoardComparisonCell
+                              key={`trip-change-desktop-${item.label}`}
+                              label={item.label}
+                              compact={isCompactMobile}
+                              originalValue={item.originalValue}
+                              updatedValue={item.updatedValue}
+                              deltaValue={item.deltaValue}
+                            />
+                          ))
+                        ) : (
+                          <>
+                            <TripBoardSummaryCell
+                              label="Credit"
+                              compact={isCompactMobile}
+                              value={
+                                rotationDashboard.parsedRotation.missingSections.includes("total credit")
+                                  ? "Needs full rotation"
+                                  : rotationFormatMinutes(rotationDashboard.snapshot.totalCreditMinutes)
+                              }
+                            />
+                            <TripBoardSummaryCell
+                              label="Op block"
+                              compact={isCompactMobile}
+                              value={
+                                rotationDashboard.parsedRotation.missingSections.includes("total scheduled block")
+                                  ? "Needs full rotation"
+                                  : rotationFormatMinutes(rotationDashboard.snapshot.scheduledBlockMinutes)
+                              }
+                            />
+                            {rotationDashboard.parsedRotation.deadheadBlock != null &&
+                            rotationDashboard.parsedRotation.deadheadBlock > 0 ? (
+                              <TripBoardSummaryCell
+                                label="DH block"
+                                compact={isCompactMobile}
+                                value={rotationFormatMinutes(rotationDashboard.parsedRotation.deadheadBlock)}
+                              />
+                            ) : null}
+                          </>
+                        )}
                         <TripBoardSummaryCell
                           label="Op legs"
                           compact={isCompactMobile}
@@ -6025,11 +6143,17 @@ export default function App() {
                                 </View>
                               ) : null}
                               {tripWatchPayWatchSummary?.hasContent ? (
-                                <View style={[styles.resultPanelSubtle, styles.tripWatchSectionCard]}>
+                                <View
+                                  style={[
+                                    styles.resultPanelSubtle,
+                                    styles.tripWatchSectionCard,
+                                    isCompactMobile && styles.tripWatchSectionCardCompact,
+                                  ]}
+                                >
                                   <Text style={styles.resultSupportMetaText}>Pay Watch</Text>
-                                  {tripWatchPayWatchSummary.summaryItems.length > 0 ? (
+                                  {tripWatchPayWatchVisibleSummaryItems.length > 0 ? (
                                     <View style={styles.tripWatchChipRow}>
-                                      {tripWatchPayWatchSummary.summaryItems.map((item) => (
+                                      {tripWatchPayWatchVisibleSummaryItems.map((item) => (
                                         <View key={`tripwatch-pay-diff-${item}`} style={styles.tripWatchDeltaChip}>
                                           <Text style={styles.tripWatchDeltaChipText}>{item}</Text>
                                         </View>
@@ -6048,9 +6172,9 @@ export default function App() {
                                       ))}
                                     </View>
                                   ) : null}
-                                  {tripWatchPayWatchSummary.recommendedItems.length > 0 ? (
+                                  {tripWatchPayWatchVisibleRecommendedItems.length > 0 ? (
                                     <View style={styles.tripWatchChipRow}>
-                                      {tripWatchPayWatchSummary.recommendedItems.map((item) => (
+                                      {tripWatchPayWatchVisibleRecommendedItems.map((item) => (
                                         <View key={`tripwatch-pay-note-${item}`} style={styles.tripWatchActionChip}>
                                           <Text style={styles.tripWatchActionChipText}>{item}</Text>
                                         </View>
@@ -6074,8 +6198,14 @@ export default function App() {
                             </View>
                           ) : !tripWatchHasDetailedChanges ? null : (
                             <View style={styles.sectionStack}>
-                              {tripWatchTotalsChanged.length > 0 ? (
-                                <View style={[styles.resultPanelSubtle, styles.tripWatchSectionCard]}>
+                              {tripWatchTotalsChanged.length > 0 && !(isCompactMobile && showTripWatchHeaderComparison) ? (
+                                <View
+                                  style={[
+                                    styles.resultPanelSubtle,
+                                    styles.tripWatchSectionCard,
+                                    isCompactMobile && styles.tripWatchSectionCardCompact,
+                                  ]}
+                                >
                                   <Text style={styles.resultSupportMetaText}>Totals changed</Text>
                                   <View style={styles.tripWatchChipRow}>
                                     {tripWatchTotalsChanged.map((item) => (
@@ -6087,11 +6217,17 @@ export default function App() {
                                 </View>
                               ) : null}
                               {tripWatchPayWatchSummary?.hasContent ? (
-                                <View style={[styles.resultPanelSubtle, styles.tripWatchSectionCard]}>
+                                <View
+                                  style={[
+                                    styles.resultPanelSubtle,
+                                    styles.tripWatchSectionCard,
+                                    isCompactMobile && styles.tripWatchSectionCardCompact,
+                                  ]}
+                                >
                                   <Text style={styles.resultSupportMetaText}>Pay Watch</Text>
-                                  {tripWatchPayWatchSummary.summaryItems.length > 0 ? (
+                                  {tripWatchPayWatchVisibleSummaryItems.length > 0 ? (
                                     <View style={styles.tripWatchChipRow}>
-                                      {tripWatchPayWatchSummary.summaryItems.map((item) => (
+                                      {tripWatchPayWatchVisibleSummaryItems.map((item) => (
                                         <View key={`tripwatch-pay-${item}`} style={styles.tripWatchDeltaChip}>
                                           <Text style={styles.tripWatchDeltaChipText}>{item}</Text>
                                         </View>
@@ -6110,9 +6246,9 @@ export default function App() {
                                       ))}
                                     </View>
                                   ) : null}
-                                  {tripWatchPayWatchSummary.recommendedItems.length > 0 ? (
+                                  {tripWatchPayWatchVisibleRecommendedItems.length > 0 ? (
                                     <View style={styles.tripWatchChipRow}>
-                                      {tripWatchPayWatchSummary.recommendedItems.map((item) => (
+                                      {tripWatchPayWatchVisibleRecommendedItems.map((item) => (
                                         <View key={`tripwatch-pay-note-${item}`} style={styles.tripWatchActionChip}>
                                           <Text style={styles.tripWatchActionChipText}>{item}</Text>
                                         </View>
@@ -6122,21 +6258,39 @@ export default function App() {
                                 </View>
                               ) : null}
                               {tripWatchResult.addedLegs.length > 0 ? (
-                                <View style={[styles.resultPanelSubtle, styles.tripWatchSectionCard]}>
-                                  <Text style={styles.resultSupportMetaText}>Added legs</Text>
+                                <View
+                                  style={[
+                                    styles.resultPanelSubtle,
+                                    styles.tripWatchSectionCard,
+                                    isCompactMobile && styles.tripWatchSectionCardCompact,
+                                  ]}
+                                >
+                                  <Text style={styles.resultSupportMetaText}>Added</Text>
                                   {tripWatchResult.addedLegs.map((item) => (
                                     <Text key={`tripwatch-added-${item}`} style={styles.tripBoardTimelineMeta}>• {item}</Text>
                                   ))}
                                 </View>
                               ) : null}
                               {tripWatchResult.changedLegs.length > 0 ? (
-                                <View style={[styles.resultPanelSubtle, styles.tripWatchSectionCard]}>
+                                <View
+                                  style={[
+                                    styles.resultPanelSubtle,
+                                    styles.tripWatchSectionCard,
+                                    isCompactMobile && styles.tripWatchSectionCardCompact,
+                                  ]}
+                                >
                                   <Text style={styles.resultSupportMetaText}>Changed legs</Text>
                                   {tripWatchVisibleChangedLegs.map((item) => (
                                     <Text key={`tripwatch-changed-${item}`} style={styles.tripBoardTimelineMeta}>• {item}</Text>
                                   ))}
                                   {tripWatchHiddenChangedLegCount > 0 ? (
-                                    <Text style={styles.tripWatchMoreChangesText}>+{tripWatchHiddenChangedLegCount} more changes</Text>
+                                    <TouchableOpacity onPress={() => setTripWatchExpandedChangedLegs((current) => !current)}>
+                                      <Text style={styles.tripWatchMoreChangesText}>
+                                        {tripWatchExpandedChangedLegs
+                                          ? "Show fewer changes"
+                                          : `+${tripWatchHiddenChangedLegCount} more changes`}
+                                      </Text>
+                                    </TouchableOpacity>
                                   ) : null}
                                 </View>
                               ) : null}
@@ -10805,6 +10959,37 @@ function TripBoardSummaryCell({
   );
 }
 
+function TripBoardComparisonCell({
+  label,
+  originalValue,
+  updatedValue,
+  deltaValue,
+  compact,
+}: {
+  label: string;
+  originalValue: string;
+  updatedValue: string;
+  deltaValue: string;
+  compact?: boolean;
+}) {
+  return (
+    <InstrumentPanel
+      variant="dataPlate"
+      style={[styles.tripBoardSummaryCell, compact ? styles.tripBoardSummaryCellCompact : null]}
+    >
+      <Text style={[styles.tripBoardSummaryCellLabel, compact ? styles.tripBoardSummaryCellLabelCompact : null]}>
+        {label}
+      </Text>
+      <Text style={[styles.tripBoardSummaryComparisonValue, compact ? styles.tripBoardSummaryComparisonValueCompact : null]}>
+        {originalValue} {"->"} {updatedValue}
+      </Text>
+      <Text style={[styles.tripBoardSummaryComparisonDelta, compact ? styles.tripBoardSummaryComparisonDeltaCompact : null]}>
+        {deltaValue}
+      </Text>
+    </InstrumentPanel>
+  );
+}
+
 function TableValueCell({
   primary,
   delta,
@@ -13056,6 +13241,16 @@ const styles = StyleSheet.create({
     gap: 6,
     alignItems: "stretch",
   },
+  tripBoardSummaryStripComparisonStack: {
+    gap: 5,
+  },
+  tripBoardSummaryStripComparisonLabel: {
+    fontSize: 9,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 0.7,
+    color: appStylePalette.textMuted,
+  },
   tripBoardSummaryInlineChip: {
     flexGrow: 1,
     flexBasis: 88,
@@ -13083,6 +13278,20 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontWeight: "900",
     color: appStylePalette.textPrimary,
+    fontVariant: ["tabular-nums"],
+  },
+  tripBoardSummaryInlineChipComparisonValue: {
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: "800",
+    color: appStylePalette.textPrimary,
+    fontVariant: ["tabular-nums"],
+  },
+  tripBoardSummaryInlineChipComparisonDelta: {
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: "900",
+    color: appStylePalette.accent,
     fontVariant: ["tabular-nums"],
   },
   tripBoardSummaryInlineChipMini: {
@@ -13223,6 +13432,28 @@ const styles = StyleSheet.create({
     fontSize: 10,
     lineHeight: 13,
   },
+  tripBoardSummaryComparisonValue: {
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "800",
+    color: appStylePalette.textPrimary,
+    fontVariant: ["tabular-nums"],
+  },
+  tripBoardSummaryComparisonValueCompact: {
+    fontSize: 11,
+    lineHeight: 15,
+  },
+  tripBoardSummaryComparisonDelta: {
+    fontSize: 13,
+    lineHeight: 17,
+    fontWeight: "900",
+    color: appStylePalette.accent,
+    fontVariant: ["tabular-nums"],
+  },
+  tripBoardSummaryComparisonDeltaCompact: {
+    fontSize: 12,
+    lineHeight: 15,
+  },
   formRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -13302,6 +13533,10 @@ const styles = StyleSheet.create({
   },
   tripWatchSectionCard: {
     gap: 8,
+  },
+  tripWatchSectionCardCompact: {
+    padding: 10,
+    gap: 6,
   },
   tripWatchChipRow: {
     flexDirection: "row",
