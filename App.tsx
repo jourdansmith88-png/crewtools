@@ -86,6 +86,7 @@ import {
   type TripWatchScreenshotParseResponse,
 } from "./src/features/rotationCompanion/tripWatchComparison";
 import { buildPayWatchSummary } from "./src/features/rotationCompanion/payWatch";
+import { buildDutyWatchSummary } from "./src/features/rotationCompanion/dutyLimitWatch";
 import type { RotationChainCandidate } from "./src/features/rotationCompanion/rotationChainBuilder";
 import { fliegerTypography, getFliegerPalette } from "./src/theme/flieger";
 import type {
@@ -2422,6 +2423,17 @@ export default function App() {
     }
     return tripWatchPayWatchSummary.recommendedItems;
   }, [isCompactMobile, showTripWatchHeaderComparison, tripWatchPayWatchSummary]);
+  const tripWatchDutyWatchSummary = useMemo(
+    () =>
+      tripWatchResult?.status === "ok"
+        ? buildDutyWatchSummary(
+            tripWatchResult.baselineSnapshot,
+            tripWatchResult.updatedSnapshot,
+            tripWatchResult,
+          )
+        : null,
+    [tripWatchResult],
+  );
 
   const formatLegFlightDisplay = (leg: RotationDashboardData["legs"][number]) => {
     const carrierPrefix =
@@ -6259,6 +6271,50 @@ export default function App() {
                                   ) : null}
                                 </View>
                               ) : null}
+                              {tripWatchDutyWatchSummary?.hasContent ? (
+                                <View
+                                  style={[
+                                    styles.resultPanelSubtle,
+                                    styles.tripWatchSectionCard,
+                                    isCompactMobile && styles.tripWatchSectionCardCompact,
+                                  ]}
+                                >
+                                  <Text style={styles.resultSupportMetaText}>117 Watch</Text>
+                                  <View style={styles.sectionStack}>
+                                    {tripWatchDutyWatchSummary.rows.map((row) => (
+                                      <View key={`tripwatch-duty-${row.dateKey}`} style={styles.sectionStack}>
+                                        <View style={styles.tripWatchChipRow}>
+                                          <View
+                                            style={[
+                                              styles.tripWatchWatchChip,
+                                              row.status === "caution" && styles.tripWatchWatchChipAmber,
+                                              row.status === "exceeded" && styles.legBadgeWarning,
+                                            ]}
+                                          >
+                                            <Text style={styles.tripWatchWatchChipText}>{row.statusLabel}</Text>
+                                          </View>
+                                        </View>
+                                        <Text style={styles.tripBoardTimelineMeta}>{row.dateKey} changed</Text>
+                                        {row.highlights.map((item) => (
+                                          <Text key={`tripwatch-duty-highlight-${row.dateKey}-${item}`} style={styles.tripBoardTimelineMeta}>• {item}</Text>
+                                        ))}
+                                        {row.notes.map((item) => (
+                                          <Text key={`tripwatch-duty-note-${row.dateKey}-${item}`} style={styles.tripBoardTimelineMeta}>• {item}</Text>
+                                        ))}
+                                      </View>
+                                    ))}
+                                  </View>
+                                  {tripWatchDutyWatchSummary.recommendedItems.length > 0 ? (
+                                    <View style={styles.tripWatchChipRow}>
+                                      {tripWatchDutyWatchSummary.recommendedItems.map((item) => (
+                                        <View key={`tripwatch-duty-action-${item}`} style={styles.tripWatchActionChip}>
+                                          <Text style={styles.tripWatchActionChipText}>{item}</Text>
+                                        </View>
+                                      ))}
+                                    </View>
+                                  ) : null}
+                                </View>
+                              ) : null}
                               {tripWatchResult.addedLegs.length > 0 ? (
                                 <View
                                   style={[
@@ -6366,6 +6422,11 @@ export default function App() {
                               <Text style={styles.resultSupportMetaText}>
                                 baselineRotation={tripWatchResult.debug.baselineRotationNumber ?? "unknown"} • updatedRotation={tripWatchResult.debug.updatedRotationNumber ?? "unknown"} • baselineDhBlock={tripWatchResult.debug.baselineDeadheadBlockMinutes ?? "?"} • updatedDhBlock={tripWatchResult.debug.updatedDeadheadBlockMinutes ?? "?"} • resultDhDelta={tripWatchResult.debug.resultDeadheadBlockDeltaMinutes ?? "?"}
                               </Text>
+                              {tripWatchDutyWatchSummary ? (
+                                <Text style={styles.resultSupportMetaText}>
+                                  baselineDutyPeriods={tripWatchDutyWatchSummary.debug.baselineDutyPeriodsCount} • updatedDutyPeriods={tripWatchDutyWatchSummary.debug.updatedDutyPeriodsCount} • dutyStatuses={tripWatchDutyWatchSummary.debug.evaluatedStatusesByDate.join(", ") || "none"} • includeRtgInBlockLimit={tripWatchDutyWatchSummary.debug.includeRtgInBlockLimit ? "yes" : "no"}
+                                </Text>
+                              ) : null}
                               <Text style={styles.resultSupportMetaText}>
                                 displayedSource={tripWatchBaselineDashboardDebug.displayedSource ?? "unknown"} • displayedParserPath={tripWatchBaselineDashboardDebug.displayedParserPath ?? "unknown"} • displayedDeadheadBlock={tripWatchBaselineDashboardDebug.displayedDeadheadBlock ?? "?"}
                               </Text>
