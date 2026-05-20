@@ -111,6 +111,7 @@ function snapshotToDutyPeriods(snapshot?: TripWatchRotationSnapshot | null) {
   return buildDutyPeriodsFromRotationLegs({
     legs: legs as RotationDashboardData["legs"],
     rotationReportTime: snapshot.reportTime,
+    pwaDutyLimitsByDate: snapshot.dutyPeriodLimits,
   });
 }
 
@@ -120,8 +121,15 @@ export function evaluateDutyPeriodLimits(
 ): DutyLimitWatchEvaluation {
   const includeRtgInBlockLimit = options.includeRtgInBlockLimit ?? true;
   const source = options.source ?? DUTY_LIMIT_WATCH_SOURCE;
-  const fdpLimitMinutes = isFiniteMinutes(options.fdpLimitMinutes) ? options.fdpLimitMinutes : undefined;
+  const fdpLimitMinutes = isFiniteMinutes(options.fdpLimitMinutes)
+    ? options.fdpLimitMinutes
+    : isFiniteMinutes(period.pwaActualMaxFdpMinutes)
+      ? period.pwaActualMaxFdpMinutes
+      : isFiniteMinutes(period.pwaScheduledMaxFdpMinutes)
+        ? period.pwaScheduledMaxFdpMinutes
+        : undefined;
   const blockLimitMinutes = isFiniteMinutes(options.blockLimitMinutes) ? options.blockLimitMinutes : undefined;
+  const modeledFdpMinutes = isFiniteMinutes(period.pwaFdpUsedMinutes) ? period.pwaFdpUsedMinutes : period.dutySpanMinutes;
   const modeledBlockMinutes = period.operatingBlockMinutes + (includeRtgInBlockLimit ? period.rtgBlockMinutes : 0);
   const flags: string[] = [];
   const notes: string[] = [];
@@ -134,7 +142,7 @@ export function evaluateDutyPeriodLimits(
     );
   }
 
-  if (!isFiniteMinutes(fdpLimitMinutes) || !isFiniteMinutes(blockLimitMinutes)) {
+  if (!isFiniteMinutes(fdpLimitMinutes) && !isFiniteMinutes(blockLimitMinutes)) {
     notes.push("Limit check needs Delta table source.");
     return {
       dateKey: period.dateKey,
@@ -156,13 +164,16 @@ export function evaluateDutyPeriodLimits(
     };
   }
 
-  const fdpRemainingMinutes = isFiniteMinutes(period.dutySpanMinutes)
-    ? fdpLimitMinutes - period.dutySpanMinutes
+  const fdpRemainingMinutes = isFiniteMinutes(modeledFdpMinutes) && isFiniteMinutes(fdpLimitMinutes)
+    ? fdpLimitMinutes - modeledFdpMinutes
     : undefined;
-  const blockRemainingMinutes = blockLimitMinutes - modeledBlockMinutes;
+  const blockRemainingMinutes = isFiniteMinutes(blockLimitMinutes) ? blockLimitMinutes - modeledBlockMinutes : undefined;
 
   let status: DutyLimitWatchStatus = "within_limits";
-  if ((isFiniteMinutes(period.dutySpanMinutes) && period.dutySpanMinutes > fdpLimitMinutes) || modeledBlockMinutes > blockLimitMinutes) {
+  if (
+    (isFiniteMinutes(modeledFdpMinutes) && isFiniteMinutes(fdpLimitMinutes) && modeledFdpMinutes > fdpLimitMinutes) ||
+    (isFiniteMinutes(blockLimitMinutes) && modeledBlockMinutes > blockLimitMinutes)
+  ) {
     status = "exceeded";
   } else if (
     (isFiniteMinutes(fdpRemainingMinutes) && fdpRemainingMinutes <= 30) ||
@@ -172,10 +183,10 @@ export function evaluateDutyPeriodLimits(
   }
 
   if (status === "exceeded") {
-    if (isFiniteMinutes(period.dutySpanMinutes) && period.dutySpanMinutes > fdpLimitMinutes) {
-      flags.push("Duty span exceeds modeled FDP limit.");
+    if (isFiniteMinutes(modeledFdpMinutes) && isFiniteMinutes(fdpLimitMinutes) && modeledFdpMinutes > fdpLimitMinutes) {
+      flags.push("Modeled FDP usage exceeds the modeled FDP limit.");
     }
-    if (modeledBlockMinutes > blockLimitMinutes) {
+    if (isFiniteMinutes(blockLimitMinutes) && modeledBlockMinutes > blockLimitMinutes) {
       flags.push("Block exceeds modeled block limit.");
     }
   } else if (status === "caution") {
@@ -262,6 +273,13 @@ export function buildDutyWatchSummary(
       const highlights: string[] = [];
       const notes: string[] = [];
 
+      if (typeof updatedPeriod.pwaFdpUsedMinutes === "number") {
+        const maxFdpMinutes =
+          updatedPeriod.pwaActualMaxFdpMinutes ?? updatedPeriod.pwaScheduledMaxFdpMinutes;
+        if (typeof maxFdpMinutes === "number") {
+          highlights.push(`FDP ${formatMinutes(updatedPeriod.pwaFdpUsedMinutes)} / ${formatMinutes(maxFdpMinutes)}`);
+        }
+      }
       if (rtgBlockDeltaMinutes > 0) {
         highlights.push(`RTG added: +${formatMinutes(rtgBlockDeltaMinutes)}`);
       }
@@ -279,6 +297,9 @@ export function buildDutyWatchSummary(
         notes.push("Limit check needs Delta table source");
       } else {
         notes.push(getStatusLabel(evaluation.status));
+        if (typeof evaluation.fdpRemainingMinutes === "number") {
+          notes.push(`FDP remaining ${formatMinutes(evaluation.fdpRemainingMinutes)}`);
+        }
       }
       notes.push(...evaluation.flags);
 

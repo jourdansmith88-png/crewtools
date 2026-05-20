@@ -1277,6 +1277,53 @@ function buildICrewParsedDashboard(
     secondaryActionLabel: annotation.confirmationCode ? "Check in" : undefined,
     secondaryActionUrl: annotation.confirmationCode ? DELTA_CHECK_IN_URL : undefined,
   }));
+  const parsedDutyPeriodsByDate = new Map(
+    parsed.pwaDutyLimitLines
+      .filter((item) => Boolean(item.dateKey))
+      .map((item) => [
+        item.dateKey!,
+        {
+          pwaFdpUsedMinutes: item.fdpUsedMinutes,
+          pwaScheduledMaxFdpMinutes: item.scheduledFdpMaxMinutes,
+          pwaActualMaxFdpMinutes: item.actualFdpMaxMinutes,
+          pwaLimitSource: item.source,
+        },
+      ] as const),
+  );
+  const parsedRotationDutyPeriods = Array.from(
+    new Map(
+      parsed.allTripSegments.map((segment, index) => [
+        Number(parsedRotationLegs[index]?.dayNumber ?? index + 1),
+        {
+          dayNumber: Number(parsedRotationLegs[index]?.dayNumber ?? index + 1),
+          date: segment.date,
+          scheduledOut: extractCompactClockDigits(extractCompactClock(segment.scheduledOut)),
+        },
+      ]),
+    ).values(),
+  ).map((dutyDay) => {
+    const date = dutyDay.date?.trim();
+    const pwa = date ? parsedDutyPeriodsByDate.get(date) : undefined;
+    return {
+      dayNumber: dutyDay.dayNumber,
+      date,
+      reportTime: dutyDay.dayNumber === 1 ? parsed.header.reportTime : dutyDay.scheduledOut,
+      releaseTime: undefined,
+      scheduledRest: undefined,
+      scheduledBlock: 0,
+      scheduledFdp: pwa?.pwaFdpUsedMinutes ?? 0,
+      fdpLimit: pwa?.pwaScheduledMaxFdpMinutes ?? 0,
+      fdpMargin:
+        typeof pwa?.pwaScheduledMaxFdpMinutes === "number" && typeof pwa?.pwaFdpUsedMinutes === "number"
+          ? pwa.pwaScheduledMaxFdpMinutes - pwa.pwaFdpUsedMinutes
+          : 0,
+      pwaFdpUsedMinutes: pwa?.pwaFdpUsedMinutes,
+      pwaScheduledMaxFdpMinutes: pwa?.pwaScheduledMaxFdpMinutes,
+      pwaActualMaxFdpMinutes: pwa?.pwaActualMaxFdpMinutes,
+      pwaLimitSource: pwa?.pwaLimitSource,
+      status: "Needs full duty period details" as const,
+    };
+  });
 
   return {
     snapshot: {
@@ -1310,7 +1357,7 @@ function buildICrewParsedDashboard(
       finalArrivalAfterDh,
       excludedDeadheadLegs: parsed.deadheadAnnotations.length,
       layoverCities,
-      dutyPeriods: [],
+      dutyPeriods: parsedRotationDutyPeriods,
       legs: parsedRotationLegs,
       isPartial: parsed.partialStatus,
       sourceTypes: "text",

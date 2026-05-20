@@ -49,6 +49,19 @@ function buildTestICrewDashboard(parsed: NonNullable<ParsedICrewTextResult["pars
     sourceText: leg.sourceText ?? undefined,
     excludeFromLogbookExport: Boolean(leg.isDeadhead),
   }));
+  const parsedDutyPeriodsByDate = new Map(
+    parsed.pwaDutyLimitLines
+      .filter((item) => Boolean(item.dateKey))
+      .map((item) => [
+        item.dateKey!,
+        {
+          pwaFdpUsedMinutes: item.fdpUsedMinutes,
+          pwaScheduledMaxFdpMinutes: item.scheduledFdpMaxMinutes,
+          pwaActualMaxFdpMinutes: item.actualFdpMaxMinutes,
+          pwaLimitSource: item.source,
+        },
+      ] as const),
+  );
 
   return {
     snapshot: {
@@ -82,7 +95,38 @@ function buildTestICrewDashboard(parsed: NonNullable<ParsedICrewTextResult["pars
       finalArrivalAfterDh: parsed.finalArrivalAfterDeadhead,
       excludedDeadheadLegs: parsed.deadheadAnnotations.length,
       layoverCities: parsed.layoverCities,
-      dutyPeriods: [],
+      dutyPeriods: Array.from(
+        new Map(
+          mappedLegs.map((leg, index) => [
+            leg.dayLabel,
+            {
+              dayNumber: index + 1,
+              date: leg.dayLabel,
+            },
+          ]),
+        ).values(),
+      ).map((period, index) => {
+        const pwa = parsedDutyPeriodsByDate.get(period.date);
+        return {
+          dayNumber: index + 1,
+          date: period.date,
+          reportTime: index === 0 ? parsed.header.reportTime : undefined,
+          releaseTime: undefined,
+          scheduledRest: undefined,
+          scheduledBlock: 0,
+          scheduledFdp: pwa?.pwaFdpUsedMinutes ?? 0,
+          fdpLimit: pwa?.pwaScheduledMaxFdpMinutes ?? 0,
+          fdpMargin:
+            typeof pwa?.pwaScheduledMaxFdpMinutes === "number" && typeof pwa?.pwaFdpUsedMinutes === "number"
+              ? pwa.pwaScheduledMaxFdpMinutes - pwa.pwaFdpUsedMinutes
+              : 0,
+          pwaFdpUsedMinutes: pwa?.pwaFdpUsedMinutes,
+          pwaScheduledMaxFdpMinutes: pwa?.pwaScheduledMaxFdpMinutes,
+          pwaActualMaxFdpMinutes: pwa?.pwaActualMaxFdpMinutes,
+          pwaLimitSource: pwa?.pwaLimitSource,
+          status: "Needs full duty period details" as const,
+        };
+      }),
       legs: mappedLegs.map((leg, index) => ({
         id: leg.id,
         legNumber: index + 1,
@@ -253,11 +297,13 @@ assert(
   dutyWatchSummary?.rows.some(
     (row) =>
       row.dateKey === "11APR" &&
+      row.highlights.some((item) => item.includes("FDP 9:57 / 14:00")) &&
       row.highlights.includes("RTG added: +0:19") &&
       row.highlights.includes("Block/FDP inputs changed") &&
-      row.notes.includes("Limit check needs Delta table source"),
+      row.notes.some((item) => item.includes("Within modeled limits")) &&
+      row.notes.some((item) => item.includes("FDP remaining 4:03")),
   ),
-  `Expected 7707 RTG/needs-more-info duty row, got ${JSON.stringify(dutyWatchSummary?.rows)}`,
+  `Expected 7707 RTG/PWA duty row, got ${JSON.stringify(dutyWatchSummary?.rows)}`,
 );
 assert(
   dutyWatchSummary?.recommendedItems.includes("Check 117") &&
@@ -265,8 +311,9 @@ assert(
   `Expected 117 recommended items, got ${JSON.stringify(dutyWatchSummary?.recommendedItems)}`,
 );
 assert(
-  dutyWatchSummary?.debug.evaluatedStatusesByDate.every((item) => item.endsWith(":needs_more_info")),
-  `Expected needs_more_info evaluated statuses for placeholder limit source, got ${JSON.stringify(dutyWatchSummary?.debug)}`,
+  dutyWatchSummary?.debug.evaluatedStatusesByDate.some((item) => item === "10APR:within_limits") &&
+    dutyWatchSummary?.debug.evaluatedStatusesByDate.some((item) => item === "11APR:within_limits"),
+  `Expected within_limits evaluated statuses from parsed PWA limits, got ${JSON.stringify(dutyWatchSummary?.debug)}`,
 );
 assert(
   comparison.dhBlockDeltaMinutes === 12,
@@ -293,6 +340,24 @@ const exceededSummaryRow = buildDutyWatchSummary(
 assert(
   exceededSummaryRow?.rows.some((row) => row.statusLabel === "Exceeded modeled limit"),
   `Expected exceeded wording to stay modeled, got ${JSON.stringify(exceededSummaryRow?.rows)}`,
+);
+assert(
+  beforeParsed.parsed?.pwaDutyLimitLines.some(
+    (line) => line.dateKey === "10APR" && line.fdpUsedMinutes === 429 && line.scheduledFdpMaxMinutes === 750 && line.actualFdpMaxMinutes === 810,
+  ) &&
+    beforeParsed.parsed?.pwaDutyLimitLines.some(
+      (line) => line.dateKey === "11APR" && line.fdpUsedMinutes === 555 && line.scheduledFdpMaxMinutes === 690 && line.actualFdpMaxMinutes === 840,
+    ),
+  `Expected 7707 before parsed PWA duty values, got ${JSON.stringify(beforeParsed.parsed?.pwaDutyLimitLines)}`,
+);
+assert(
+  afterParsed.parsed?.pwaDutyLimitLines.some(
+    (line) => line.dateKey === "10APR" && line.fdpUsedMinutes === 437 && line.scheduledFdpMaxMinutes === 750 && line.actualFdpMaxMinutes === 810,
+  ) &&
+    afterParsed.parsed?.pwaDutyLimitLines.some(
+      (line) => line.dateKey === "11APR" && line.fdpUsedMinutes === 597 && line.scheduledFdpMaxMinutes === 690 && line.actualFdpMaxMinutes === 840,
+    ),
+  `Expected 7707 after parsed PWA duty values, got ${JSON.stringify(afterParsed.parsed?.pwaDutyLimitLines)}`,
 );
 
 console.log("dutyLimitWatch passed");

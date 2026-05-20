@@ -6,9 +6,11 @@ export const rotation7707ICrewAfterText = [
   "10 1OO3726 SLC1326 IDA.1432 1.06",
   "                                          1.06DHD",
   "IDA 15.00/HILTON GARDEN INN",
+  "PWA FDP/SKD MAX/ACT MAX 7.17/12.30/13.30",
   "11 2DL2335 IDA0553 SLC.0705 1.12BL",
   "11 2DL2798 SLC0750 DFW.1118 2.28BL",
   "*DFW*1219 DFW.1238 0.19 0.36 2",
   "DFW 1314 SLC.1457 2.43",
   "11 TOTAL 7.02BL 1.06DHD",
+  "PWA FDP/SKD MAX/ACT MAX 9.57/11.30/14.00",
 ].join("\n");

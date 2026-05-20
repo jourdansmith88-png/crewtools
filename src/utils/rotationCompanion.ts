@@ -35,6 +35,10 @@ export type ParsedRotationDutyPeriod = {
   scheduledFdp: number;
   fdpLimit: number;
   fdpMargin: number;
+  pwaFdpUsedMinutes?: number;
+  pwaScheduledMaxFdpMinutes?: number;
+  pwaActualMaxFdpMinutes?: number;
+  pwaLimitSource?: "icrew_pwa_fdp_line";
   status: "Good" | "Watch" | "At Risk" | "Likely Timeout" | "Needs full duty period details";
 };
 

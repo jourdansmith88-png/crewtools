@@ -11,6 +11,10 @@ export type RotationDutyPeriodSummary = {
   operatingBlockMinutes: number;
   deadheadBlockMinutes: number;
   rtgBlockMinutes: number;
+  pwaFdpUsedMinutes?: number;
+  pwaScheduledMaxFdpMinutes?: number;
+  pwaActualMaxFdpMinutes?: number;
+  pwaLimitSource?: "icrew_pwa_fdp_line";
   legCount: number;
   operatingLegCount: number;
   deadheadLegCount: number;
@@ -55,9 +59,21 @@ function compareByDeparture(left: RotationDashboardData["legs"][number], right: 
 export function buildDutyPeriodsFromRotationLegs(args: {
   legs: RotationDashboardData["legs"];
   rotationReportTime?: string;
+  pwaDutyLimitsByDate?: Array<{
+    dateKey?: string;
+    pwaFdpUsedMinutes?: number;
+    pwaScheduledMaxFdpMinutes?: number;
+    pwaActualMaxFdpMinutes?: number;
+    pwaLimitSource?: "icrew_pwa_fdp_line";
+  }>;
 }): RotationDutyPeriodSummary[] {
   const legs = Array.isArray(args.legs) ? [...args.legs] : [];
   const grouped = new Map<string, RotationDashboardData["legs"]>();
+  const pwaByDate = new Map(
+    (args.pwaDutyLimitsByDate ?? [])
+      .filter((item) => Boolean(item.dateKey))
+      .map((item) => [item.dateKey!.trim().toUpperCase(), item] as const),
+  );
 
   legs.forEach((leg) => {
     const dateKey = leg.dayLabel?.trim() || "UNKNOWN";
@@ -86,6 +102,7 @@ export function buildDutyPeriodsFromRotationLegs(args: {
       dutySpanMinutes = dutyEndMinutes >= reportMinutes ? dutyEndMinutes - reportMinutes : dutyEndMinutes + 24 * 60 - reportMinutes;
     }
 
+    const pwa = pwaByDate.get(dateKey.trim().toUpperCase());
     return {
       dateKey,
       reportTime,
@@ -97,6 +114,10 @@ export function buildDutyPeriodsFromRotationLegs(args: {
       operatingBlockMinutes: operatingLegs.reduce((sum, leg) => sum + (leg.scheduledBlockMinutes ?? 0), 0),
       deadheadBlockMinutes: deadheadLegs.reduce((sum, leg) => sum + (leg.scheduledBlockMinutes ?? 0), 0),
       rtgBlockMinutes: rtgLegs.reduce((sum, leg) => sum + (leg.scheduledBlockMinutes ?? 0), 0),
+      pwaFdpUsedMinutes: pwa?.pwaFdpUsedMinutes,
+      pwaScheduledMaxFdpMinutes: pwa?.pwaScheduledMaxFdpMinutes,
+      pwaActualMaxFdpMinutes: pwa?.pwaActualMaxFdpMinutes,
+      pwaLimitSource: pwa?.pwaLimitSource,
       legCount: orderedLegs.length,
       operatingLegCount: operatingLegs.length,
       deadheadLegCount: deadheadLegs.length,

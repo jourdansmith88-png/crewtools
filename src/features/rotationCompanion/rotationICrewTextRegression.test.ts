@@ -293,6 +293,23 @@ BOI 10.00/HOTEL TEST
 06 TOTAL 0.00BL 1.23DHD
 `.trim();
 
+const duplicatedPwaFixture = `
+SLC   PILOT 220         *** ROTATION OPER
+9999     POS-A        EFFECTIVE MAY07         CHECK IN AT 07.00
+ACTUAL REPORT TIME 0700
+TRIP DATES                    07MAY - 07MAY
+REGULAR- 7.09TL                      2.24TBL  0.00TBMU  0.54TDHD  0.00TDMU
+TAFB  08.00CR
+TAFB  08.00EX
+07 1DL1744 SLC0802 BOI.0909 1.07BL
+07 1DL1744 BOI1040 SLC.1151 1.11BL
+07 1OO3726 SLC1326 IDA.1432 1.06
+1.06DHD
+PWA FDP/SKD MAX/ACT MAX 7.17/12.30/13.30
+PWA FDP/SKD MAX/ACT MAX 7.17/12.30/13.30
+07 TOTAL 2.18BL 1.06DHD
+`.trim();
+
 const yxCarrierNameParsed = parseICrewText(yxCarrierNameFixture);
 assert(
   yxCarrierNameParsed.deadheadAnnotations[0]?.carrier === "YX" &&
@@ -302,6 +319,15 @@ assert(
   `Expected YX regional carrier mapping to Republic Airways with DHD-supported classification, got ${JSON.stringify(
     yxCarrierNameParsed.deadheadAnnotations[0],
   )}`,
+);
+
+const duplicatedPwaParsed = parseICrewText(duplicatedPwaFixture);
+assert(
+  duplicatedPwaParsed.pwaDutyLimitLines.length === 1 &&
+    duplicatedPwaParsed.pwaDutyLimitLines[0]?.fdpUsedMinutes === 437 &&
+    duplicatedPwaParsed.pwaDutyLimitLines[0]?.scheduledFdpMaxMinutes === 750 &&
+    duplicatedPwaParsed.pwaDutyLimitLines[0]?.actualFdpMaxMinutes === 810,
+  `Expected duplicate PWA lines to collapse to one parsed duty limit line, got ${JSON.stringify(duplicatedPwaParsed.pwaDutyLimitLines)}`,
 );
 assert(
   JSON.stringify(
@@ -676,6 +702,16 @@ runICrewAssertions("rotation0233 iCrew live-paste fixture", rotation0233ICrewLiv
   assert(beforeParsed.operatingScheduledBlockMinutes === 531, `[${label}] Expected 7707 before operatingScheduledBlockMinutes 531, got ${beforeParsed.operatingScheduledBlockMinutes}`);
   assert(beforeParsed.deadheadScheduledBlockMinutes === 54, `[${label}] Expected 7707 before deadheadScheduledBlockMinutes 54, got ${beforeParsed.deadheadScheduledBlockMinutes}`);
   assert(
+    beforeParsed.pwaDutyLimitLines.length === 2 &&
+      beforeParsed.pwaDutyLimitLines[0]?.fdpUsedMinutes === 429 &&
+      beforeParsed.pwaDutyLimitLines[0]?.scheduledFdpMaxMinutes === 750 &&
+      beforeParsed.pwaDutyLimitLines[0]?.actualFdpMaxMinutes === 810 &&
+      beforeParsed.pwaDutyLimitLines[1]?.fdpUsedMinutes === 555 &&
+      beforeParsed.pwaDutyLimitLines[1]?.scheduledFdpMaxMinutes === 690 &&
+      beforeParsed.pwaDutyLimitLines[1]?.actualFdpMaxMinutes === 840,
+    `[${label}] Expected 7707 before PWA lines 7:09/12:30/13:30 and 9:15/11:30/14:00, got ${JSON.stringify(beforeParsed.pwaDutyLimitLines)}`,
+  );
+  assert(
     beforeDebug.diagnostics.standaloneDhdLines.some((item) => item.attachedToRoute === "SLC-IDA" && item.normalizedBlock === "0:54"),
     `[${label}] Expected before diagnostics standalone DHD attachment, got ${JSON.stringify(beforeDebug.diagnostics.standaloneDhdLines)}`,
   );
@@ -691,6 +727,16 @@ runICrewAssertions("rotation0233 iCrew live-paste fixture", rotation0233ICrewLiv
   );
   assert(afterParsed.header.totalDeadheadBlockMinutes === 66, `[${label}] Expected 7707 after totalDeadheadBlockMinutes 66, got ${afterParsed.header.totalDeadheadBlockMinutes}`);
   assert(afterParsed.deadheadScheduledBlockMinutes === 66, `[${label}] Expected 7707 after deadheadScheduledBlockMinutes 66, got ${afterParsed.deadheadScheduledBlockMinutes}`);
+  assert(
+    afterParsed.pwaDutyLimitLines.length === 2 &&
+      afterParsed.pwaDutyLimitLines[0]?.fdpUsedMinutes === 437 &&
+      afterParsed.pwaDutyLimitLines[0]?.scheduledFdpMaxMinutes === 750 &&
+      afterParsed.pwaDutyLimitLines[0]?.actualFdpMaxMinutes === 810 &&
+      afterParsed.pwaDutyLimitLines[1]?.fdpUsedMinutes === 597 &&
+      afterParsed.pwaDutyLimitLines[1]?.scheduledFdpMaxMinutes === 690 &&
+      afterParsed.pwaDutyLimitLines[1]?.actualFdpMaxMinutes === 840,
+    `[${label}] Expected 7707 after PWA lines 7:17/12:30/13:30 and 9:57/11:30/14:00, got ${JSON.stringify(afterParsed.pwaDutyLimitLines)}`,
+  );
   const afterRtgLeg = afterParsed.allTripSegments.find(
     (leg) => leg.departureAirport === "DFW" && leg.arrivalAirport === "DFW",
   );

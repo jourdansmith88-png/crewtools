@@ -56,6 +56,17 @@ export type ICrewStandaloneDhdAttachment = {
     | "no_matching_leg";
 };
 
+export type ICrewPwaDutyLimitLine = {
+  line: string;
+  dayToken: string | null;
+  dateKey: string | null;
+  fdpUsedMinutes: number;
+  scheduledFdpMaxMinutes: number;
+  actualFdpMaxMinutes: number;
+  source: "icrew_pwa_fdp_line";
+  duplicateIgnored?: boolean;
+};
+
 export type ParsedICrewTextResult = {
   header: ICrewHeader;
   layoverCities: string[];
@@ -76,6 +87,7 @@ export type ParsedICrewTextResult = {
   logbookLegs: RotationChainLeg[];
   deadheadAnnotations: ICrewDeadheadAnnotation[];
   standaloneDhdAttachments: ICrewStandaloneDhdAttachment[];
+  pwaDutyLimitLines: ICrewPwaDutyLimitLine[];
   incompleteFragments: string[];
   parserNotes: string[];
   partialStatus: boolean;
@@ -126,6 +138,7 @@ export type ICrewParserDiagnostics = {
     sourceText: string | null;
   }>;
   standaloneDhdLines: ICrewStandaloneDhdAttachment[];
+  pwaLines: ICrewPwaDutyLimitLine[];
   resultingDeadheadLegs: string[];
   parserStageFailed: "header" | "totals" | "legs" | "displayModel" | null;
   parserError: string | null;
@@ -406,6 +419,7 @@ function buildICrewParserDiagnostics(
     attemptedLegParseResults: extra?.attemptedLegParseResults ?? [],
     parsedSegments: extra?.parsedSegments ?? [],
     standaloneDhdLines: extra?.standaloneDhdLines ?? [],
+    pwaLines: extra?.pwaLines ?? [],
     resultingDeadheadLegs: extra?.resultingDeadheadLegs ?? [],
     parserStageFailed,
     parserError,
@@ -547,6 +561,67 @@ function parseICrewLayoverCities(rawText: string) {
     layovers.push(match[1].toUpperCase());
   }
   return Array.from(new Set(layovers));
+}
+
+function parseICrewPwaDutyLimitLines(
+  rawText: string,
+  segments: Array<{
+    dayToken: string;
+    sourceLineIndex: number;
+    date?: string;
+  }>,
+) {
+  const parsedLines: ICrewPwaDutyLimitLine[] = [];
+  const seenByDay = new Map<string, string>();
+  const rawLines = splitRawLines(rawText);
+
+  for (const [lineIndex, rawLine] of rawLines.entries()) {
+    const normalizedLine = normalizeICrewLine(rawLine);
+    const match = normalizedLine.match(
+      /^PWA\s+FDP\/SKD\s+MAX\/ACT\s+MAX\s+(\d{1,2}[.:]\d{2})\/(\d{1,2}[.:]\d{2})\/(\d{1,2}[.:]\d{2})$/i,
+    );
+    if (!match?.[1] || !match?.[2] || !match?.[3]) {
+      continue;
+    }
+
+    const nearestSegment =
+      [...segments]
+        .reverse()
+        .find((segment) => segment.sourceLineIndex < lineIndex) ?? null;
+    const dayToken = nearestSegment?.dayToken ?? null;
+    const dateKey = nearestSegment?.date ?? null;
+    const signature = `${match[1]}/${match[2]}/${match[3]}`;
+    const existingSignature = dayToken ? seenByDay.get(dayToken) : undefined;
+    if (dayToken && existingSignature === signature) {
+      parsedLines.push({
+        line: normalizedLine,
+        dayToken,
+        dateKey,
+        fdpUsedMinutes: parseDotDurationToMinutes(match[1]),
+        scheduledFdpMaxMinutes: parseDotDurationToMinutes(match[2]),
+        actualFdpMaxMinutes: parseDotDurationToMinutes(match[3]),
+        source: "icrew_pwa_fdp_line",
+        duplicateIgnored: true,
+      });
+      continue;
+    }
+
+    if (dayToken) {
+      seenByDay.set(dayToken, signature);
+    }
+    parsedLines.push({
+      line: normalizedLine,
+      dayToken,
+      dateKey,
+      fdpUsedMinutes: parseDotDurationToMinutes(match[1]),
+      scheduledFdpMaxMinutes: parseDotDurationToMinutes(match[2]),
+      actualFdpMaxMinutes: parseDotDurationToMinutes(match[3]),
+      source: "icrew_pwa_fdp_line",
+      duplicateIgnored: false,
+    });
+  }
+
+  return parsedLines;
 }
 
 export function parseICrewLayoverDetails(rawText: string) {
@@ -1091,6 +1166,7 @@ function parseICrewTextInternal(rawText: string): ParsedICrewTextResult {
   let header = parseICrewHeader(rawText, parsedSegments);
   const layoverCities = parseICrewLayoverCities(rawText);
   const layoverDetails = parseICrewLayoverDetails(rawText);
+  const pwaDutyLimitLines = parseICrewPwaDutyLimitLines(rawText, parsedSegments);
   const dayTotals = parseDayLevelDhdTotals(rawText);
   const summedDayDeadheadMinutes = Array.from(dayTotals.values()).reduce(
     (sum, totals) => sum + totals.deadheadBlockMinutes,
@@ -1135,6 +1211,18 @@ function parseICrewTextInternal(rawText: string): ParsedICrewTextResult {
   if (parsedSegmentAttempt.standaloneDhdLines.length > 0) {
     parserNotes.push(
       `Attached ${parsedSegmentAttempt.standaloneDhdLines.length} standalone DHD line${parsedSegmentAttempt.standaloneDhdLines.length === 1 ? "" : "s"} to matching leg block evidence.`,
+    );
+  }
+  const keptPwaLines = pwaDutyLimitLines.filter((line) => !line.duplicateIgnored);
+  const ignoredPwaLines = pwaDutyLimitLines.filter((line) => line.duplicateIgnored);
+  if (keptPwaLines.length > 0) {
+    parserNotes.push(
+      `Parsed ${keptPwaLines.length} PWA FDP/SKD MAX/ACT MAX line${keptPwaLines.length === 1 ? "" : "s"} from iCrew duty-day detail.`,
+    );
+  }
+  if (ignoredPwaLines.length > 0) {
+    parserNotes.push(
+      `Ignored ${ignoredPwaLines.length} duplicate PWA FDP/SKD MAX/ACT MAX line${ignoredPwaLines.length === 1 ? "" : "s"}.`,
     );
   }
   if (incompleteFragments.length > 0) {
@@ -1328,6 +1416,7 @@ function parseICrewTextInternal(rawText: string): ParsedICrewTextResult {
     logbookLegs: visibleOperatingLegs,
     deadheadAnnotations,
     standaloneDhdAttachments: parsedSegmentAttempt.standaloneDhdLines,
+    pwaDutyLimitLines: keptPwaLines,
     incompleteFragments,
     parserNotes,
     partialStatus,
@@ -1408,6 +1497,7 @@ export function parseICrewTextWithDiagnostics(rawText: string): ICrewParseDebugR
               sourceText: segment.sourceText ?? null,
             })),
             standaloneDhdLines: parsedSegmentAttempt.standaloneDhdLines,
+            pwaLines: parseICrewPwaDutyLimitLines(rawText, parsedSegmentAttempt.segments),
           },
         ),
       };
@@ -1446,6 +1536,7 @@ export function parseICrewTextWithDiagnostics(rawText: string): ICrewParseDebugR
             sourceText: segment.sourceText ?? null,
           })),
           standaloneDhdLines: parsedSegmentAttempt.standaloneDhdLines,
+          pwaLines: parseICrewPwaDutyLimitLines(rawText, parsedSegmentAttempt.segments),
         }),
       };
     }
@@ -1470,6 +1561,7 @@ export function parseICrewTextWithDiagnostics(rawText: string): ICrewParseDebugR
             sourceText: segment.sourceText ?? null,
           })),
           standaloneDhdLines: parsed.standaloneDhdAttachments,
+          pwaLines: parsed.pwaDutyLimitLines,
           resultingDeadheadLegs: parsed.deadheadAnnotations.map(
             (annotation) =>
               `${annotation.cityPair} ${annotation.carrier}${annotation.flightNumber} ${annotation.scheduledBlock} ${annotation.reason}`,
