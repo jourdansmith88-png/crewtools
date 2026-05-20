@@ -2346,7 +2346,7 @@ export default function App() {
         tripWatchResult.creditDeltaMinutes,
       ),
       buildItem(
-        "Op block",
+        isCompactMobile ? "Block" : "Op block",
         tripWatchResult.baselineSnapshot.operatingBlockMinutes,
         tripWatchResult.updatedSnapshot.operatingBlockMinutes,
         tripWatchResult.operatingBlockDeltaMinutes,
@@ -2358,7 +2358,7 @@ export default function App() {
         tripWatchResult.dhBlockDeltaMinutes,
       ),
     ].filter((item): item is { label: string; originalValue: string; updatedValue: string; deltaValue: string } => Boolean(item));
-  }, [tripWatchResult]);
+  }, [isCompactMobile, tripWatchResult]);
   const showTripWatchHeaderComparison = tripWatchHeaderComparisonItems.length > 0;
   const tripWatchChangedLegLimit = isCompactMobile ? 3 : 6;
   const tripWatchVisibleChangedLegs = useMemo(
@@ -5386,7 +5386,7 @@ export default function App() {
                             </Text>
                           </View>
                           <View style={[styles.tripBoardSummaryInlineChip, styles.tripBoardSummaryInlineChipPrimary]}>
-                            <Text style={styles.tripBoardSummaryInlineChipLabel}>Op block</Text>
+                            <Text style={styles.tripBoardSummaryInlineChipLabel}>Block</Text>
                             <Text style={styles.tripBoardSummaryInlineChipValue}>
                               {rotationDashboard.parsedRotation.missingSections.includes("total scheduled block")
                                 ? "Needs full"
@@ -5961,8 +5961,10 @@ export default function App() {
 
                 <View style={[styles.resultPanel, isCompactMobile && styles.resultPanelCompact]}>
                   <Text style={styles.inputLabel}>Trip Watch</Text>
-                  <Text style={styles.resultBodyText}>
-                    Got rerouted? Paste the updated rotation or attach changed MiCrew screenshots to compare against your loaded trip.
+                  <Text style={[styles.resultBodyText, isCompactMobile && styles.tripWatchIntroTextCompact]}>
+                    {isCompactMobile
+                      ? "Paste updated rotation or reroute text to compare against your loaded trip."
+                      : "Got rerouted? Paste the updated rotation or attach changed MiCrew screenshots to compare against your loaded trip."}
                   </Text>
                   <View style={[styles.quickActionGrid, isCompactMobile && styles.quickActionGridCompact]}>
                     {[
@@ -14066,6 +14068,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 22,
     color: appStylePalette.textPrimary,
+  },
+  tripWatchIntroTextCompact: {
+    fontSize: 12,
+    lineHeight: 18,
   },
   resultSupportMetaText: {
     fontSize: 13,
