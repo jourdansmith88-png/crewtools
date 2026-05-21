@@ -1,0 +1,20 @@
+{
+  "caseId": "4501",
+  "rotationNumber": "4501",
+  "base": "TBD",
+  "tripDates": "",
+  "sourceType": "unknown",
+  "baselineType": "none",
+  "afterType": "unknown",
+  "expected": {
+    "creditMinutes": 0,
+    "blockMinutes": 0,
+    "layovers": [],
+    "finalArrival": "TBD",
+    "legCount": 0,
+    "deadheadLegCount": 0,
+    "operatingLegCount": 0,
+    "shouldParse": false,
+    "shouldCompare": false
+  }
+}

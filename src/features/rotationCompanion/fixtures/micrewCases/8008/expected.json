@@ -1,0 +1,21 @@
+{
+  "caseId": "8008",
+  "rotationNumber": "8008",
+  "base": "SLC",
+  "tripDates": "01MAY - 03MAY",
+  "sourceType": "screenshot_transcription",
+  "baselineType": "synthetic",
+  "afterType": "real_final",
+  "expected": {
+    "creditMinutes": 510,
+    "blockMinutes": 510,
+    "layovers": ["MKE"],
+    "finalArrival": "SLC",
+    "legCount": 4,
+    "deadheadLegCount": 0,
+    "operatingLegCount": 4,
+    "shouldParse": true,
+    "shouldCompare": true,
+    "expectedWatchItems": ["Pay impact check recommended."]
+  }
+}
