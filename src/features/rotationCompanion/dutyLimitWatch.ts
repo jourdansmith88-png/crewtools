@@ -1,5 +1,6 @@
 import type { RotationDashboardData } from "../../utils/rotationCompanion.ts";
 import { buildDutyPeriodsFromRotationLegs, type RotationDutyPeriodSummary } from "./dutyPeriods.ts";
+import { getUnaugmentedFlightTimeLimitMinutes } from "./far117Limits.ts";
 import type { TripWatchComparisonResult, TripWatchRotationSnapshot } from "./tripWatchComparison.ts";
 
 export const DUTY_LIMIT_WATCH_SOURCE = "delta_table_placeholder_v1";
@@ -35,13 +36,32 @@ export type DutyLimitWatchOptions = {
 export type DutyWatchSummaryRow = {
   dateKey: string;
   status: DutyLimitWatchStatus;
-  statusLabel: "Within modeled limits" | "Caution" | "Exceeded modeled limit" | "Needs more info";
+  statusLabel: "Within parsed iCrew max" | "Within modeled limits" | "Caution" | "Exceeded modeled limit" | "Needs more info";
+  dateLabel: string;
+  fdpAllowableLabel?: string;
+  fdpScheduledLabel?: string;
+  fdpCurrentLabel?: string;
+  fdpLabel?: string;
+  fdpRemainingLabel?: string;
+  blockAllowableLabel?: string;
+  blockScheduledLabel?: string;
+  blockCurrentLabel?: string;
+  blockLabel?: string;
+  blockRemainingLabel?: string;
+  blockPendingNote?: string;
+  changeLabel?: string;
+  primaryLine: string;
+  blockLine?: string;
+  secondaryLine?: string;
+  inlineStatusLabel?: "Caution" | "Exceeded modeled limit" | "Needs more info";
   highlights: string[];
   notes: string[];
 };
 
 export type DutyWatchSummary = {
   hasContent: boolean;
+  overallStatus: DutyLimitWatchStatus;
+  overallStatusLabel: "Within parsed iCrew max" | "Within modeled limits" | "Caution" | "Exceeded modeled limit" | "Needs more info";
   rows: DutyWatchSummaryRow[];
   recommendedItems: string[];
   debug: {
@@ -52,8 +72,30 @@ export type DutyWatchSummary = {
   };
 };
 
+export type DutyTimelineHeaderRow = {
+  dateKey: string;
+  status: DutyLimitWatchStatus;
+  statusLabel: DutyWatchSummaryRow["statusLabel"];
+  inlineStatusLabel?: DutyWatchSummaryRow["inlineStatusLabel"];
+  dateLabel: string;
+  fdpAllowableLabel?: string;
+  fdpScheduledLabel?: string;
+  fdpCurrentLabel?: string;
+  fdpLabel?: string;
+  fdpRemainingLabel?: string;
+  blockAllowableLabel?: string;
+  blockScheduledLabel?: string;
+  blockCurrentLabel?: string;
+  blockLabel?: string;
+  blockRemainingLabel?: string;
+  blockPendingNote?: string;
+  changeLabel?: string;
+};
+
 const EMPTY_DUTY_WATCH_SUMMARY: DutyWatchSummary = {
   hasContent: false,
+  overallStatus: "needs_more_info",
+  overallStatusLabel: "Needs more info",
   rows: [],
   recommendedItems: [],
   debug: {
@@ -83,10 +125,13 @@ function formatDeltaMinutes(value?: number | null) {
   return `${prefix}${formatMinutes(Math.abs(value))}`;
 }
 
-function getStatusLabel(status: DutyLimitWatchStatus): DutyWatchSummaryRow["statusLabel"] {
+function getStatusLabel(
+  status: DutyLimitWatchStatus,
+  source?: string | null,
+): DutyWatchSummaryRow["statusLabel"] {
   switch (status) {
     case "within_limits":
-      return "Within modeled limits";
+      return source === "icrew_pwa_fdp_line" ? "Within parsed iCrew max" : "Within modeled limits";
     case "caution":
       return "Caution";
     case "exceeded":
@@ -98,6 +143,34 @@ function getStatusLabel(status: DutyLimitWatchStatus): DutyWatchSummaryRow["stat
 
 function buildPeriodMap(periods: RotationDutyPeriodSummary[]) {
   return new Map(periods.map((period) => [period.dateKey, period]));
+}
+
+function getStatusPriority(status: DutyLimitWatchStatus) {
+  switch (status) {
+    case "exceeded":
+      return 0;
+    case "caution":
+      return 1;
+    case "needs_more_info":
+      return 2;
+    case "within_limits":
+      return 3;
+    default:
+      return 4;
+  }
+}
+
+function getDateSortValue(dateKey: string) {
+  const match = dateKey.match(/^(\d{2})/);
+  return match ? Number(match[1]) : Number.MAX_SAFE_INTEGER;
+}
+
+function formatPendingValue() {
+  return "—";
+}
+
+function buildModeledBlockMinutes(period: RotationDutyPeriodSummary, includeRtgInBlockLimit: boolean) {
+  return period.operatingBlockMinutes + (includeRtgInBlockLimit ? period.rtgBlockMinutes : 0);
 }
 
 function snapshotToDutyPeriods(snapshot?: TripWatchRotationSnapshot | null) {
@@ -120,7 +193,10 @@ export function evaluateDutyPeriodLimits(
   options: DutyLimitWatchOptions = {},
 ): DutyLimitWatchEvaluation {
   const includeRtgInBlockLimit = options.includeRtgInBlockLimit ?? true;
-  const source = options.source ?? DUTY_LIMIT_WATCH_SOURCE;
+  const source =
+    options.source ??
+    period.pwaLimitSource ??
+    DUTY_LIMIT_WATCH_SOURCE;
   const fdpLimitMinutes = isFiniteMinutes(options.fdpLimitMinutes)
     ? options.fdpLimitMinutes
     : isFiniteMinutes(period.pwaActualMaxFdpMinutes)
@@ -128,7 +204,9 @@ export function evaluateDutyPeriodLimits(
       : isFiniteMinutes(period.pwaScheduledMaxFdpMinutes)
         ? period.pwaScheduledMaxFdpMinutes
         : undefined;
-  const blockLimitMinutes = isFiniteMinutes(options.blockLimitMinutes) ? options.blockLimitMinutes : undefined;
+  const blockLimitMinutes = isFiniteMinutes(options.blockLimitMinutes)
+    ? options.blockLimitMinutes
+    : getUnaugmentedFlightTimeLimitMinutes(period.reportTime);
   const modeledFdpMinutes = isFiniteMinutes(period.pwaFdpUsedMinutes) ? period.pwaFdpUsedMinutes : period.dutySpanMinutes;
   const modeledBlockMinutes = period.operatingBlockMinutes + (includeRtgInBlockLimit ? period.rtgBlockMinutes : 0);
   const flags: string[] = [];
@@ -296,7 +374,9 @@ export function buildDutyWatchSummary(
       if (evaluation.status === "needs_more_info") {
         notes.push("Limit check needs Delta table source");
       } else {
-        notes.push(getStatusLabel(evaluation.status));
+        if (evaluation.status !== "within_limits") {
+          notes.push(getStatusLabel(evaluation.status, evaluation.source));
+        }
         if (typeof evaluation.fdpRemainingMinutes === "number") {
           notes.push(`FDP remaining ${formatMinutes(evaluation.fdpRemainingMinutes)}`);
         }
@@ -314,15 +394,143 @@ export function buildDutyWatchSummary(
         return null;
       }
 
+      const dateLabel = dateKey;
+      let fdpLabel: string | undefined;
+      let fdpRemainingLabel: string | undefined;
+      let blockLabel: string | undefined;
+      let blockRemainingLabel: string | undefined;
+      let blockPendingNote: string | undefined;
+      let fdpAllowableLabel: string | undefined;
+      let fdpScheduledLabel: string | undefined;
+      let fdpCurrentLabel: string | undefined;
+      let blockAllowableLabel: string | undefined;
+      let blockScheduledLabel: string | undefined;
+      let blockCurrentLabel: string | undefined;
+      const baselineModeledBlockMinutes = baselinePeriod
+        ? buildModeledBlockMinutes(baselinePeriod, includeRtgInBlockLimit)
+        : undefined;
+      const updatedModeledBlockMinutes = buildModeledBlockMinutes(updatedPeriod, includeRtgInBlockLimit);
+      if (typeof updatedPeriod.pwaFdpUsedMinutes === "number") {
+        const maxFdpMinutes =
+          updatedPeriod.pwaActualMaxFdpMinutes ?? updatedPeriod.pwaScheduledMaxFdpMinutes;
+        if (typeof maxFdpMinutes === "number") {
+          fdpLabel = `FDP ${formatMinutes(updatedPeriod.pwaFdpUsedMinutes)}/${formatMinutes(maxFdpMinutes)}`;
+          fdpAllowableLabel = formatMinutes(maxFdpMinutes);
+        }
+        fdpCurrentLabel = formatMinutes(updatedPeriod.pwaFdpUsedMinutes);
+      } else if (typeof updatedPeriod.dutySpanMinutes === "number") {
+        fdpCurrentLabel = formatMinutes(updatedPeriod.dutySpanMinutes);
+      }
+      if (typeof baselinePeriod?.pwaFdpUsedMinutes === "number") {
+        fdpScheduledLabel = formatMinutes(baselinePeriod.pwaFdpUsedMinutes);
+      } else if (!baselinePeriod && fdpCurrentLabel) {
+        fdpScheduledLabel = fdpCurrentLabel;
+      }
+      if (typeof evaluation.fdpRemainingMinutes === "number") {
+        fdpRemainingLabel = `FDP rem ${formatMinutes(evaluation.fdpRemainingMinutes)}`;
+      }
+      blockCurrentLabel = formatMinutes(updatedModeledBlockMinutes);
+      if (typeof baselineModeledBlockMinutes === "number") {
+        blockScheduledLabel = formatMinutes(baselineModeledBlockMinutes);
+      } else {
+        blockScheduledLabel = blockCurrentLabel;
+      }
+      blockLabel = `Block ${blockCurrentLabel}`;
+      blockRemainingLabel =
+        typeof evaluation.blockRemainingMinutes === "number"
+          ? `Block rem ${formatMinutes(evaluation.blockRemainingMinutes)}`
+          : formatPendingValue();
+      blockAllowableLabel =
+        typeof evaluation.blockLimitMinutes === "number"
+          ? formatMinutes(evaluation.blockLimitMinutes)
+          : formatPendingValue();
+      if (blockAllowableLabel === formatPendingValue()) {
+        blockPendingNote = "Block max pending";
+      }
+
+      const secondaryParts: string[] = [];
+      if (rtgBlockDeltaMinutes > 0) {
+        secondaryParts.push(`RTG +${formatMinutes(rtgBlockDeltaMinutes)}`);
+      }
+      if (deadheadBlockDeltaMinutes !== 0) {
+        const formattedDh = formatDeltaMinutes(deadheadBlockDeltaMinutes);
+        if (formattedDh) {
+          secondaryParts.push(`DH ${formattedDh}`);
+        }
+      }
+      if (operatingBlockDeltaMinutes !== 0 || dutySpanChanged || rtgBlockDeltaMinutes !== 0) {
+        secondaryParts.push("Block/FDP changed");
+      }
+      if (secondaryParts.length === 0 && evaluation.status === "needs_more_info") {
+        secondaryParts.push("Limit check needs Delta table source");
+      }
+
       return {
         dateKey,
         status: evaluation.status,
-        statusLabel: getStatusLabel(evaluation.status),
+        statusLabel: getStatusLabel(evaluation.status, evaluation.source),
+        dateLabel,
+        fdpAllowableLabel,
+        fdpScheduledLabel,
+        fdpCurrentLabel,
+        fdpLabel,
+        fdpRemainingLabel,
+        blockAllowableLabel,
+        blockScheduledLabel,
+        blockCurrentLabel,
+        blockLabel,
+        blockRemainingLabel,
+        blockPendingNote,
+        changeLabel: secondaryParts.join(" · ") || undefined,
+        primaryLine: [
+          dateLabel,
+          fdpAllowableLabel ? `FDP Allow ${fdpAllowableLabel}` : null,
+          fdpCurrentLabel ? `Current ${fdpCurrentLabel}` : null,
+          fdpRemainingLabel,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        blockLine: [blockLabel, blockRemainingLabel].filter(Boolean).join(" · "),
+        secondaryLine: secondaryParts.join(" · ") || undefined,
+        inlineStatusLabel:
+          evaluation.status === "within_limits" ? undefined : getStatusLabel(evaluation.status, evaluation.source),
         highlights,
         notes: Array.from(new Set(notes)),
       } satisfies DutyWatchSummaryRow;
     })
-    .filter((row): row is DutyWatchSummaryRow => Boolean(row));
+    .filter((row): row is DutyWatchSummaryRow => Boolean(row))
+    .sort((left, right) => {
+      const statusPriority = getStatusPriority(left.status) - getStatusPriority(right.status);
+      if (statusPriority !== 0) {
+        return statusPriority;
+      }
+      const leftHasRtg = left.highlights.some((item) => item.startsWith("RTG added")) ? 0 : 1;
+      const rightHasRtg = right.highlights.some((item) => item.startsWith("RTG added")) ? 0 : 1;
+      if (leftHasRtg !== rightHasRtg) {
+        return leftHasRtg - rightHasRtg;
+      }
+      const leftDeltaScore = left.highlights.filter((item) => item.includes("Block") || item.includes("DH block") || item.includes("RTG")).length;
+      const rightDeltaScore = right.highlights.filter((item) => item.includes("Block") || item.includes("DH block") || item.includes("RTG")).length;
+      if (leftDeltaScore !== rightDeltaScore) {
+        return rightDeltaScore - leftDeltaScore;
+      }
+      return getDateSortValue(left.dateKey) - getDateSortValue(right.dateKey);
+    });
+
+  const overallStatus = rows.length
+    ? rows.slice(1).reduce<DutyLimitWatchStatus>(
+        (current, row) => (getStatusPriority(row.status) < getStatusPriority(current) ? row.status : current),
+        rows[0].status,
+      )
+    : "needs_more_info";
+  const overallStatusLabel = rows.length
+    ? getStatusLabel(
+        overallStatus,
+        rows.every((row) => row.status === "within_limits" && row.statusLabel === "Within parsed iCrew max")
+          ? "icrew_pwa_fdp_line"
+          : undefined,
+      )
+    : "Needs more info";
 
   const recommendedItems = rows.length
     ? Array.from(
@@ -337,6 +545,8 @@ export function buildDutyWatchSummary(
 
   return {
     hasContent: rows.length > 0,
+    overallStatus,
+    overallStatusLabel,
     rows,
     recommendedItems,
     debug: {
@@ -346,4 +556,117 @@ export function buildDutyWatchSummary(
       includeRtgInBlockLimit,
     },
   };
+}
+
+export function buildDutyTimelineHeaderRows(
+  snapshot: TripWatchRotationSnapshot | null | undefined,
+  comparisonResult?: TripWatchComparisonResult | null,
+  baselineSnapshot?: TripWatchRotationSnapshot | null,
+  options: DutyLimitWatchOptions = {},
+): DutyTimelineHeaderRow[] {
+  if (!snapshot) {
+    return [];
+  }
+
+  const includeRtgInBlockLimit = options.includeRtgInBlockLimit ?? true;
+  const periods = snapshotToDutyPeriods(snapshot);
+  const evaluations = evaluateRotationDutyLimits(periods, options);
+  const baselineMap = buildPeriodMap(snapshotToDutyPeriods(baselineSnapshot));
+
+  return periods.map((period) => {
+    const evaluation = evaluations.find((item) => item.dateKey === period.dateKey);
+    const baselinePeriod = baselineMap.get(period.dateKey);
+    const modeledBlockMinutes = buildModeledBlockMinutes(period, includeRtgInBlockLimit);
+    const baselineModeledBlockMinutes = baselinePeriod
+      ? buildModeledBlockMinutes(baselinePeriod, includeRtgInBlockLimit)
+      : undefined;
+    const rtgBlockDeltaMinutes = (period.rtgBlockMinutes ?? 0) - (baselinePeriod?.rtgBlockMinutes ?? 0);
+    const deadheadBlockDeltaMinutes = (period.deadheadBlockMinutes ?? 0) - (baselinePeriod?.deadheadBlockMinutes ?? 0);
+    const operatingBlockDeltaMinutes = (period.operatingBlockMinutes ?? 0) - (baselinePeriod?.operatingBlockMinutes ?? 0);
+
+    const fdpMaxMinutes = period.pwaActualMaxFdpMinutes ?? period.pwaScheduledMaxFdpMinutes;
+    const fdpLabel =
+      typeof period.pwaFdpUsedMinutes === "number" && typeof fdpMaxMinutes === "number"
+        ? `FDP ${formatMinutes(period.pwaFdpUsedMinutes)}/${formatMinutes(fdpMaxMinutes)}`
+        : undefined;
+    const fdpAllowableLabel = typeof fdpMaxMinutes === "number" ? formatMinutes(fdpMaxMinutes) : undefined;
+    const fdpScheduledLabel =
+      typeof baselinePeriod?.pwaFdpUsedMinutes === "number"
+        ? formatMinutes(baselinePeriod.pwaFdpUsedMinutes)
+        : typeof period.pwaFdpUsedMinutes === "number"
+          ? formatMinutes(period.pwaFdpUsedMinutes)
+          : undefined;
+    const fdpCurrentLabel =
+      typeof period.pwaFdpUsedMinutes === "number"
+        ? formatMinutes(period.pwaFdpUsedMinutes)
+        : typeof period.dutySpanMinutes === "number"
+          ? formatMinutes(period.dutySpanMinutes)
+          : undefined;
+    const fdpRemainingLabel =
+      typeof evaluation?.fdpRemainingMinutes === "number"
+        ? `FDP rem ${formatMinutes(evaluation.fdpRemainingMinutes)}`
+        : undefined;
+    const blockLabel =
+      period.deadheadBlockMinutes > 0 && period.operatingBlockMinutes > 0
+        ? `Block ${formatMinutes(modeledBlockMinutes)} + DH ${formatMinutes(period.deadheadBlockMinutes)}`
+        : period.deadheadBlockMinutes > 0 && modeledBlockMinutes === 0
+          ? `DH ${formatMinutes(period.deadheadBlockMinutes)}`
+          : `Block ${formatMinutes(modeledBlockMinutes)}`;
+    const blockAllowableLabel =
+      typeof evaluation?.blockLimitMinutes === "number"
+        ? formatMinutes(evaluation.blockLimitMinutes)
+        : formatPendingValue();
+    const blockScheduledLabel =
+      typeof baselineModeledBlockMinutes === "number"
+        ? formatMinutes(baselineModeledBlockMinutes)
+        : formatMinutes(modeledBlockMinutes);
+    const blockCurrentLabel = formatMinutes(modeledBlockMinutes);
+    const blockRemainingLabel =
+      typeof evaluation?.blockRemainingMinutes === "number"
+        ? `Block rem ${formatMinutes(evaluation.blockRemainingMinutes)}`
+        : formatPendingValue();
+    const blockPendingNote =
+      blockAllowableLabel === formatPendingValue() || blockRemainingLabel === formatPendingValue()
+        ? "Block max pending"
+        : undefined;
+
+    const changeParts: string[] = [];
+    if (comparisonResult?.status === "ok" && baselineSnapshot) {
+      if (rtgBlockDeltaMinutes > 0) {
+        changeParts.push(`RTG +${formatMinutes(rtgBlockDeltaMinutes)}`);
+      }
+      if (deadheadBlockDeltaMinutes !== 0) {
+        const formattedDh = formatDeltaMinutes(deadheadBlockDeltaMinutes);
+        if (formattedDh) {
+          changeParts.push(`DH ${formattedDh}`);
+        }
+      }
+      if (operatingBlockDeltaMinutes !== 0 || deadheadBlockDeltaMinutes !== 0 || rtgBlockDeltaMinutes !== 0) {
+        changeParts.push(deadheadBlockDeltaMinutes !== 0 && rtgBlockDeltaMinutes === 0 ? "Block/DH changed" : "Block/FDP changed");
+      }
+    }
+
+    return {
+      dateKey: period.dateKey,
+      status: evaluation?.status ?? "needs_more_info",
+      statusLabel: getStatusLabel(evaluation?.status ?? "needs_more_info", evaluation?.source),
+      inlineStatusLabel:
+        evaluation?.status && evaluation.status !== "within_limits"
+          ? getStatusLabel(evaluation.status, evaluation.source)
+          : undefined,
+      dateLabel: period.dateKey,
+      fdpAllowableLabel,
+      fdpScheduledLabel,
+      fdpCurrentLabel,
+      fdpLabel,
+      fdpRemainingLabel,
+      blockAllowableLabel,
+      blockScheduledLabel,
+      blockCurrentLabel,
+      blockLabel,
+      blockRemainingLabel,
+      blockPendingNote,
+      changeLabel: changeParts.join(" · ") || undefined,
+    };
+  });
 }

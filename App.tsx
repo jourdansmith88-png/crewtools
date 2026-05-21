@@ -86,7 +86,7 @@ import {
   type TripWatchScreenshotParseResponse,
 } from "./src/features/rotationCompanion/tripWatchComparison";
 import { buildPayWatchSummary } from "./src/features/rotationCompanion/payWatch";
-import { buildDutyWatchSummary } from "./src/features/rotationCompanion/dutyLimitWatch";
+import { buildDutyTimelineHeaderRows, buildDutyWatchSummary } from "./src/features/rotationCompanion/dutyLimitWatch";
 import type { RotationChainCandidate } from "./src/features/rotationCompanion/rotationChainBuilder";
 import { fliegerTypography, getFliegerPalette } from "./src/theme/flieger";
 import type {
@@ -112,6 +112,62 @@ type RotationScreenshotAttachment = {
 
 const DELTA_CHECK_IN_URL = "https://www.delta.com/check-in";
 const SKYHOP_URL = "https://www.skyhopglobal.com";
+
+class RotationDebugErrorBoundary extends Component<
+  { children: any },
+  { error: Error | null; stack: string | null }
+> {
+  constructor(props: { children: any }) {
+    super(props);
+    this.state = { error: null, stack: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return {
+      error,
+      stack: error.stack ?? null,
+    };
+  }
+
+  componentDidCatch(error: Error) {
+    console.error("ROTATION_DEBUG_ERROR_BOUNDARY", error);
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <SafeAreaView style={{ flex: 1, backgroundColor: "#0b1220" }}>
+          <ScrollView
+            contentContainerStyle={{
+              padding: 20,
+              gap: 12,
+            }}
+          >
+            <Text style={{ color: "#f8fafc", fontSize: 18, fontWeight: "700" }}>Rotation Debug Crash</Text>
+            <Text style={{ color: "#fca5a5", fontSize: 14, fontWeight: "600" }}>
+              {this.state.error.name}: {this.state.error.message}
+            </Text>
+            {this.state.stack ? (
+              <Text
+                selectable
+                style={{
+                  color: "#cbd5e1",
+                  fontSize: 12,
+                  lineHeight: 18,
+                  fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+                }}
+              >
+                {this.state.stack}
+              </Text>
+            ) : null}
+          </ScrollView>
+        </SafeAreaView>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 function formatTripWatchDeltaValue(label: string, deltaMinutes?: number | null) {
   if (deltaMinutes == null || deltaMinutes === 0) {
@@ -2287,10 +2343,17 @@ export default function App() {
     rotationScreenshots.length,
     rotationScreenshotParseResult,
   ]);
-  const tripWatchBaselineSnapshot = useMemo(
-    () => (displayedRotationDashboard ? buildTripWatchRotationSnapshot(displayedRotationDashboard) : null),
-    [displayedRotationDashboard],
-  );
+  const tripWatchBaselineSnapshot = useMemo(() => {
+    if (!displayedRotationDashboard) {
+      return null;
+    }
+    try {
+      return buildTripWatchRotationSnapshot(displayedRotationDashboard);
+    } catch (error) {
+      console.error("TRIP_WATCH_BASELINE_SNAPSHOT_ERROR", error);
+      return null;
+    }
+  }, [displayedRotationDashboard]);
   const tripWatchBaselineDashboardDebug = useMemo(() => {
     const summarizeDeadheadishLegs = (dashboard?: RotationDashboardData | null) =>
       (dashboard?.legs ?? [])
@@ -2444,17 +2507,21 @@ export default function App() {
         tripWatchTotalsChanged.length > 0
       ),
   );
-  const tripWatchPayWatchSummary = useMemo(
-    () =>
-      tripWatchResult?.status === "ok"
-        ? buildPayWatchSummary(
-            tripWatchResult.baselineSnapshot,
-            tripWatchResult.updatedSnapshot,
-            tripWatchResult,
-          )
-        : null,
-    [tripWatchResult],
-  );
+  const tripWatchPayWatchSummary = useMemo(() => {
+    if (tripWatchResult?.status !== "ok") {
+      return null;
+    }
+    try {
+      return buildPayWatchSummary(
+        tripWatchResult.baselineSnapshot,
+        tripWatchResult.updatedSnapshot,
+        tripWatchResult,
+      );
+    } catch (error) {
+      console.error("TRIP_WATCH_PAY_WATCH_ERROR", error);
+      return null;
+    }
+  }, [tripWatchResult]);
   const tripWatchPayWatchVisibleSummaryItems = useMemo(() => {
     if (!tripWatchPayWatchSummary) {
       return [];
@@ -2470,16 +2537,57 @@ export default function App() {
     }
     return tripWatchPayWatchSummary.recommendedItems;
   }, [isCompactMobile, showTripWatchHeaderComparison, tripWatchPayWatchSummary]);
-  const tripWatchDutyWatchSummary = useMemo(
-    () =>
-      tripWatchResult?.status === "ok"
-        ? buildDutyWatchSummary(
-            tripWatchResult.baselineSnapshot,
+  const tripWatchDutyWatchSummary = useMemo(() => {
+    if (tripWatchResult?.status !== "ok") {
+      return null;
+    }
+    try {
+      return buildDutyWatchSummary(
+        tripWatchResult.baselineSnapshot,
+        tripWatchResult.updatedSnapshot,
+        tripWatchResult,
+      );
+    } catch (error) {
+      console.error("TRIP_WATCH_DUTY_WATCH_ERROR", error);
+      return null;
+    }
+  }, [tripWatchResult]);
+  const displayedTripWatchSnapshot = useMemo(() => {
+    if (!rotationDashboard) {
+      return null;
+    }
+    try {
+      return buildTripWatchRotationSnapshot(rotationDashboard);
+    } catch (error) {
+      console.error("DISPLAYED_TRIP_WATCH_SNAPSHOT_ERROR", error);
+      return null;
+    }
+  }, [rotationDashboard]);
+  const timelineDutyHeaderRows = useMemo(() => {
+    try {
+      if (tripWatchResult?.status === "ok" && tripWatchResult.updatedSnapshot) {
+        const sameRotation =
+          !tripWatchResult.title?.includes("Different rotation") &&
+          (!tripWatchResult.baselineSnapshot?.rotationNumber ||
+            !tripWatchResult.updatedSnapshot?.rotationNumber ||
+            tripWatchResult.baselineSnapshot.rotationNumber === tripWatchResult.updatedSnapshot.rotationNumber);
+        if (sameRotation) {
+          return buildDutyTimelineHeaderRows(
             tripWatchResult.updatedSnapshot,
             tripWatchResult,
-          )
-        : null,
-    [tripWatchResult],
+            tripWatchResult.baselineSnapshot,
+          );
+        }
+      }
+      return displayedTripWatchSnapshot ? buildDutyTimelineHeaderRows(displayedTripWatchSnapshot) : [];
+    } catch (error) {
+      console.error("TRIP_WATCH_TIMELINE_DUTY_HEADERS_ERROR", error);
+      return [];
+    }
+  }, [displayedTripWatchSnapshot, tripWatchResult]);
+  const timelineDutyHeaderRowByDate = useMemo(
+    () => new Map(timelineDutyHeaderRows.map((row) => [row.dateKey, row] as const)),
+    [timelineDutyHeaderRows],
   );
 
   const formatLegFlightDisplay = (leg: RotationDashboardData["legs"][number]) => {
@@ -5668,6 +5776,7 @@ export default function App() {
                               rotationDashboard.scheduledRestMinutes != null
                             ? `Rest ${rotationFormatMinutes(rotationDashboard.scheduledRestMinutes)}`
                             : null;
+                      const dutyHeaderRow = showDateLabel ? timelineDutyHeaderRowByDate.get(item.dayLabel) : null;
                       return (
                         <View key={item.key} style={[styles.tripBoardTimelineRow, isCompactMobile && styles.tripBoardTimelineRowCompact]}>
                           <View style={[styles.tripBoardTimelineSpineColumn, isCompactMobile && styles.tripBoardTimelineSpineColumnCompact]}>
@@ -5697,6 +5806,54 @@ export default function App() {
                               ) : null}
                             </View>
                           </View>
+                          <View style={{ flex: 1, gap: isCompactMobile ? 8 : 10 }}>
+                            {dutyHeaderRow ? (
+                              <View
+                                style={[
+                                  styles.resultPanelSubtle,
+                                  styles.tripWatchSectionCard,
+                                  styles.tripWatchSectionCardCompact,
+                                  { paddingVertical: isCompactMobile ? 8 : 10 },
+                                ]}
+                              >
+                                <View
+                                  style={[
+                                    styles.tripWatchChipRow,
+                                    { justifyContent: "space-between", alignItems: "center" },
+                                  ]}
+                                >
+                                  <Text style={[styles.tripBoardTimelineMeta, { flexShrink: 0 }]}>{`${dutyHeaderRow.dateLabel} DUTY`}</Text>
+                                  {dutyHeaderRow.inlineStatusLabel ? (
+                                    <View
+                                      style={[
+                                        styles.tripWatchWatchChip,
+                                        dutyHeaderRow.status === "caution" && styles.tripWatchWatchChipAmber,
+                                        dutyHeaderRow.status === "exceeded" && styles.legBadgeWarning,
+                                      ]}
+                                    >
+                                      <Text style={styles.tripWatchWatchChipText}>{dutyHeaderRow.inlineStatusLabel}</Text>
+                                    </View>
+                                  ) : null}
+                                </View>
+                                <Text style={[styles.tripBoardTimelineMeta, { letterSpacing: 0.4 }]}>
+                                  {isCompactMobile ? "       MAX    SCH    CUR    REM" : "        MAX     SCHED   CURRENT   REM"}
+                                </Text>
+                                <Text style={styles.tripBoardTimelineMeta}>
+                                  {`FDP    ${dutyHeaderRow.fdpAllowableLabel ?? "TBD"}   ${dutyHeaderRow.fdpScheduledLabel ?? "TBD"}   ${dutyHeaderRow.fdpCurrentLabel ?? "TBD"}   ${dutyHeaderRow.fdpRemainingLabel?.replace(/^FDP rem /, "") ?? "TBD"}`}
+                                </Text>
+                                <Text style={styles.tripBoardTimelineMeta}>
+                                  {`BLOCK  ${dutyHeaderRow.blockAllowableLabel ?? "—"}   ${dutyHeaderRow.blockScheduledLabel ?? "TBD"}   ${dutyHeaderRow.blockCurrentLabel ?? "TBD"}   ${dutyHeaderRow.blockRemainingLabel?.replace(/^Block rem /, "") ?? "—"}`}
+                                </Text>
+                                {dutyHeaderRow.blockPendingNote ? (
+                                  <Text style={[styles.tripBoardTimelineMeta, styles.tripBoardTimelineMetaMuted]}>
+                                    {dutyHeaderRow.blockPendingNote}
+                                  </Text>
+                                ) : null}
+                                {dutyHeaderRow.changeLabel ? (
+                                  <Text style={styles.tripBoardTimelineMeta}>{dutyHeaderRow.changeLabel}</Text>
+                                ) : null}
+                              </View>
+                            ) : null}
                           {item.type === "layover" ? (
                             <InstrumentPanel
                               variant="decision"
@@ -5931,6 +6088,7 @@ export default function App() {
                               ) : null}
                             </InstrumentPanel>
                           )}
+                          </View>
                         </View>
                       );
                     })}
@@ -6326,28 +6484,61 @@ export default function App() {
                                     isCompactMobile && styles.tripWatchSectionCardCompact,
                                   ]}
                                 >
-                                  <Text style={styles.resultSupportMetaText}>117 Watch</Text>
+                                  <View style={[styles.tripWatchChipRow, { justifyContent: "space-between", alignItems: "center" }]}>
+                                    <Text style={styles.resultSupportMetaText}>117 WATCH</Text>
+                                    <View
+                                      style={[
+                                        styles.tripWatchWatchChip,
+                                        tripWatchDutyWatchSummary.overallStatus === "caution" && styles.tripWatchWatchChipAmber,
+                                        tripWatchDutyWatchSummary.overallStatus === "exceeded" && styles.legBadgeWarning,
+                                      ]}
+                                    >
+                                      <Text style={styles.tripWatchWatchChipText}>
+                                        {isCompactMobile && tripWatchDutyWatchSummary.overallStatusLabel === "Within parsed iCrew max"
+                                          ? "Within iCrew max"
+                                          : tripWatchDutyWatchSummary.overallStatusLabel}
+                                      </Text>
+                                    </View>
+                                  </View>
                                   <View style={styles.sectionStack}>
                                     {tripWatchDutyWatchSummary.rows.map((row) => (
-                                      <View key={`tripwatch-duty-${row.dateKey}`} style={styles.sectionStack}>
-                                        <View style={styles.tripWatchChipRow}>
-                                          <View
-                                            style={[
-                                              styles.tripWatchWatchChip,
-                                              row.status === "caution" && styles.tripWatchWatchChipAmber,
-                                              row.status === "exceeded" && styles.legBadgeWarning,
-                                            ]}
-                                          >
-                                            <Text style={styles.tripWatchWatchChipText}>{row.statusLabel}</Text>
-                                          </View>
+                                      <View
+                                        key={`tripwatch-duty-${row.dateKey}`}
+                                        style={[
+                                          styles.resultPanelSubtle,
+                                          styles.tripWatchSectionCard,
+                                          styles.tripWatchSectionCardCompact,
+                                          { paddingVertical: isCompactMobile ? 10 : 12 },
+                                        ]}
+                                      >
+                                        <View style={[styles.tripWatchChipRow, { justifyContent: "space-between", alignItems: "center" }]}>
+                                          <Text style={[styles.tripBoardTimelineMeta, { flexShrink: 0 }]}>{row.dateLabel}</Text>
+                                          {row.inlineStatusLabel ? (
+                                            <View
+                                              style={[
+                                                styles.tripWatchWatchChip,
+                                                row.status === "caution" && styles.tripWatchWatchChipAmber,
+                                                row.status === "exceeded" && styles.legBadgeWarning,
+                                              ]}
+                                            >
+                                              <Text style={styles.tripWatchWatchChipText}>{row.inlineStatusLabel}</Text>
+                                            </View>
+                                          ) : null}
                                         </View>
-                                        <Text style={styles.tripBoardTimelineMeta}>{row.dateKey} changed</Text>
-                                        {row.highlights.map((item) => (
-                                          <Text key={`tripwatch-duty-highlight-${row.dateKey}-${item}`} style={styles.tripBoardTimelineMeta}>• {item}</Text>
-                                        ))}
-                                        {row.notes.map((item) => (
-                                          <Text key={`tripwatch-duty-note-${row.dateKey}-${item}`} style={styles.tripBoardTimelineMeta}>• {item}</Text>
-                                        ))}
+                                        <Text style={styles.tripBoardTimelineMeta}>
+                                          {`FDP ${row.fdpCurrentLabel ?? row.fdpScheduledLabel ?? "TBD"}/${row.fdpAllowableLabel ?? "—"} · ${row.fdpRemainingLabel ?? "FDP rem —"}`}
+                                        </Text>
+                                        <Text style={styles.tripBoardTimelineMeta}>
+                                          {`Block ${row.blockCurrentLabel ?? "TBD"}/${row.blockAllowableLabel ?? "—"} · ${row.blockRemainingLabel === "—" ? "Rem —" : row.blockRemainingLabel ?? "Rem —"}`}
+                                        </Text>
+                                        {row.blockPendingNote ? (
+                                          <Text style={[styles.tripBoardTimelineMeta, styles.tripBoardTimelineMetaMuted]}>
+                                            {row.blockPendingNote}
+                                          </Text>
+                                        ) : null}
+                                        {row.changeLabel ? (
+                                          <Text style={styles.tripBoardTimelineMeta}>{row.changeLabel}</Text>
+                                        ) : null}
                                       </View>
                                     ))}
                                   </View>

@@ -1,10 +1,12 @@
 import {
+  buildDutyTimelineHeaderRows,
   buildDutyWatchSummary,
   DUTY_LIMIT_WATCH_SOURCE,
   evaluateDutyPeriodLimits,
   evaluateRotationDutyLimits,
 } from "./dutyLimitWatch.ts";
 import { buildDutyPeriodsFromRotationLegs } from "./dutyPeriods.ts";
+import { getUnaugmentedFlightTimeLimitMinutes } from "./far117Limits.ts";
 import { buildTripWatchRotationSnapshot, compareRotationSnapshots } from "./tripWatchComparison.ts";
 import { parseICrewTextWithDiagnostics, type ParsedICrewTextResult } from "./parseICrewText.ts";
 import { rotation7707ICrewBeforeText } from "./fixtures/rotation7707ICrewBeforeText.ts";
@@ -187,7 +189,10 @@ const samplePeriods = buildDutyPeriodsFromRotationLegs({
 });
 
 const period = samplePeriods[0];
-const needsMoreInfo = evaluateDutyPeriodLimits(period);
+const needsMoreInfo = evaluateDutyPeriodLimits({
+  ...period,
+  reportTime: undefined,
+});
 assert(needsMoreInfo.status === "needs_more_info", `Expected needs_more_info, got ${needsMoreInfo.status}`);
 assert(needsMoreInfo.source === DUTY_LIMIT_WATCH_SOURCE, `Expected placeholder source, got ${needsMoreInfo.source}`);
 
@@ -196,6 +201,14 @@ const withinLimits = evaluateDutyPeriodLimits(period, {
   blockLimitMinutes: 480,
 });
 assert(withinLimits.status === "within_limits", `Expected within_limits, got ${withinLimits.status}`);
+
+assert(
+  getUnaugmentedFlightTimeLimitMinutes("07:15") === 540 &&
+    getUnaugmentedFlightTimeLimitMinutes("05:00") === 540 &&
+    getUnaugmentedFlightTimeLimitMinutes("04:59") === 480 &&
+    getUnaugmentedFlightTimeLimitMinutes("20:00") === 480,
+  "Expected FAR 117 Table A unaugmented flight time limits to map correctly",
+);
 
 const cautionFdp = evaluateDutyPeriodLimits(period, {
   fdpLimitMinutes: 180,
@@ -294,16 +307,81 @@ const comparison = compareRotationSnapshots(beforeSnapshot, afterSnapshot);
 const dutyWatchSummary = buildDutyWatchSummary(beforeSnapshot, afterSnapshot, comparison);
 assert(dutyWatchSummary?.hasContent, "Expected 7707 duty watch summary to have content");
 assert(
+  dutyWatchSummary?.overallStatusLabel === "Within parsed iCrew max",
+  `Expected parsed iCrew max overall label, got ${dutyWatchSummary?.overallStatusLabel}`,
+);
+assert(
+  dutyWatchSummary?.rows[0]?.dateKey === "11APR" &&
+    dutyWatchSummary?.rows[0]?.fdpAllowableLabel === "14:00" &&
+    dutyWatchSummary?.rows[0]?.fdpScheduledLabel === "9:15" &&
+    dutyWatchSummary?.rows[0]?.fdpCurrentLabel === "9:57" &&
+    dutyWatchSummary?.rows[0]?.fdpRemainingLabel === "FDP rem 4:03" &&
+    dutyWatchSummary?.rows[0]?.blockAllowableLabel === "9:00" &&
+    dutyWatchSummary?.rows[0]?.blockScheduledLabel === "6:27" &&
+    dutyWatchSummary?.rows[0]?.blockCurrentLabel === "6:42" &&
+    dutyWatchSummary?.rows[0]?.blockRemainingLabel === "Block rem 2:18" &&
+    dutyWatchSummary?.rows[0]?.changeLabel?.includes("RTG +0:19") &&
+    dutyWatchSummary?.rows[0]?.changeLabel?.includes("Block/FDP changed") &&
+    !dutyWatchSummary?.rows[0]?.blockPendingNote &&
+    !dutyWatchSummary?.rows[0]?.notes.some((item) => item.includes("Within parsed iCrew max")),
+  `Expected 7707 RTG day to sort first with compact row text, got ${JSON.stringify(dutyWatchSummary?.rows)}`,
+);
+assert(
   dutyWatchSummary?.rows.some(
     (row) =>
-      row.dateKey === "11APR" &&
-      row.highlights.some((item) => item.includes("FDP 9:57 / 14:00")) &&
-      row.highlights.includes("RTG added: +0:19") &&
-      row.highlights.includes("Block/FDP inputs changed") &&
-      row.notes.some((item) => item.includes("Within modeled limits")) &&
-      row.notes.some((item) => item.includes("FDP remaining 4:03")),
+      row.dateKey === "10APR" &&
+      row.fdpAllowableLabel === "13:30" &&
+      row.fdpScheduledLabel === "7:09" &&
+      row.fdpCurrentLabel === "7:17" &&
+      row.fdpRemainingLabel === "FDP rem 6:13" &&
+      row.blockAllowableLabel === "9:00" &&
+      row.blockScheduledLabel === "2:24" &&
+      row.blockCurrentLabel === "2:18" &&
+      row.blockRemainingLabel === "Block rem 6:42" &&
+      row.changeLabel?.includes("DH +0:12"),
   ),
   `Expected 7707 RTG/PWA duty row, got ${JSON.stringify(dutyWatchSummary?.rows)}`,
+);
+assert(
+  !dutyWatchSummary?.rows.some((row) => row.primaryLine.includes(" REM ")),
+  `Expected no ambiguous REM label, got ${JSON.stringify(dutyWatchSummary?.rows)}`,
+);
+const timelineHeaderRows = buildDutyTimelineHeaderRows(afterSnapshot, comparison, beforeSnapshot);
+assert(
+  timelineHeaderRows.some(
+    (row) =>
+      row.dateKey === "11APR" &&
+      row.fdpAllowableLabel === "14:00" &&
+      row.fdpScheduledLabel === "9:15" &&
+      row.fdpCurrentLabel === "9:57" &&
+      row.fdpRemainingLabel === "FDP rem 4:03" &&
+      row.blockAllowableLabel === "9:00" &&
+      row.blockScheduledLabel === "6:27" &&
+      row.blockCurrentLabel === "6:42" &&
+      row.blockRemainingLabel === "Block rem 2:18" &&
+      row.changeLabel?.includes("RTG +0:19"),
+  ) &&
+    timelineHeaderRows.some(
+      (row) =>
+        row.dateKey === "10APR" &&
+        row.fdpAllowableLabel === "13:30" &&
+        row.fdpScheduledLabel === "7:09" &&
+        row.fdpCurrentLabel === "7:17" &&
+        row.fdpRemainingLabel === "FDP rem 6:13" &&
+        row.blockAllowableLabel === "9:00" &&
+        row.blockScheduledLabel === "2:24" &&
+        row.blockCurrentLabel === "2:18" &&
+        row.blockRemainingLabel === "Block rem 6:42",
+    ),
+  `Expected timeline duty headers for 10APR and 11APR, got ${JSON.stringify(timelineHeaderRows)}`,
+);
+assert(
+  !timelineHeaderRows.some(
+    (row) =>
+      row.blockAllowableLabel?.toLowerCase().includes("pending") ||
+      row.blockRemainingLabel?.toLowerCase().includes("pending"),
+  ),
+  `Expected unavailable max labels to render as em dash rather than pending, got ${JSON.stringify(timelineHeaderRows)}`,
 );
 assert(
   dutyWatchSummary?.recommendedItems.includes("Check 117") &&
@@ -340,6 +418,10 @@ const exceededSummaryRow = buildDutyWatchSummary(
 assert(
   exceededSummaryRow?.rows.some((row) => row.statusLabel === "Exceeded modeled limit"),
   `Expected exceeded wording to stay modeled, got ${JSON.stringify(exceededSummaryRow?.rows)}`,
+);
+assert(
+  exceededSummaryRow?.overallStatusLabel === "Exceeded modeled limit",
+  `Expected exceeded overall label to stay modeled, got ${exceededSummaryRow?.overallStatusLabel}`,
 );
 assert(
   beforeParsed.parsed?.pwaDutyLimitLines.some(
