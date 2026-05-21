@@ -2409,6 +2409,11 @@ export default function App() {
     [tripWatchResult],
   );
   const [tripWatchExpandedChangedLegs, setTripWatchExpandedChangedLegs] = useState(false);
+  useEffect(() => {
+    if (rotationDashboard) {
+      setTripWatchExpanded(false);
+    }
+  }, [rotationDashboard?.snapshot.rotationNumber, rotationDashboard?.snapshot.tripDates]);
   const tripWatchHeaderComparisonItems = useMemo(() => {
     if (
       !tripWatchResult ||
@@ -6187,7 +6192,9 @@ export default function App() {
                     {[
                       { label: "Analyze change", onPress: () => setTripWatchExpanded(true) },
                       { label: "Check pay impact", onPress: openPayImpactFromRotation },
-                      { label: "Ask contract question", onPress: openContractCopilotFromRotation },
+                      ...(!isCompactMobile
+                        ? [{ label: "Ask contract question", onPress: openContractCopilotFromRotation }]
+                        : []),
                       { label: "Check 117", onPress: openFar117FromRotation },
                     ].map((action) => (
                       <TouchableOpacity
@@ -6201,22 +6208,24 @@ export default function App() {
                       </TouchableOpacity>
                     ))}
                   </View>
-                  <View style={[styles.quickActionGrid, isCompactMobile && styles.quickActionGridCompact]}>
-                    {[
-                      { label: quickContacts.crewScheduling ? "Crew Scheduling" : "Add Crew Scheduling", key: "crewScheduling" as const },
-                      { label: quickContacts.dispatch ? "Dispatch" : "Add Dispatch", key: "dispatch" as const },
-                    ].map((action) => (
-                      <TouchableOpacity
-                        key={action.label}
-                        style={[styles.quickActionButton, isCompactMobile && styles.quickActionButtonCompact]}
-                        onPress={() => handleQuickContactPress(action.key)}
-                      >
-                        <Text style={[styles.quickActionButtonText, isCompactMobile && styles.quickActionButtonTextCompact]}>
-                          {action.label}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
+                  {!isCompactMobile ? (
+                    <View style={[styles.quickActionGrid, isCompactMobile && styles.quickActionGridCompact]}>
+                      {[
+                        { label: quickContacts.crewScheduling ? "Crew Scheduling" : "Add Crew Scheduling", key: "crewScheduling" as const },
+                        { label: quickContacts.dispatch ? "Dispatch" : "Add Dispatch", key: "dispatch" as const },
+                      ].map((action) => (
+                        <TouchableOpacity
+                          key={action.label}
+                          style={[styles.quickActionButton, isCompactMobile && styles.quickActionButtonCompact]}
+                          onPress={() => handleQuickContactPress(action.key)}
+                        >
+                          <Text style={[styles.quickActionButtonText, isCompactMobile && styles.quickActionButtonTextCompact]}>
+                            {action.label}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  ) : null}
                   {tripWatchExpanded ? (
                     <View style={styles.sectionStack}>
                       <View style={styles.inputGroup}>
@@ -13200,7 +13209,7 @@ const styles = StyleSheet.create({
   },
   containerCompact: {
     padding: 12,
-    paddingBottom: 140,
+    paddingBottom: 196,
     gap: 12,
   },
   hero: {

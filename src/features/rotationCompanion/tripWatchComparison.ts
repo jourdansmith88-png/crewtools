@@ -28,6 +28,13 @@ export type TripWatchRotationSnapshot = {
   finalOperatingArrival?: string;
   finalArrivalAfterDh?: string;
   isPartial?: boolean;
+  dutyPeriodLimits?: Array<{
+    dateKey: string;
+    pwaFdpUsedMinutes?: number;
+    pwaScheduledMaxFdpMinutes?: number;
+    pwaActualMaxFdpMinutes?: number;
+    pwaLimitSource?: "icrew_pwa_fdp_line";
+  }>;
 };
 
 export type TripWatchComparisonStatus = "ok" | "no_loaded_rotation" | "needs_more_info" | "unparseable";
@@ -240,9 +247,13 @@ function formatTripWatchMinutes(value?: number | null) {
 }
 
 export function buildTripWatchRotationSnapshot(dashboard: RotationDashboardData): TripWatchRotationSnapshot {
-  const operatingLegs = dashboard.legs.filter((leg) => !leg.isDeadhead);
-  const deadheadLegs = dashboard.legs.filter((leg) => leg.isDeadhead);
-  const parsedDeadheadLegs = dashboard.parsedRotation.legs.filter((leg) => leg.isDeadhead || leg.segmentType === "deadhead");
+  const visibleLegs = Array.isArray(dashboard.legs) ? dashboard.legs : [];
+  const parsedLegs = Array.isArray(dashboard.parsedRotation.legs) ? dashboard.parsedRotation.legs : [];
+  const layoverCities = Array.isArray(dashboard.snapshot.layoverCities) ? dashboard.snapshot.layoverCities : [];
+  const operatingLegs = visibleLegs.filter((leg) => !leg.isDeadhead);
+  const deadheadLegs = visibleLegs.filter((leg) => leg.isDeadhead);
+  const parsedDeadheadLegs = parsedLegs.filter((leg) => leg.isDeadhead || leg.segmentType === "deadhead");
+  const parsedDutyPeriods = Array.isArray(dashboard.parsedRotation.dutyPeriods) ? dashboard.parsedRotation.dutyPeriods : [];
   const fallbackDeadheadMinutesFromVisibleLegs = deadheadLegs.reduce((sum, leg) => sum + (leg.scheduledBlockMinutes ?? 0), 0);
   const fallbackDeadheadMinutesFromParsedLegs = parsedDeadheadLegs.reduce((sum, leg) => sum + (leg.scheduledBlock ?? 0), 0);
   const deadheadBlockMinutes =
@@ -255,7 +266,7 @@ export function buildTripWatchRotationSnapshot(dashboard: RotationDashboardData)
   const finalOperatingArrival = operatingLegs.at(-1)?.destination ?? dashboard.snapshot.finalArrival;
   const finalArrivalAfterDh =
     dashboard.parsedRotation.finalArrivalAfterDh ??
-    dashboard.legs.at(-1)?.destination ??
+    visibleLegs.at(-1)?.destination ??
     finalOperatingArrival;
   return {
     rotationNumber: dashboard.snapshot.rotationNumber,
@@ -263,10 +274,10 @@ export function buildTripWatchRotationSnapshot(dashboard: RotationDashboardData)
     source: dashboard.source,
     parserPath: dashboard.parsedRotation.parserPath,
     parseConfidence: dashboard.parsedRotation.parseConfidence,
-    legs: dashboard.legs,
+    legs: visibleLegs,
     operatingLegs,
     deadheadLegs,
-    layovers: dashboard.snapshot.layoverCities,
+    layovers: layoverCities,
     totalCreditMinutes: dashboard.snapshot.totalCreditMinutes,
     operatingBlockMinutes: dashboard.snapshot.scheduledBlockMinutes,
     deadheadBlockMinutes,
@@ -276,6 +287,15 @@ export function buildTripWatchRotationSnapshot(dashboard: RotationDashboardData)
     finalOperatingArrival,
     finalArrivalAfterDh,
     isPartial: dashboard.parsedRotation.isPartial,
+    dutyPeriodLimits: parsedDutyPeriods
+      .filter((period) => period.date)
+      .map((period) => ({
+        dateKey: period.date!,
+        pwaFdpUsedMinutes: period.pwaFdpUsedMinutes,
+        pwaScheduledMaxFdpMinutes: period.pwaScheduledMaxFdpMinutes,
+        pwaActualMaxFdpMinutes: period.pwaActualMaxFdpMinutes,
+        pwaLimitSource: period.pwaLimitSource,
+      })),
   };
 }
 
