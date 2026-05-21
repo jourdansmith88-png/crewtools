@@ -268,6 +268,21 @@ function parseHourMinute(value?: string) {
   return Number(match[1]) * 60 + Number(match[2]);
 }
 
+function parseMicrewTotalsLine(rawText: string) {
+  const match = rawText.match(
+    /\bTOTALS\s+(\d{1,2}:\d{2})TL\s+(\d{1,2}:\d{2})BL(?:\s+(\d{1,2}:\d{2})CR)?(?:\s+(\d{1,2}:\d{2})MU)?/i,
+  );
+  if (!match) {
+    return null;
+  }
+  return {
+    totalCreditMinutes: parseHourMinute(match[1]),
+    totalScheduledBlockMinutes: parseHourMinute(match[2]),
+    carryoverCreditMinutes: parseHourMinute(match[3]),
+    makeUpMinutes: parseHourMinute(match[4]),
+  };
+}
+
 function parseDotOrColonDuration(value?: string) {
   if (!value) {
     return undefined;
@@ -1009,7 +1024,10 @@ export function parseRotationText(
   );
   const startDate = dateMatch?.[1]?.toUpperCase() ?? sortedVisibleDateTokens[0];
   const endDate = dateMatch?.[2]?.toUpperCase() ?? sortedVisibleDateTokens.at(-1);
-  const totalCredit = parseHourMinute(rawText.match(/\b(?:Credit|Cr)\s*[-: ]\s*(\d{1,2}:\d{2})/i)?.[1]);
+  const micrewTotals = parseMicrewTotalsLine(rawText);
+  const totalCredit =
+    parseHourMinute(rawText.match(/\b(?:Credit|Cr)\s*[-: ]\s*(\d{1,2}:\d{2})/i)?.[1]) ??
+    micrewTotals?.totalCreditMinutes;
   const reportTime = formatTime(
     rawText.match(/\b(?:Report|Rpt)\s*[-: ]\s*(\d{3,4})/i)?.[1] ??
       rawText.match(/CHECK\s*IN\s*AT\s*(\d{3,4})/i)?.[1] ??
@@ -1034,8 +1052,12 @@ export function parseRotationText(
 
   const normalizedLegs = computeLegTurns(accumulator.legs);
   const dutyPeriods = buildDutyPeriods(normalizedLegs, startDate, accumulator.layoverRestByDay);
-  const totalScheduledBlock =
+  const computedScheduledBlock =
     normalizedLegs.reduce((sum, leg) => sum + (leg.isDeadhead ? 0 : leg.scheduledBlock ?? 0), 0);
+  const totalScheduledBlock =
+    sourceFormat === "micrew_mobile"
+      ? micrewTotals?.totalScheduledBlockMinutes ?? computedScheduledBlock
+      : computedScheduledBlock;
   const deadheadBlock =
     normalizedLegs.reduce((sum, leg) => sum + (leg.isDeadhead ? leg.scheduledBlock ?? 0 : 0), 0);
   const excludedDeadheadLegs = normalizedLegs.filter((leg) => leg.isDeadhead).length;

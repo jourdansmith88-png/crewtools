@@ -1,6 +1,13 @@
-Pending transcription from friend-provided MiCrew screenshots.
+Transcribed from friend-provided MiCrew mobile screenshots into the normalized text format used by the fixture harness.
 
-Planned files:
-- `after.real.micrew.txt` for the normalized after/final trip text
-- `before.synthetic.micrew.txt` only if we need a cautious synthetic baseline for compare coverage
-- `expected.json` should be updated once the text is transcribed and validated
+This case currently ships as an after/final-only fixture:
+- `after.real.micrew.txt` is the normalized transcription
+- `before.synthetic.micrew.txt` is intentionally left empty for now
+- `expected.json` is parse-only and does not assert Trip Watch comparison behavior yet
+
+Redaction:
+- personal identifiers should remain `PPR REDACTED`
+
+Notes:
+- hotel names and phone numbers are included for future layover/utility fixture coverage, even though the current harness only asserts the trip-shape fields
+- this case now asserts the authoritative MiCrew `TOTALS 16:56TL 16:48BL 00:00CR 00:08MU` line for total scheduled block instead of the visible-leg sum
