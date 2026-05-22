@@ -11,3 +11,8 @@ Redaction:
 Notes:
 - hotel names and phone numbers are included for future layover/utility fixture coverage, even though the current harness only asserts the trip-shape fields
 - this case now asserts the authoritative MiCrew `TOTALS 16:56TL 16:48BL 00:00CR 00:08MU` line for total scheduled block instead of the visible-leg sum
+
+Synthetic iCrew-style conversion added:
+- `after.synthetic.icrew.txt`
+
+This file is derived from the normalized MiCrew fixture and is intended only for copy/paste parser testing. It is not an official iCrew printout.

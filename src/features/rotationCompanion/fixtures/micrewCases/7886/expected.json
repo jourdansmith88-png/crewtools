@@ -1,20 +1,21 @@
 {
   "caseId": "7886",
   "rotationNumber": "7886",
-  "base": "TBD",
-  "tripDates": "",
-  "sourceType": "unknown",
+  "base": "SLC",
+  "tripDates": "27MAY - 29MAY",
+  "sourceType": "screenshot_transcription",
   "baselineType": "none",
-  "afterType": "unknown",
+  "afterType": "real_final",
   "expected": {
-    "creditMinutes": 0,
-    "blockMinutes": 0,
-    "layovers": [],
-    "finalArrival": "TBD",
-    "legCount": 0,
-    "deadheadLegCount": 0,
-    "operatingLegCount": 0,
-    "shouldParse": false,
+    "creditMinutes": 947,
+    "blockMinutes": 693,
+    "deadheadBlockMinutes": 104,
+    "layovers": ["PSC"],
+    "finalArrival": "SLC",
+    "legCount": 6,
+    "deadheadLegCount": 1,
+    "operatingLegCount": 5,
+    "shouldParse": true,
     "shouldCompare": false
   }
 }

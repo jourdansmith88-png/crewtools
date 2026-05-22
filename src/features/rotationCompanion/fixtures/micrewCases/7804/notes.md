@@ -26,3 +26,8 @@ Uncertainty notes:
 - the final visible leg is `SFO-SEA` while the preceding layover city shown is `SJC`; this likely reflects a Bay Area airport transfer or nearby-station presentation detail, but the fixture preserves the screenshot literally
 - current MiCrew parser now carries the visible `D` marker on `DL2208 PHX-MSP` through as a deadhead annotation
 - no synthetic baseline was created
+
+Synthetic iCrew-style conversion added:
+- `after.synthetic.icrew.txt`
+
+This file is derived from the normalized MiCrew fixture and is intended only for copy/paste parser testing. It is not an official iCrew printout.

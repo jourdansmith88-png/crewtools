@@ -10,3 +10,8 @@ Current parser expectations for this first case:
 - 4 parsed operating legs
 - 1 layover city (`MKE`)
 - trip compare should surface a schedule/pay watch change because the synthetic baseline is shorter than the final/flown after state
+
+Synthetic iCrew-style conversion added:
+- `after.synthetic.icrew.txt`
+
+This file is derived from the normalized MiCrew fixture and is intended only for copy/paste parser testing. It is not an official iCrew printout.

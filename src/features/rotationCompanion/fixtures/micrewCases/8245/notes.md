@@ -29,3 +29,8 @@ Known parser gap:
 Uncertainty notes:
 - per-leg `Rpt-` lines were normalized from the visible departure cadence because the screenshot only shows the trip-level report/release header
 - no synthetic baseline was created
+
+Synthetic iCrew-style conversion added:
+- `after.synthetic.icrew.txt`
+
+This file is derived from the normalized MiCrew fixture and is intended only for copy/paste parser testing. It is not an official iCrew printout.
