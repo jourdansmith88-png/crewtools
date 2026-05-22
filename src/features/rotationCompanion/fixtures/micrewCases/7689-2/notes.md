@@ -27,3 +27,14 @@ Known parser/UI notes:
 Uncertainty notes:
 - per-leg `Rpt-` lines were normalized from the visible departure cadence because the screenshot only shows the trip-level report/release header
 - no synthetic baseline was created
+
+Synthetic iCrew-style conversion added:
+- `after.synthetic.icrew.txt`
+
+This file is derived from the normalized MiCrew fixture and is intended only for copy/paste parser testing. It is not an official iCrew printout.
+
+Synthetic iCrew note:
+- the smoke file keeps the source case identifier `7689-2` in the synthetic notes, but uses numeric header rotation `7689` so the iCrew parser can ingest it cleanly
+- both visible deadheads are represented in iCrew-style form with day-level `DHD` lines:
+  - `D DL720 SLC-AUS`
+  - `D DL9967 BOS-LGA`
