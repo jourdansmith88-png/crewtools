@@ -1,20 +1,20 @@
 {
   "caseId": "4501",
   "rotationNumber": "4501",
-  "base": "TBD",
-  "tripDates": "",
-  "sourceType": "unknown",
+  "base": "SLC",
+  "tripDates": "14MAY - 17MAY",
+  "sourceType": "screenshot_transcription",
   "baselineType": "none",
-  "afterType": "unknown",
+  "afterType": "real_final",
   "expected": {
-    "creditMinutes": 0,
-    "blockMinutes": 0,
-    "layovers": [],
-    "finalArrival": "TBD",
-    "legCount": 0,
+    "creditMinutes": 1302,
+    "blockMinutes": 1197,
+    "layovers": ["AUS", "LGA", "JFK"],
+    "finalArrival": "SLC",
+    "legCount": 8,
     "deadheadLegCount": 0,
-    "operatingLegCount": 0,
-    "shouldParse": false,
+    "operatingLegCount": 8,
+    "shouldParse": true,
     "shouldCompare": false
   }
 }
