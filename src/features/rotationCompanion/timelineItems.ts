@@ -12,15 +12,28 @@ export type TodayTimelineItem =
       key: string;
       type: "layover";
       city: string;
+      layoverDetailIndex?: number;
       isHighlighted: false;
       dayLabel: string;
     };
 
-export function buildTodayTimelineItems(dashboard: Pick<RotationDashboardData, "legs" | "snapshot">): TodayTimelineItem[] {
-  const layoverSet = new Set(
-    dashboard.snapshot.layoverCities.map((city) => city.trim().toUpperCase()).filter(Boolean),
-  );
+export function buildTodayTimelineItems(
+  dashboard: Pick<RotationDashboardData, "legs" | "snapshot" | "layoverDetails">,
+): TodayTimelineItem[] {
+  const orderedLayoverDetails =
+    dashboard.layoverDetails?.map((detail, index) => ({
+      city: detail.city.trim().toUpperCase(),
+      detailIndex: index,
+    })).filter((detail) => detail.city.length > 0) ?? [];
+  const orderedLayoverCities =
+    orderedLayoverDetails.length > 0
+      ? orderedLayoverDetails
+      : dashboard.snapshot.layoverCities
+          .map((city, index) => ({ city: city.trim().toUpperCase(), detailIndex: index }))
+          .filter((detail) => detail.city.length > 0);
+
   const items: TodayTimelineItem[] = [];
+  let nextLayoverIndex = 0;
   dashboard.legs.forEach((leg, index) => {
     items.push({
       key: `leg-${leg.id}`,
@@ -31,14 +44,17 @@ export function buildTodayTimelineItems(dashboard: Pick<RotationDashboardData, "
     });
     const arrivalCity = leg.destination.trim().toUpperCase();
     const isLastLeg = index === dashboard.legs.length - 1;
-    if (!isLastLeg && layoverSet.has(arrivalCity)) {
+    const nextLayover = orderedLayoverCities[nextLayoverIndex];
+    if (!isLastLeg && nextLayover?.city === arrivalCity) {
       items.push({
-        key: `layover-${leg.id}-${arrivalCity}`,
+        key: `layover-${leg.id}-${arrivalCity}-${nextLayoverIndex}`,
         type: "layover",
         city: arrivalCity,
+        layoverDetailIndex: orderedLayoverDetails.length > 0 ? nextLayover.detailIndex : undefined,
         isHighlighted: false,
         dayLabel: leg.dayLabel,
       });
+      nextLayoverIndex += 1;
     }
   });
   return items;

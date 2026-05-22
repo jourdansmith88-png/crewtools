@@ -5763,7 +5763,8 @@ export default function App() {
                         itemIndex === 0 || visibleTimelineItems[itemIndex - 1]?.dayLabel !== item.dayLabel;
                       const layoverDetail =
                         item.type === "layover"
-                          ? getTimelineLayoverDetail(rotationDashboard, item.city)
+                          ? getTimelineLayoverDetailByIndex(rotationDashboard, item.layoverDetailIndex) ??
+                            getTimelineLayoverDetail(rotationDashboard, item.city)
                           : null;
                       const layoverTransportDisplay = getLayoverTransportDisplay(layoverDetail);
                       const layoverDisplayTransportPhone = getLayoverDisplayTransportPhone(layoverDetail);
@@ -10974,6 +10975,13 @@ function getTimelineLayoverDetail(dashboard: RotationDashboardData, city: string
       (detail) => detail.city.trim().toUpperCase() === city.trim().toUpperCase(),
     ) ?? null
   );
+}
+
+function getTimelineLayoverDetailByIndex(dashboard: RotationDashboardData, index?: number) {
+  if (typeof index !== "number" || index < 0) {
+    return null;
+  }
+  return dashboard.layoverDetails?.[index] ?? null;
 }
 
 function isPlaceholderPhoneValue(value?: string | null) {

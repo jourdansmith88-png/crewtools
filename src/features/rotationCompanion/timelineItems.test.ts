@@ -56,7 +56,17 @@ function buildTestICrewDashboard(parsed: NonNullable<ParsedICrewTextResult["pars
     legs: mappedLegs,
     nextLeg: mappedLegs[0],
     whatMatters: [],
-    layoverDetails: [],
+    layoverDetails: parsed.layoverDetails.map((detail) => ({
+      city: detail.city,
+      hotelName: detail.hotelName,
+      hotelPhone: detail.hotelPhone,
+      transport: detail.transport,
+      transportProvider: detail.transportProvider,
+      transportType: detail.transportType,
+      transportPhone: detail.transportPhone,
+      pickup: detail.pickup,
+      restMinutes: detail.restMinutes,
+    })),
     dutyDays: [],
     tonightLayoverCity: parsed.layoverCities[0] ?? "TBD",
     tomorrowReportTime: undefined,
@@ -152,3 +162,46 @@ if (parsed4501.parsed) {
 }
 
 console.log("timeline items regression passed");
+
+const rotation7669SyntheticIcrew = readFileSync(
+  new URL("./fixtures/micrewCases/7669/after.synthetic.icrew.txt", import.meta.url),
+  "utf8",
+);
+
+const parsed7669 = parseICrewTextWithDiagnostics(rotation7669SyntheticIcrew);
+assert(parsed7669.parserSucceeded && parsed7669.parsed, "7669 synthetic iCrew should parse through the iCrew path");
+
+if (parsed7669.parsed) {
+  const dashboard = buildTestICrewDashboard(parsed7669.parsed);
+  const timelineItems = buildTodayTimelineItems(dashboard);
+  const legItems = timelineItems.filter((item) => item.type === "leg");
+  const layoverItems = timelineItems.filter((item) => item.type === "layover");
+  const firstLayover = layoverItems[0];
+  const timelineSequence = timelineItems.map((item) =>
+    item.type === "leg" ? `${item.leg.origin}-${item.leg.destination}` : `LAYOVER ${item.city}`,
+  );
+
+  assert(legItems.length === 5, `7669 timeline should include 5 leg items, got ${legItems.length}`);
+  assert(layoverItems.length === 2, `7669 timeline should include 2 layovers, got ${layoverItems.length}`);
+  assert(firstLayover?.city === "JFK", `7669 first layover should be JFK, got ${firstLayover?.city ?? "none"}`);
+  assert(
+    timelineSequence.indexOf("LAYOVER JFK") > timelineSequence.indexOf("IAH-JFK"),
+    `7669 JFK layover should come after IAH-JFK, got ${timelineSequence.join(" | ")}`,
+  );
+  assert(
+    timelineSequence.indexOf("LAYOVER IAH") > timelineSequence.indexOf("MSP-IAH"),
+    `7669 IAH layover should come after MSP-IAH, got ${timelineSequence.join(" | ")}`,
+  );
+  assert(
+    timelineSequence.indexOf("LAYOVER IAH") !== timelineSequence.indexOf("SLC-IAH") + 1,
+    `7669 IAH layover should not appear immediately after SLC-IAH, got ${timelineSequence.join(" | ")}`,
+  );
+  assert(
+    layoverItems.filter((item) => item.city === "IAH").length === 1,
+    `7669 IAH layover should appear exactly once, got ${layoverItems.map((item) => item.city).join(" | ")}`,
+  );
+  assert(
+    layoverItems.filter((item) => item.city === "JFK").length === 1,
+    `7669 JFK layover should appear exactly once, got ${layoverItems.map((item) => item.city).join(" | ")}`,
+  );
+}
