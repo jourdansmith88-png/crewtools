@@ -6,6 +6,7 @@ import {
   type RotationChainCandidate,
   type RotationChainLeg,
 } from "./rotationChainBuilder.ts";
+import { describeAirportAreaTransfer } from "./airportAreaContinuity.ts";
 
 export type ICrewHeader = {
   base: string;
@@ -1309,8 +1310,14 @@ function parseICrewTextInternal(rawText: string): ParsedICrewTextResult {
       currentSegment?.departureAirport &&
       previousSegment.arrivalAirport !== currentSegment.departureAirport
     ) {
+      const airportAreaTransfer = describeAirportAreaTransfer(
+        previousSegment.arrivalAirport,
+        currentSegment.departureAirport,
+      );
       parserNotes.push(
-        `Route continuity warning: ${previousSegment.arrivalAirport} does not connect directly to ${currentSegment.departureAirport} between ${previousSegment.departureAirport}-${previousSegment.arrivalAirport} and ${currentSegment.departureAirport}-${currentSegment.arrivalAirport}.`,
+        airportAreaTransfer
+          ? `${airportAreaTransfer} between ${previousSegment.departureAirport}-${previousSegment.arrivalAirport} and ${currentSegment.departureAirport}-${currentSegment.arrivalAirport}.`
+          : `Route continuity warning: ${previousSegment.arrivalAirport} does not connect directly to ${currentSegment.departureAirport} between ${previousSegment.departureAirport}-${previousSegment.arrivalAirport} and ${currentSegment.departureAirport}-${currentSegment.arrivalAirport}.`,
       );
       break;
     }

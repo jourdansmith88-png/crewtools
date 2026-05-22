@@ -1113,8 +1113,12 @@ XYZ - HOTEL - Another Hotel     303-555-2222
   );
   assert(parsed.scheduledBlockSource === "iCrewSummaryTotals", `[${label}] Expected scheduledBlockSource iCrewSummaryTotals, got ${parsed.scheduledBlockSource}`);
   assert(
-    parsed.parserNotes.some((note) => note.includes("Route continuity warning")),
-    `[${label}] Expected non-blocking route continuity warning, got ${JSON.stringify(parsed.parserNotes)}`,
+    parsed.parserNotes.some(
+      (note) =>
+        note.includes("Route continuity warning") ||
+        note.includes("Airport-area transfer: SNA -> BUR"),
+    ),
+    `[${label}] Expected non-blocking continuity note, got ${JSON.stringify(parsed.parserNotes)}`,
   );
 
   console.log(`${label} passed`);
@@ -1181,6 +1185,30 @@ XYZ - HOTEL - Another Hotel     303-555-2222
       thirdRow?.parsedTokens?.mealMarker === "M" &&
       thirdRow?.parsedTokens?.equipmentShip === "8310",
     `[${label}] Expected 846 row to parse TURN+meal+EQP correctly, got ${JSON.stringify(thirdRow?.parsedTokens)}`,
+  );
+  console.log(`${label} passed`);
+}
+
+{
+  const label = "4501 airport-area continuity handling";
+  const rotation4501SyntheticICrewText = readFileSync(
+    new URL("./fixtures/micrewCases/4501/after.synthetic.icrew.txt", import.meta.url),
+    "utf8",
+  );
+  const debugResult = parseICrewTextWithDiagnostics(rotation4501SyntheticICrewText);
+  assert(debugResult.parserSucceeded === true, `[${label}] Expected parserSucceeded true`);
+  const parsed = debugResult.parsed;
+  assert(parsed, `[${label}] Expected parsed result`);
+  if (!parsed) {
+    throw new Error(`[${label}] Missing parsed result`);
+  }
+  assert(
+    parsed.parserNotes.some((note) => note.includes("Airport-area transfer: LGA -> JFK")),
+    `[${label}] Expected airport-area transfer note, got ${JSON.stringify(parsed.parserNotes)}`,
+  );
+  assert(
+    !parsed.parserNotes.some((note) => note.includes("Route continuity warning")),
+    `[${label}] Expected no hard continuity warning, got ${JSON.stringify(parsed.parserNotes)}`,
   );
   console.log(`${label} passed`);
 }
