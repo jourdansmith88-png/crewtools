@@ -3,6 +3,7 @@ import {
   diagnoseScreenshotRotationPartialStatus,
   excludeDeadheadLegsFromVisibleChain,
 } from "./rotationChainBuilder.ts";
+import { readFileSync } from "node:fs";
 import {
   parseICrewFlightToken,
   parseICrewLayoverDetails,
@@ -237,6 +238,45 @@ assert(
   numericFlight.carrier === "DL" && numericFlight.flightNumber === "1272" && numericFlight.marker === null,
   `Expected 1272 => DL/1272, got ${JSON.stringify(numericFlight)}`,
 );
+
+const rotation8008SyntheticICrewText = readFileSync(
+  new URL("./fixtures/micrewCases/8008/after.synthetic.icrew.txt", import.meta.url),
+  "utf8",
+);
+const rotation8008SyntheticDebug = parseICrewTextWithDiagnostics(rotation8008SyntheticICrewText);
+assert(
+  rotation8008SyntheticDebug.parserSucceeded === true && rotation8008SyntheticDebug.parsed,
+  `[rotation8008 synthetic] Expected parserSucceeded true`,
+);
+assert(
+  rotation8008SyntheticDebug.parsed.header.rotationNumber === "8008",
+  `[rotation8008 synthetic] Expected rotationNumber 8008, got ${rotation8008SyntheticDebug.parsed.header.rotationNumber}`,
+);
+assert(
+  rotation8008SyntheticDebug.parsed.header.tripDates === "01MAY - 03MAY",
+  `[rotation8008 synthetic] Expected tripDates 01MAY - 03MAY, got ${rotation8008SyntheticDebug.parsed.header.tripDates}`,
+);
+assert(
+  rotation8008SyntheticDebug.parsed.header.totalCreditMinutes === 945,
+  `[rotation8008 synthetic] Expected totalCreditMinutes 945, got ${rotation8008SyntheticDebug.parsed.header.totalCreditMinutes}`,
+);
+assert(
+  rotation8008SyntheticDebug.parsed.header.scheduledBlockMinutes === 630,
+  `[rotation8008 synthetic] Expected scheduledBlockMinutes 630, got ${rotation8008SyntheticDebug.parsed.header.scheduledBlockMinutes}`,
+);
+assert(
+  rotation8008SyntheticDebug.parsed.allTripSegments.length === 4,
+  `[rotation8008 synthetic] Expected 4 parsed segments, got ${rotation8008SyntheticDebug.parsed.allTripSegments.length}`,
+);
+assert(
+  rotation8008SyntheticDebug.parsed.deadheadAnnotations.length === 0,
+  `[rotation8008 synthetic] Expected 0 deadhead annotations, got ${rotation8008SyntheticDebug.parsed.deadheadAnnotations.length}`,
+);
+assert(
+  rotation8008SyntheticDebug.parsed.finalArrivalAfterDeadhead === "SLC",
+  `[rotation8008 synthetic] Expected final arrival SLC, got ${rotation8008SyntheticDebug.parsed.finalArrivalAfterDeadhead}`,
+);
+console.log("rotation8008 synthetic iCrew smoke fixture passed");
 
 const explicitDeadheadFlight = parseICrewFlightToken("06", "D2903");
 assert(

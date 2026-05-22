@@ -15,3 +15,13 @@ Synthetic iCrew-style conversion added:
 - `after.synthetic.icrew.txt`
 
 This file is derived from the normalized MiCrew fixture and is intended only for copy/paste parser testing. It is not an official iCrew printout.
+
+Synthetic iCrew correction note:
+- `after.synthetic.icrew.txt` uses the screenshot-corrected smoke values for this case:
+  - credit `15:45`
+  - block `10:30`
+  - `DL2619 SLC-MKE = 4:10`
+  - `DL2716 MKE-SLC = 2:27`
+  - `DL833 SLC-BUR = 1:03`
+  - `DL828 BUR-SLC = 2:50`
+- this keeps the synthetic copy/paste iCrew smoke file internally consistent even though the older normalized MiCrew fixture for `8008` was seeded with shorter values
