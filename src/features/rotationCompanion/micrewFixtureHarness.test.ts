@@ -126,6 +126,21 @@ for (const fixtureId of fixtureIds) {
     `Fixture ${fixtureId} operating leg count mismatch: expected ${expectedValues.operatingLegCount}, got ${operatingLegCount}`,
   );
 
+  if (fixtureId === "8245") {
+    const regionalDhLeg = afterDashboard.legs.find(
+      (leg) => leg.origin === "GEG" && leg.destination === "SEA",
+    );
+    assert(regionalDhLeg, "Fixture 8245 should retain visible GEG-SEA regional leg");
+    assert(
+      regionalDhLeg?.carrier === "OO" && regionalDhLeg.isDeadhead === true,
+      `Fixture 8245 expected GEG-SEA to remain OO deadhead, got ${JSON.stringify(regionalDhLeg)}`,
+    );
+    assert(
+      afterDashboard.legs.some((leg) => leg.origin === "GEG" && leg.destination === "SEA"),
+      "Fixture 8245 visible timeline should still contain GEG-SEA",
+    );
+  }
+
   if (!expectedValues.shouldCompare) {
     continue;
   }
@@ -152,3 +167,44 @@ for (const fixtureId of fixtureIds) {
     );
   }
 }
+
+function assertRegionalMicrewDeadheadSnippet(label: string, carrierCode: "OO" | "YX" | "9E", flightNumber: string) {
+  const parsed = parseRotationIntoDashboard(
+    [
+      `ROT TEST-${carrierCode} 01MAY-01MAY`,
+      "PPR REDACTED",
+      "Rpt- 0700 01MAY",
+      "Release- 1200 01MAY",
+      "Credit- 05:00",
+      "TAFB 05:00",
+      `${carrierCode}${flightNumber} : SLC-BOI`,
+      "Dep- 0800 01MAY",
+      "Arr- 1000 01MAY",
+      "Blk- 2:00",
+      "TOTALS 05:00TL 02:00BL 00:00CR 00:00MU",
+    ].join("\n"),
+  );
+
+  assert(parsed.ok, `[${label}] Expected MiCrew snippet to parse`);
+  if (!parsed.ok) {
+    return;
+  }
+  const leg = parsed.dashboard.legs[0];
+  assert(leg, `[${label}] Expected one visible leg`);
+  assert(
+    leg?.carrier === carrierCode && leg?.isDeadhead === true,
+    `[${label}] Expected ${carrierCode}${flightNumber} to remain ${carrierCode} deadhead, got ${JSON.stringify(leg)}`,
+  );
+  assert(
+    parsed.dashboard.legs.filter((candidate) => !candidate.isDeadhead).length === 0,
+    `[${label}] Expected regional snippet to exclude the leg from operating counts`,
+  );
+  assert(
+    parsed.dashboard.parsedRotation.deadheadBlock === 120,
+    `[${label}] Expected regional snippet to include deadhead block 120, got ${parsed.dashboard.parsedRotation.deadheadBlock}`,
+  );
+}
+
+assertRegionalMicrewDeadheadSnippet("MiCrew OO regional deadhead", "OO", "3857");
+assertRegionalMicrewDeadheadSnippet("MiCrew YX regional deadhead", "YX", "1234");
+assertRegionalMicrewDeadheadSnippet("MiCrew 9E regional deadhead", "9E", "5045");

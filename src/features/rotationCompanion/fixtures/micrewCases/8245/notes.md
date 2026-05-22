@@ -23,8 +23,8 @@ Confidently visible fields captured:
 Known parser gap:
 - the screenshot includes `O OO3857 GEG-SEA 1745-1859 ES4`
 - this offline/regional row is preserved faithfully in the transcription
-- current MiCrew parser does parse the case successfully, but it normalizes that row into a generic `DL3857` operating leg rather than preserving the visible `OO3857` offline/regional identity
-- this fixture currently asserts trip-shape fields only, not carrier-specific normalization for that row
+- current MiCrew parser now preserves that row as `OO3857` and classifies it as a deadhead leg
+- the fixture asserts the trip shape plus the deadhead accounting implied by that preserved regional carrier row
 
 Uncertainty notes:
 - per-leg `Rpt-` lines were normalized from the visible departure cadence because the screenshot only shows the trip-level report/release header

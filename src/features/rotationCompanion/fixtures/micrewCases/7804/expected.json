@@ -1,20 +1,21 @@
 {
   "caseId": "7804",
   "rotationNumber": "7804",
-  "base": "TBD",
-  "tripDates": "",
-  "sourceType": "unknown",
+  "base": "SEA",
+  "tripDates": "21MAY - 25MAY",
+  "sourceType": "screenshot_transcription",
   "baselineType": "none",
-  "afterType": "unknown",
+  "afterType": "real_final",
   "expected": {
-    "creditMinutes": 0,
-    "blockMinutes": 0,
-    "layovers": [],
-    "finalArrival": "TBD",
-    "legCount": 0,
-    "deadheadLegCount": 0,
-    "operatingLegCount": 0,
-    "shouldParse": false,
+    "creditMinutes": 1639,
+    "blockMinutes": 1430,
+    "deadheadBlockMinutes": 244,
+    "layovers": ["DFW", "PHX", "SAT", "SJC"],
+    "finalArrival": "SEA",
+    "legCount": 8,
+    "deadheadLegCount": 1,
+    "operatingLegCount": 7,
+    "shouldParse": true,
     "shouldCompare": false
   }
 }

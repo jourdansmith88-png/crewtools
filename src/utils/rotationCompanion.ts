@@ -22,7 +22,12 @@ export type ParsedRotationLeg = {
   makeUpMinutes?: number;
   turnSource?: "verified_turn_field" | "safe_schedule_derived" | "unknown";
   hasInboundSegment?: boolean;
-  deadheadSource?: "t_column" | "explicit_label" | "micrew_context" | "unknown";
+  deadheadSource?:
+    | "t_column"
+    | "explicit_label"
+    | "micrew_context"
+    | "regional_carrier_prefix"
+    | "unknown";
 };
 
 export type ParsedRotationDutyPeriod = {
@@ -514,7 +519,7 @@ function parseMicrewLines(lines: string[], accumulator: RotationParseAccumulator
       );
     }
 
-    const legMatch = line.match(/(?:\bD\s+)?(?:DL)?(\d{2,4})\s*[: ]\s*([A-Z]{3})-([A-Z]{3})/i);
+    const legMatch = line.match(/^(?:\s*([DO])\s+)?(?:(DL|OO|YX|9E))?(\d{2,4})\s*[: ]\s*([A-Z]{3})-([A-Z]{3})/i);
     if (legMatch) {
       const out = line.match(/(?:Dep|Out)-\s*(\d{3,4})/i)?.[1];
       const inputArrival = line.match(/(?:Arr|In)-\s*(\d{3,4})/i)?.[1];
@@ -526,14 +531,24 @@ function parseMicrewLines(lines: string[], accumulator: RotationParseAccumulator
       const confirmationMatch = line.match(/Confirmation\s*#([A-Z0-9]+)/i)?.[1];
       const scheduledBlock = blockMatch ? Number(blockMatch[1]) * 60 + Number(blockMatch[2]) : undefined;
       const turnAfterPreviousLeg = turnMatch ? Number(turnMatch[1]) * 60 + Number(turnMatch[2]) : undefined;
-      const isDeadhead = /^\s*D\s+/.test(line) || /\bDH\b|\bdeadhead\b/i.test(line);
+      const deadheadMarker = (legMatch[1] ?? "").toUpperCase();
+      const carrier = (legMatch[2] ?? "DL").toUpperCase();
+      const flightNumber = legMatch[3];
+      const regionalCarrierDeadhead = ["OO", "YX", "9E"].includes(carrier);
+      const explicitDeadhead = deadheadMarker === "D" || /\bDH\b|\bdeadhead\b/i.test(line);
+      const isDeadhead = regionalCarrierDeadhead || explicitDeadhead;
+      const deadheadSource = regionalCarrierDeadhead
+        ? "regional_carrier_prefix"
+        : explicitDeadhead
+          ? "micrew_context"
+          : undefined;
       accumulator.legs.push({
-        id: `${legMatch[1]}-${legMatch[2]}-${legMatch[3]}-${index}`,
+        id: `${carrier}${flightNumber}-${legMatch[4]}-${legMatch[5]}-${index}`,
         legNumber: accumulator.legs.length + 1,
         dayNumber: accumulator.currentDay,
-        departureAirport: legMatch[2].toUpperCase(),
-        arrivalAirport: legMatch[3].toUpperCase(),
-        flightNumber: `DL${legMatch[1]}`,
+        departureAirport: legMatch[4].toUpperCase(),
+        arrivalAirport: legMatch[5].toUpperCase(),
+        flightNumber,
         reportTime: reportMatch,
         scheduledOut: out,
         scheduledIn: inputArrival,
@@ -541,11 +556,12 @@ function parseMicrewLines(lines: string[], accumulator: RotationParseAccumulator
         turnAfterPreviousLeg,
         turnSource: turnAfterPreviousLeg != null ? "verified_turn_field" : undefined,
         status: "normal",
-        isDeadhead: /\b(?:DH|DHD|DEADHEAD)\b/i.test(line),
-        deadheadSource: /\b(?:DH|DHD|DEADHEAD)\b/i.test(line) ? "micrew_context" : undefined,
+        isDeadhead,
+        deadheadSource,
         gate: gateMatch,
         equipmentShip: equipmentMatch,
         confirmationNumber: confirmationMatch,
+        carrier,
       });
       accumulator.micrewLegsParsed += 1;
       currentLegIndex = accumulator.legs.length - 1;
