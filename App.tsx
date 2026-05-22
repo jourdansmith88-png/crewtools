@@ -87,6 +87,7 @@ import {
 } from "./src/features/rotationCompanion/tripWatchComparison";
 import { buildPayWatchSummary } from "./src/features/rotationCompanion/payWatch";
 import { buildDutyTimelineHeaderRows, buildDutyWatchSummary } from "./src/features/rotationCompanion/dutyLimitWatch";
+import { buildTodayTimelineItems, type TodayTimelineItem } from "./src/features/rotationCompanion/timelineItems";
 import type { RotationChainCandidate } from "./src/features/rotationCompanion/rotationChainBuilder";
 import { fliegerTypography, getFliegerPalette } from "./src/theme/flieger";
 import type {
@@ -5317,8 +5318,8 @@ export default function App() {
           displayedRotationDashboard ? (() => {
             const rotationDashboard = displayedRotationDashboard;
             const timelineItems = buildTodayTimelineItems(rotationDashboard);
-            const mobileTimelineItems = timelineItems.slice(0, isCompactMobile ? 5 : 7);
-            const timelineHasLayoverActions = mobileTimelineItems.some((item) => {
+            const visibleTimelineItems = timelineItems;
+            const timelineHasLayoverActions = visibleTimelineItems.some((item) => {
               if (item.type !== "layover") {
                 return false;
               }
@@ -5757,9 +5758,9 @@ export default function App() {
                 <View style={[styles.resultPanel, isCompactMobile && styles.resultPanelCompact]}>
                   {!isCompactMobile ? <Text style={styles.inputLabel}>Trip timeline</Text> : null}
                   <View style={[styles.tripBoardTimelineStack, isCompactMobile && styles.tripBoardTimelineStackCompact]}>
-                    {mobileTimelineItems.map((item, itemIndex) => {
+                    {visibleTimelineItems.map((item, itemIndex) => {
                       const showDateLabel =
-                        itemIndex === 0 || mobileTimelineItems[itemIndex - 1]?.dayLabel !== item.dayLabel;
+                        itemIndex === 0 || visibleTimelineItems[itemIndex - 1]?.dayLabel !== item.dayLabel;
                       const layoverDetail =
                         item.type === "layover"
                           ? getTimelineLayoverDetail(rotationDashboard, item.city)
@@ -5806,7 +5807,7 @@ export default function App() {
                                         : styles.tripBoardTimelineNodeOperating,
                                 ]}
                               />
-                              {itemIndex < mobileTimelineItems.length - 1 ? (
+                              {itemIndex < visibleTimelineItems.length - 1 ? (
                                 <View style={[styles.tripBoardTimelineSpineLine, isCompactMobile && styles.tripBoardTimelineSpineLineCompact]} />
                               ) : null}
                             </View>
@@ -10965,50 +10966,6 @@ function ResultLine({
       <Text style={[styles.resultValue, emphasis && styles.resultValueEmphasis]}>{value}</Text>
     </View>
   );
-}
-
-type TodayTimelineItem =
-  | {
-      key: string;
-      type: "leg";
-      leg: RotationDashboardData["legs"][number];
-      isHighlighted: boolean;
-      dayLabel: string;
-    }
-  | {
-      key: string;
-      type: "layover";
-      city: string;
-      isHighlighted: false;
-      dayLabel: string;
-    };
-
-function buildTodayTimelineItems(dashboard: RotationDashboardData): TodayTimelineItem[] {
-  const layoverSet = new Set(
-    dashboard.snapshot.layoverCities.map((city) => city.trim().toUpperCase()).filter(Boolean),
-  );
-  const items: TodayTimelineItem[] = [];
-  dashboard.legs.forEach((leg, index) => {
-    items.push({
-      key: `leg-${leg.id}`,
-      type: "leg",
-      leg,
-      isHighlighted: index === 0,
-      dayLabel: leg.dayLabel,
-    });
-    const arrivalCity = leg.destination.trim().toUpperCase();
-    const isLastLeg = index === dashboard.legs.length - 1;
-    if (!isLastLeg && layoverSet.has(arrivalCity)) {
-      items.push({
-        key: `layover-${leg.id}-${arrivalCity}`,
-        type: "layover",
-        city: arrivalCity,
-        isHighlighted: false,
-        dayLabel: leg.dayLabel,
-      });
-    }
-  });
-  return items;
 }
 
 function getTimelineLayoverDetail(dashboard: RotationDashboardData, city: string) {
