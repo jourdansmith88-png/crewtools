@@ -269,6 +269,8 @@ function makeTimingUpdate(overrides: Partial<CalendarUpdateEvent> = {}): Calenda
   const result = buildLiveTimelineProjection(baseline, [makeTimingUpdate({ scheduledOut: "12:15", scheduledIn: "17:15" })]);
   const changedLeg = result.items.find((item) => item.type === "leg" && item.flightNumber === "1156");
   assert(changedLeg?.status === "early", `Early event should be marked early, got ${changedLeg?.status ?? "none"}`);
+  assert(changedLeg?.badgeLabels.includes("Calendar update"), "Early projected leg should keep Calendar update badge");
+  assert(changedLeg?.badgeLabels.includes("Early"), "Early projected leg should include Early badge");
 }
 
 {
@@ -276,6 +278,8 @@ function makeTimingUpdate(overrides: Partial<CalendarUpdateEvent> = {}): Calenda
   const result = buildLiveTimelineProjection(baseline, [makeTimingUpdate({ scheduledOut: "13:45", scheduledIn: "18:45" })]);
   const changedLeg = result.items.find((item) => item.type === "leg" && item.flightNumber === "1156");
   assert(changedLeg?.status === "delayed", `Delayed event should be marked delayed, got ${changedLeg?.status ?? "none"}`);
+  assert(changedLeg?.badgeLabels.includes("Calendar update"), "Delayed projected leg should keep Calendar update badge");
+  assert(changedLeg?.badgeLabels.includes("Delayed"), "Delayed projected leg should include Delayed badge");
 }
 
 {
@@ -284,6 +288,7 @@ function makeTimingUpdate(overrides: Partial<CalendarUpdateEvent> = {}): Calenda
   const changedLeg = result.items.find((item) => item.type === "leg" && item.flightNumber === "1156");
   assert(changedLeg?.changeKind === "actual_time_added", "Actual block update should mark actual_time_added");
   assert(changedLeg?.blockDeltaMinutes === 40, `Block delta should be calculated, got ${changedLeg?.blockDeltaMinutes ?? "none"}`);
+  assert(changedLeg?.badgeLabels.includes("Block +0:40"), `Block delta badge should be shown, got ${changedLeg?.badgeLabels.join(", ") ?? "none"}`);
 }
 
 {
@@ -304,6 +309,7 @@ function makeTimingUpdate(overrides: Partial<CalendarUpdateEvent> = {}): Calenda
   const sameAirportItem = result.items.find((item) => item.status === "same_airport_event");
   assert(Boolean(sameAirportItem), "Same-airport event should be inserted into the timeline");
   assert(result.insertedSameAirportEventCount === 1, `Same-airport count should be 1, got ${result.insertedSameAirportEventCount}`);
+  assert(sameAirportItem?.badgeLabels.includes("RTG event"), `Same-airport event should use RTG event badge, got ${sameAirportItem?.badgeLabels.join(", ") ?? "none"}`);
 }
 
 {

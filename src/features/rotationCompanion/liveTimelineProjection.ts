@@ -199,6 +199,14 @@ function computeEventBlockMinutes(event: CalendarUpdateEvent) {
   return computeBlockMinutesFromTimes(event.scheduledOut, event.scheduledIn);
 }
 
+function formatDeltaBadge(minutes: number) {
+  const sign = minutes > 0 ? "+" : "-";
+  const absoluteMinutes = Math.abs(minutes);
+  const hours = Math.floor(absoluteMinutes / 60);
+  const remainderMinutes = absoluteMinutes % 60;
+  return `Block ${sign}${hours}:${String(remainderMinutes).padStart(2, "0")}`;
+}
+
 const MONTH_ABBREVIATIONS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 
 function parseDayLabel(dayLabel?: string | null) {
@@ -411,6 +419,10 @@ function buildLegTimelineStatus(
   const currentOutMinutes = parseClockToMinutes(currentLeg.departureTime);
   const timeDeltaMinutes =
     baselineOutMinutes != null && currentOutMinutes != null ? currentOutMinutes - baselineOutMinutes : undefined;
+  const baselineInMinutes = parseClockToMinutes(baselineLeg.arrivalTime);
+  const currentInMinutes = parseClockToMinutes(currentLeg.arrivalTime);
+  const arrivalDeltaMinutes =
+    baselineInMinutes != null && currentInMinutes != null ? currentInMinutes - baselineInMinutes : undefined;
   const hasActualTiming = Boolean(currentLeg.actualOut || currentLeg.actualIn || isFiniteMinutes(currentLeg.actualBlockMinutes));
   const hasTimeChange =
     baselineLeg.departureTime !== currentLeg.departureTime ||
@@ -428,10 +440,10 @@ function buildLegTimelineStatus(
     monitoringMessages.push("Projected from calendar actuals.");
   } else if (hasTimeChange) {
     changeKind = "time_changed";
-    if ((timeDeltaMinutes ?? 0) > 0) {
+    if ((arrivalDeltaMinutes ?? 0) > 0) {
       status = "delayed";
       badgeLabels.push("Delayed");
-    } else if ((timeDeltaMinutes ?? 0) < 0) {
+    } else if ((timeDeltaMinutes ?? 0) < 0 && (arrivalDeltaMinutes == null || arrivalDeltaMinutes <= 0)) {
       status = "early";
       badgeLabels.push("Early");
     } else {
@@ -449,7 +461,7 @@ function buildLegTimelineStatus(
     changeKind = "block_changed";
   }
   if (blockDeltaMinutes != null && blockDeltaMinutes !== 0) {
-    badgeLabels.push("Possible pay impact");
+    badgeLabels.push(formatDeltaBadge(blockDeltaMinutes));
   }
 
   return {
@@ -473,7 +485,7 @@ function buildSameAirportLiveItem(event: CalendarUpdateEvent, syntheticLeg: Rota
     status: "same_airport_event",
     changeKind: "same_airport_event_added",
     confidence: event.confidence ?? "medium",
-    badgeLabels: ["RTG detected", "Possible pay impact", "Refresh MiCrew for confirmation"],
+    badgeLabels: ["RTG event", "Calendar update", "Refresh MiCrew for confirmation"],
     monitoringMessages: [
       "RTG-style event detected. 117 and block monitoring are active.",
       "Refresh MiCrew when available to confirm pay and final schedule treatment.",

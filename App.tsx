@@ -6278,7 +6278,7 @@ export default function App() {
                                           : "OP"}
                                   </Text>
                                   {isLiveTimelineLegItem(item)
-                                    ? item.badgeLabels.slice(0, 2).map((badge) => (
+                                    ? item.badgeLabels.slice(0, 3).map((badge) => (
                                         <Text key={`${item.key}-${badge}`} style={[styles.statusBadge, styles.statusBadgeCompact]}>
                                           {badge}
                                         </Text>
@@ -6382,7 +6382,7 @@ export default function App() {
                                 </Text>
                               ) : (isLiveTimelineLegItem(item) ? item.origin === item.destination : item.leg.origin === item.leg.destination) ? (
                                 <Text style={[styles.tripBoardTimelineMeta, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
-                                  {isLiveTimelineLegItem(item) ? "RTG-style event" : "Return-to-gate segment"}
+                                  {isLiveTimelineLegItem(item) ? "RTG event" : "Return-to-gate segment"}
                                 </Text>
                               ) : !(isLiveTimelineLegItem(item) ? item.isDeadhead : item.leg.isDeadhead) && !isCompactMobile ? (
                                 <Text style={styles.tripBoardTimelineMeta}>Counts toward logbook/export.</Text>
