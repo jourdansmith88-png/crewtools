@@ -106,6 +106,8 @@ import {
 } from "./src/features/rotationCompanion/rotationProjection";
 import {
   buildLiveTimelineProjection,
+  type LiveTimelineDutySummary,
+  type LiveTimelineItem,
   type LiveTimelineProjectionResult,
 } from "./src/features/rotationCompanion/liveTimelineProjection";
 import type { RotationChainCandidate } from "./src/features/rotationCompanion/rotationChainBuilder";
@@ -2301,6 +2303,7 @@ export default function App() {
     useState<CalendarProjectionEventSummary | null>(null);
   const [calendarLabLiveTimelineProjection, setCalendarLabLiveTimelineProjection] =
     useState<LiveTimelineProjectionResult | null>(null);
+  const [useLiveProjectedTimeline, setUseLiveProjectedTimeline] = useState(false);
   const [rotationToolBanner, setRotationToolBanner] = useState<RotationToolBanner | null>(null);
   const [contractCopilotStarterQuestion, setContractCopilotStarterQuestion] = useState("");
   const [quickContacts, setQuickContacts] = useState<QuickContacts>({
@@ -2465,6 +2468,7 @@ export default function App() {
       setCalendarLabProjection(null);
       setCalendarLabProjectionSummary(null);
       setCalendarLabLiveTimelineProjection(null);
+      setUseLiveProjectedTimeline(false);
     }
   }, [rotationDashboard?.snapshot.rotationNumber, rotationDashboard?.snapshot.tripDates]);
   useEffect(() => {
@@ -2653,6 +2657,13 @@ export default function App() {
   const timelineDutyHeaderRowByDate = useMemo(
     () => new Map(timelineDutyHeaderRows.map((row) => [row.dateKey, row] as const)),
     [timelineDutyHeaderRows],
+  );
+  const liveTimelineDutySummaryByDate = useMemo(
+    () =>
+      new Map(
+        (calendarLabLiveTimelineProjection?.dutySummaries ?? []).map((summary) => [summary.dateKey, summary] as const),
+      ),
+    [calendarLabLiveTimelineProjection?.dutySummaries],
   );
 
   const formatLegFlightDisplay = (leg: RotationDashboardData["legs"][number]) => {
@@ -5510,13 +5521,23 @@ export default function App() {
         {activeTab === "today" && (
           displayedRotationDashboard ? (() => {
             const rotationDashboard = displayedRotationDashboard;
+            const liveProjectedTimelineEnabled =
+              rotationDebugEnabled &&
+              useLiveProjectedTimeline &&
+              Boolean(calendarLabLiveTimelineProjection);
             const timelineItems = buildTodayTimelineItems(rotationDashboard);
-            const visibleTimelineItems = timelineItems;
+            const visibleTimelineItems: Array<TodayTimelineItem | LiveTimelineItem> =
+              liveProjectedTimelineEnabled && calendarLabLiveTimelineProjection
+                ? calendarLabLiveTimelineProjection.items
+                : timelineItems;
             const timelineHasLayoverActions = visibleTimelineItems.some((item) => {
               if (item.type !== "layover") {
                 return false;
               }
-              const detail = getTimelineLayoverDetail(rotationDashboard, item.city);
+              const detail =
+                isLiveTimelineLayoverItem(item)
+                  ? item.layoverDetail ?? getTimelineLayoverDetail(rotationDashboard, item.city ?? "")
+                  : getTimelineLayoverDetail(rotationDashboard, item.city);
               return Boolean(
                 detail?.hotelPhone ||
                 getLayoverDisplayTransportPhone(detail) ||
@@ -5956,8 +5977,12 @@ export default function App() {
                         itemIndex === 0 || visibleTimelineItems[itemIndex - 1]?.dayLabel !== item.dayLabel;
                       const layoverDetail =
                         item.type === "layover"
-                          ? getTimelineLayoverDetailByIndex(rotationDashboard, item.layoverDetailIndex) ??
-                            getTimelineLayoverDetail(rotationDashboard, item.city)
+                          ? isLiveTimelineLayoverItem(item)
+                            ? item.layoverDetail ??
+                              getTimelineLayoverDetailByIndex(rotationDashboard, item.layoverDetailIndex) ??
+                              getTimelineLayoverDetail(rotationDashboard, item.city ?? "")
+                            : getTimelineLayoverDetailByIndex(rotationDashboard, item.layoverDetailIndex) ??
+                              getTimelineLayoverDetail(rotationDashboard, item.city)
                           : null;
                       const layoverTransportDisplay = getLayoverTransportDisplay(layoverDetail);
                       const layoverDisplayTransportPhone = getLayoverDisplayTransportPhone(layoverDetail);
@@ -5972,11 +5997,16 @@ export default function App() {
                       const layoverRestLabel =
                         layoverDetail?.restMinutes != null
                           ? `Rest ${rotationFormatMinutes(layoverDetail.restMinutes)}`
-                          : rotationDashboard.tonightLayoverCity === item.city &&
+                          : item.type === "layover" &&
+                            rotationDashboard.tonightLayoverCity === item.city &&
                               rotationDashboard.scheduledRestMinutes != null
                             ? `Rest ${rotationFormatMinutes(rotationDashboard.scheduledRestMinutes)}`
                             : null;
                       const dutyHeaderRow = showDateLabel ? timelineDutyHeaderRowByDate.get(item.dayLabel) : null;
+                      const liveDutySummary =
+                        showDateLabel && liveProjectedTimelineEnabled
+                          ? liveTimelineDutySummaryByDate.get(item.dayLabel)
+                          : null;
                       return (
                         <View key={item.key} style={[styles.tripBoardTimelineRow, isCompactMobile && styles.tripBoardTimelineRowCompact]}>
                           <View style={[styles.tripBoardTimelineSpineColumn, isCompactMobile && styles.tripBoardTimelineSpineColumnCompact]}>
@@ -5994,11 +6024,17 @@ export default function App() {
                                   isCompactMobile && styles.tripBoardTimelineNodeCompact,
                                   item.type === "layover"
                                     ? styles.tripBoardTimelineNodeLayover
-                                    : item.leg.isDeadhead
-                                      ? styles.tripBoardTimelineNodeDh
-                                      : item.leg.origin === item.leg.destination
-                                        ? styles.tripBoardTimelineNodeRtg
-                                        : styles.tripBoardTimelineNodeOperating,
+                                    : isLiveTimelineLegItem(item)
+                                      ? item.isDeadhead
+                                        ? styles.tripBoardTimelineNodeDh
+                                        : item.origin === item.destination
+                                          ? styles.tripBoardTimelineNodeRtg
+                                          : styles.tripBoardTimelineNodeOperating
+                                      : item.leg.isDeadhead
+                                        ? styles.tripBoardTimelineNodeDh
+                                        : item.leg.origin === item.leg.destination
+                                          ? styles.tripBoardTimelineNodeRtg
+                                          : styles.tripBoardTimelineNodeOperating,
                                 ]}
                               />
                               {itemIndex < visibleTimelineItems.length - 1 ? (
@@ -6007,7 +6043,7 @@ export default function App() {
                             </View>
                           </View>
                           <View style={{ flex: 1, gap: isCompactMobile ? 8 : 10 }}>
-                            {dutyHeaderRow ? (
+                            {dutyHeaderRow || liveDutySummary ? (
                               <View
                                 style={[
                                   styles.resultPanelSubtle,
@@ -6022,13 +6058,13 @@ export default function App() {
                                     { justifyContent: "space-between", alignItems: "center" },
                                   ]}
                                 >
-                                  <Text style={[styles.tripBoardTimelineMeta, { flexShrink: 0 }]}>{`${dutyHeaderRow.dateLabel} DUTY`}</Text>
-                                  {dutyHeaderRow.inlineStatusLabel ? (
+                                  <Text style={[styles.tripBoardTimelineMeta, { flexShrink: 0 }]}>{`${liveDutySummary?.dateKey ?? dutyHeaderRow?.dateLabel ?? item.dayLabel} DUTY`}</Text>
+                                  {dutyHeaderRow?.inlineStatusLabel ? (
                                     <View
                                       style={[
                                         styles.tripWatchWatchChip,
-                                        dutyHeaderRow.status === "caution" && styles.tripWatchWatchChipAmber,
-                                        dutyHeaderRow.status === "exceeded" && styles.legBadgeWarning,
+                                        dutyHeaderRow?.status === "caution" && styles.tripWatchWatchChipAmber,
+                                        dutyHeaderRow?.status === "exceeded" && styles.legBadgeWarning,
                                       ]}
                                     >
                                       <Text style={styles.tripWatchWatchChipText}>{dutyHeaderRow.inlineStatusLabel}</Text>
@@ -6038,18 +6074,33 @@ export default function App() {
                                 <Text style={[styles.tripBoardTimelineMeta, { letterSpacing: 0.4 }]}>
                                   {isCompactMobile ? "       MAX    SCH    CUR    REM" : "        MAX     SCHED   CURRENT   REM"}
                                 </Text>
-                                <Text style={styles.tripBoardTimelineMeta}>
-                                  {`FDP    ${dutyHeaderRow.fdpAllowableLabel ?? "TBD"}   ${dutyHeaderRow.fdpScheduledLabel ?? "TBD"}   ${dutyHeaderRow.fdpCurrentLabel ?? "TBD"}   ${dutyHeaderRow.fdpRemainingLabel?.replace(/^FDP rem /, "") ?? "TBD"}`}
-                                </Text>
-                                <Text style={styles.tripBoardTimelineMeta}>
-                                  {`BLOCK  ${dutyHeaderRow.blockAllowableLabel ?? "—"}   ${dutyHeaderRow.blockScheduledLabel ?? "TBD"}   ${dutyHeaderRow.blockCurrentLabel ?? "TBD"}   ${dutyHeaderRow.blockRemainingLabel?.replace(/^Block rem /, "") ?? "—"}`}
-                                </Text>
-                                {dutyHeaderRow.blockPendingNote ? (
+                                {liveDutySummary ? (
+                                  <>
+                                    <Text style={styles.tripBoardTimelineMeta}>
+                                      {`FDP    ${rotationFormatMinutes(liveDutySummary.projectedFdpUsedMinutes != null ? (liveDutySummary.projectedFdpUsedMinutes + (liveDutySummary.fdpRemainingMinutes ?? 0)) : undefined)}   ${rotationFormatMinutes(liveDutySummary.baselineFdpUsedMinutes)}   ${rotationFormatMinutes(liveDutySummary.projectedFdpUsedMinutes)}   ${rotationFormatMinutes(liveDutySummary.fdpRemainingMinutes)}`}
+                                    </Text>
+                                    <Text style={styles.tripBoardTimelineMeta}>
+                                      {`BLOCK  ${rotationFormatMinutes((liveDutySummary.projectedBlockMinutes ?? 0) + (liveDutySummary.blockRemainingMinutes ?? 0))}   ${rotationFormatMinutes(liveDutySummary.baselineBlockMinutes)}   ${rotationFormatMinutes(liveDutySummary.projectedBlockMinutes)}   ${rotationFormatMinutes(liveDutySummary.blockRemainingMinutes)}`}
+                                    </Text>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Text style={styles.tripBoardTimelineMeta}>
+                                      {`FDP    ${dutyHeaderRow?.fdpAllowableLabel ?? "TBD"}   ${dutyHeaderRow?.fdpScheduledLabel ?? "TBD"}   ${dutyHeaderRow?.fdpCurrentLabel ?? "TBD"}   ${dutyHeaderRow?.fdpRemainingLabel?.replace(/^FDP rem /, "") ?? "TBD"}`}
+                                    </Text>
+                                    <Text style={styles.tripBoardTimelineMeta}>
+                                      {`BLOCK  ${dutyHeaderRow?.blockAllowableLabel ?? "—"}   ${dutyHeaderRow?.blockScheduledLabel ?? "TBD"}   ${dutyHeaderRow?.blockCurrentLabel ?? "TBD"}   ${dutyHeaderRow?.blockRemainingLabel?.replace(/^Block rem /, "") ?? "—"}`}
+                                    </Text>
+                                  </>
+                                )}
+                                {dutyHeaderRow?.blockPendingNote && !liveDutySummary ? (
                                   <Text style={[styles.tripBoardTimelineMeta, styles.tripBoardTimelineMetaMuted]}>
                                     {dutyHeaderRow.blockPendingNote}
                                   </Text>
                                 ) : null}
-                                {dutyHeaderRow.changeLabel ? (
+                                {liveDutySummary ? (
+                                  <Text style={styles.tripBoardTimelineMeta}>{liveDutySummary.badges.join(" · ")}</Text>
+                                ) : dutyHeaderRow?.changeLabel ? (
                                   <Text style={styles.tripBoardTimelineMeta}>{dutyHeaderRow.changeLabel}</Text>
                                 ) : null}
                               </View>
@@ -6170,9 +6221,15 @@ export default function App() {
                             </InstrumentPanel>
                           ) : (
                             <InstrumentPanel
-                              variant={item.isHighlighted ? "elevated" : "decision"}
+                              variant={!isLiveTimelineLegItem(item) && item.isHighlighted ? "elevated" : "decision"}
                               tone={
-                                item.leg.isDeadhead
+                                isLiveTimelineLegItem(item)
+                                  ? item.isDeadhead
+                                    ? "cyan"
+                                    : item.status === "same_airport_event"
+                                      ? "green"
+                                      : "green"
+                                  : item.leg.isDeadhead
                                   ? "cyan"
                                   : isReturnToGateLeg(item.leg)
                                     ? "green"
@@ -6181,13 +6238,15 @@ export default function App() {
                               style={[
                                 styles.tripBoardTimelineCard,
                                 isCompactMobile && styles.tripBoardTimelineCardCompact,
-                                item.isHighlighted && styles.tripBoardTimelineCardHighlighted,
-                                isReturnToGateLeg(item.leg) && styles.tripBoardTimelineCardRtg,
+                                !isLiveTimelineLegItem(item) && item.isHighlighted && styles.tripBoardTimelineCardHighlighted,
+                                ((isLiveTimelineLegItem(item) && item.segmentType === "return_to_gate") ||
+                                  (!isLiveTimelineLegItem(item) && isReturnToGateLeg(item.leg))) &&
+                                  styles.tripBoardTimelineCardRtg,
                               ]}
                             >
                               <View style={[styles.tripBoardTimelineHeader, isCompactMobile && styles.tripBoardTimelineHeaderCompact]}>
                                 <View style={[styles.tripBoardTimelineBadgeRow, isCompactMobile && styles.tripBoardTimelineBadgeRowCompact]}>
-                                  {item.isHighlighted ? (
+                                  {!isLiveTimelineLegItem(item) && item.isHighlighted ? (
                                     <Text style={[styles.statusBadge, styles.statusBadgeCaution, isCompactMobile && styles.statusBadgeCompact]}>
                                       NEXT EVENT
                                     </Text>
@@ -6196,53 +6255,96 @@ export default function App() {
                                     style={[
                                       styles.statusBadge,
                                       isCompactMobile && styles.statusBadgeCompact,
-                                      item.leg.isDeadhead
+                                      (isLiveTimelineLegItem(item) ? item.isDeadhead : item.leg.isDeadhead)
                                         ? styles.deadheadBadge
-                                        : isReturnToGateLeg(item.leg)
+                                        : ((isLiveTimelineLegItem(item) && item.segmentType === "return_to_gate") ||
+                                            (!isLiveTimelineLegItem(item) && isReturnToGateLeg(item.leg)))
                                           ? styles.statusBadgeRtg
                                           : styles.statusBadgeResolved,
                                     ]}
                                   >
-                                    {item.leg.isDeadhead ? "DH" : isReturnToGateLeg(item.leg) ? "RTG" : "OP"}
+                                    {isLiveTimelineLegItem(item)
+                                      ? item.isDeadhead
+                                        ? "DH"
+                                        : item.status === "same_airport_event" || item.segmentType === "return_to_gate"
+                                          ? "RTG"
+                                          : item.status === "possible_reroute"
+                                            ? "MON"
+                                            : "OP"
+                                      : item.leg.isDeadhead
+                                        ? "DH"
+                                        : isReturnToGateLeg(item.leg)
+                                          ? "RTG"
+                                          : "OP"}
                                   </Text>
+                                  {isLiveTimelineLegItem(item)
+                                    ? item.badgeLabels.slice(0, 2).map((badge) => (
+                                        <Text key={`${item.key}-${badge}`} style={[styles.statusBadge, styles.statusBadgeCompact]}>
+                                          {badge}
+                                        </Text>
+                                      ))
+                                    : null}
                                 </View>
                                 <Text style={[styles.tripBoardTimelineTime, isCompactMobile && styles.tripBoardTimelineTimeCompact]}>
-                                  {(item.leg.departureTime ?? "TBD")} - {(item.leg.arrivalTime ?? "TBD")}
+                                  {isLiveTimelineLegItem(item)
+                                    ? `${item.currentDepartureTime ?? "TBD"} - ${item.currentArrivalTime ?? "TBD"}`
+                                    : `${item.leg.departureTime ?? "TBD"} - ${item.leg.arrivalTime ?? "TBD"}`}
                                 </Text>
                               </View>
                               <Text style={[styles.tripBoardTimelineCityPair, isCompactMobile && styles.tripBoardTimelineCityPairCompact]}>
-                                {item.leg.origin} {"->"} {item.leg.destination}
+                                {(isLiveTimelineLegItem(item) ? item.origin : item.leg.origin)} {"->"} {(isLiveTimelineLegItem(item) ? item.destination : item.leg.destination)}
                               </Text>
+                              {isLiveTimelineLegItem(item) && item.baselineDepartureTime && (item.baselineDepartureTime !== item.currentDepartureTime || item.baselineArrivalTime !== item.currentArrivalTime) ? (
+                                <Text style={[styles.tripBoardTimelineMeta, styles.tripBoardTimelineMetaMuted, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+                                  Baseline {item.baselineDepartureTime ?? "TBD"} - {item.baselineArrivalTime ?? "TBD"}
+                                </Text>
+                              ) : null}
                               <View style={[styles.tripBoardTimelineMetaRow, isCompactMobile && styles.tripBoardTimelineMetaRowCompact]}>
                                 <Text style={[styles.tripBoardTimelineMeta, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
-                                  {formatLegFlightDisplay(item.leg)}
+                                  {isLiveTimelineLegItem(item)
+                                    ? `Flight ${`${item.carrier ?? ""}${item.flightNumber ?? "TBD"}`.trim()}`
+                                    : formatLegFlightDisplay(item.leg)}
                                 </Text>
                                 <Text style={[styles.tripBoardTimelineMeta, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
-                                  {item.leg.isDeadhead ? "DH block" : "Block"} {rotationFormatMinutes(item.leg.scheduledBlockMinutes)}
+                                  {(isLiveTimelineLegItem(item) ? item.isDeadhead : item.leg.isDeadhead) ? "DH block" : "Block"} {rotationFormatMinutes(isLiveTimelineLegItem(item) ? item.currentBlockMinutes : item.leg.scheduledBlockMinutes)}
                                 </Text>
                               </View>
+                              {isLiveTimelineLegItem(item) && item.blockDeltaMinutes != null && item.blockDeltaMinutes !== 0 ? (
+                                <Text style={[styles.tripBoardTimelineMeta, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+                                  Block {rotationFormatMinutes(item.currentBlockMinutes)} · {item.blockDeltaMinutes > 0 ? "+" : "-"}{rotationFormatMinutes(Math.abs(item.blockDeltaMinutes))}
+                                </Text>
+                              ) : null}
                               <View style={[styles.tripBoardTimelineMetaRow, isCompactMobile && styles.tripBoardTimelineMetaRowCompact]}>
-                                {!item.leg.isDeadhead && item.leg.turnMinutes != null ? (
+                                {!isLiveTimelineLegItem(item) && !item.leg.isDeadhead && item.leg.turnMinutes != null ? (
                                   <Text style={[styles.tripBoardTimelineMeta, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
                                     Turn {rotationFormatMinutes(item.leg.turnMinutes)}
                                   </Text>
                                 ) : null}
-                                {!item.leg.isDeadhead && item.leg.aircraft ? (
+                                {!isLiveTimelineLegItem(item) && !item.leg.isDeadhead && item.leg.aircraft ? (
                                   <Text style={[styles.tripBoardTimelineMeta, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
                                     Ship/equip {item.leg.aircraft}
                                   </Text>
-                                ) : item.leg.isDeadhead && item.leg.confirmationNumber ? (
+                                ) : !isLiveTimelineLegItem(item) && item.leg.isDeadhead && item.leg.confirmationNumber ? (
                                   <Text style={[styles.tripBoardTimelineMeta, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
                                     PNR {item.leg.confirmationNumber}
                                   </Text>
                                 ) : null}
                               </View>
-                              {!item.leg.isDeadhead && item.leg.gate && item.leg.gate !== "TBD" ? (
+                              {((isLiveTimelineLegItem(item) ? !item.isDeadhead && item.currentDepartureTime : !item.leg.isDeadhead && item.leg.gate && item.leg.gate !== "TBD")) && !isLiveTimelineLegItem(item) ? (
                                 <Text style={[styles.tripBoardTimelineMeta, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
                                   Gate {item.leg.gate}
                                 </Text>
                               ) : null}
-                              {item.leg.isDeadhead && !item.leg.confirmationNumber ? (
+                              {isLiveTimelineLegItem(item) && item.monitoringMessages.length > 0 ? (
+                                <View style={styles.tripBoardTimelineHintStack}>
+                                  {item.monitoringMessages.slice(0, 2).map((message) => (
+                                    <Text key={`${item.key}-${message}`} style={[styles.tripBoardTimelineMeta, styles.tripBoardTimelineMetaMuted, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+                                      {message}
+                                    </Text>
+                                  ))}
+                                </View>
+                              ) : null}
+                              {!isLiveTimelineLegItem(item) && item.leg.isDeadhead && !item.leg.confirmationNumber ? (
                                 <View style={styles.tripBoardTimelineHintStack}>
                                   <Text style={[styles.tripBoardTimelineMeta, styles.tripBoardTimelineMetaMuted, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
                                     Confirmation not found
@@ -6252,7 +6354,7 @@ export default function App() {
                                   </Text>
                                 </View>
                               ) : null}
-                              {item.leg.isDeadhead && item.leg.confirmationNumber ? (
+                              {!isLiveTimelineLegItem(item) && item.leg.isDeadhead && item.leg.confirmationNumber ? (
                                 <View style={styles.tripBoardTimelineActionRow}>
                                   <TouchableOpacity
                                     style={[
@@ -6274,14 +6376,18 @@ export default function App() {
                                   </TouchableOpacity>
                                 </View>
                               ) : null}
-                              {item.leg.origin === item.leg.destination ? (
+                              {isLiveTimelineLegItem(item) && item.status === "possible_reroute" ? (
                                 <Text style={[styles.tripBoardTimelineMeta, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
-                                  Return-to-gate segment
+                                  Possible reroute event. Projected from calendar.
                                 </Text>
-                              ) : !item.leg.isDeadhead && !isCompactMobile ? (
+                              ) : (isLiveTimelineLegItem(item) ? item.origin === item.destination : item.leg.origin === item.leg.destination) ? (
+                                <Text style={[styles.tripBoardTimelineMeta, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+                                  {isLiveTimelineLegItem(item) ? "RTG-style event" : "Return-to-gate segment"}
+                                </Text>
+                              ) : !(isLiveTimelineLegItem(item) ? item.isDeadhead : item.leg.isDeadhead) && !isCompactMobile ? (
                                 <Text style={styles.tripBoardTimelineMeta}>Counts toward logbook/export.</Text>
                               ) : null}
-                              {item.leg.isDeadhead ? (
+                              {(isLiveTimelineLegItem(item) ? item.isDeadhead : item.leg.isDeadhead) ? (
                                 <Text style={[styles.tripBoardTimelineMeta, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
                                   Excluded from logbook/export
                                 </Text>
@@ -7149,6 +7255,30 @@ export default function App() {
                             {calendarLabLiveTimelineProjection ? (
                               <View style={styles.sectionStack}>
                                 <Text style={styles.resultSupportMetaText}>Live timeline projection:</Text>
+                                <TouchableOpacity
+                                  style={[
+                                    styles.calendarLabToggleButton,
+                                    useLiveProjectedTimeline && styles.calendarLabToggleButtonActive,
+                                  ]}
+                                  onPress={() => setUseLiveProjectedTimeline((current) => !current)}
+                                >
+                                  <Text
+                                    style={[
+                                      styles.calendarLabToggleButtonText,
+                                      useLiveProjectedTimeline && styles.calendarLabToggleButtonTextActive,
+                                    ]}
+                                  >
+                                    {useLiveProjectedTimeline ? "Using live projected timeline" : "Use live projected timeline"}
+                                  </Text>
+                                </TouchableOpacity>
+                                <Text style={styles.resultSupportMetaText}>
+                                  Live projected timeline is {useLiveProjectedTimeline ? "ON" : "OFF"}
+                                </Text>
+                                {useLiveProjectedTimeline ? (
+                                  <Text style={styles.tripBoardTimelineMeta}>
+                                    Timeline is showing calendar-projected times and inserted RTG/same-airport events.
+                                  </Text>
+                                ) : null}
                                 <Text style={styles.tripBoardTimelineMeta}>
                                   Updated leg count {calendarLabLiveTimelineProjection.updatedLegCount} • Changed leg count {calendarLabLiveTimelineProjection.changedLegCount} • Inserted same-airport/RTG {calendarLabLiveTimelineProjection.insertedSameAirportEventCount} • Possible reroute {calendarLabLiveTimelineProjection.possibleRerouteCount} • Duty summaries changed {calendarLabLiveTimelineProjection.dutySummaries.filter((summary) => summary.monitoringStatus !== "baseline_only").length}
                                 </Text>
@@ -11410,6 +11540,14 @@ function getTimelineLayoverDetailByIndex(dashboard: RotationDashboardData, index
   return dashboard.layoverDetails?.[index] ?? null;
 }
 
+function isLiveTimelineLayoverItem(item: TodayTimelineItem | LiveTimelineItem): item is LiveTimelineItem & { type: "layover" } {
+  return item.type === "layover";
+}
+
+function isLiveTimelineLegItem(item: TodayTimelineItem | LiveTimelineItem): item is LiveTimelineItem & { type: "leg" } {
+  return item.type === "leg" && !("leg" in item);
+}
+
 function isPlaceholderPhoneValue(value?: string | null) {
   if (!value) {
     return false;
@@ -14517,6 +14655,30 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "800",
     color: appStylePalette.accent,
+  },
+  calendarLabToggleButton: {
+    alignSelf: "flex-start",
+    minWidth: 250,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 999,
+    borderWidth: 1.5,
+    borderColor: appStylePalette.accent,
+    backgroundColor: appStylePalette.surfaceRaised,
+  },
+  calendarLabToggleButtonActive: {
+    backgroundColor: appStylePalette.accent,
+    borderColor: appStylePalette.accent,
+  },
+  calendarLabToggleButtonText: {
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: "900",
+    color: appStylePalette.accent,
+    textAlign: "center",
+  },
+  calendarLabToggleButtonTextActive: {
+    color: appStylePalette.canvas,
   },
   quickActionGrid: {
     flexDirection: "row",
