@@ -133,8 +133,20 @@ type RotationScreenshotAttachment = {
   mimeType?: string;
 };
 
+type CalendarLabSessionState = {
+  version: 1;
+  baselineKey: string;
+  parsedEventCount: number;
+  filteredEvents: CalendarBaselineEventFilterResult | null;
+  projection: ProjectedRotationSnapshot | null;
+  projectionSummary: CalendarProjectionEventSummary | null;
+  liveTimelineProjection: LiveTimelineProjectionResult | null;
+  useLiveProjectedTimeline: boolean;
+};
+
 const DELTA_CHECK_IN_URL = "https://www.delta.com/check-in";
 const SKYHOP_URL = "https://www.skyhopglobal.com";
+const CALENDAR_LAB_SESSION_STORAGE_KEY = "rotationCompanion.calendarSyncLab.session";
 
 class RotationDebugErrorBoundary extends Component<
   { children: any },
@@ -206,6 +218,35 @@ function formatTripWatchDebugMinutes(value?: number | null) {
     return null;
   }
   return `${Math.floor(value / 60)}:${String(Math.abs(value % 60)).padStart(2, "0")}`;
+}
+
+function buildCalendarLabBaselineKey(snapshot?: BaselineRotationSnapshot | null) {
+  if (!snapshot) {
+    return "";
+  }
+  const legSignature = snapshot.legs
+    .map(
+      (leg) =>
+        [
+          leg.dateKey ?? "",
+          leg.carrier ?? "",
+          leg.flightNumber ?? "",
+          leg.origin ?? "",
+          leg.destination ?? "",
+          leg.scheduledOut ?? "",
+          leg.scheduledIn ?? "",
+          leg.segmentType ?? "",
+          leg.isDeadhead ? "dh" : "op",
+        ].join(":"),
+    )
+    .join("|");
+  return JSON.stringify({
+    rotationNumber: snapshot.rotationNumber ?? "",
+    tripDates: snapshot.tripDates ?? "",
+    base: snapshot.base ?? "",
+    legCount: snapshot.legs.length,
+    legSignature,
+  });
 }
 
 function serializeTripWatchDebugLeg(
@@ -2304,6 +2345,8 @@ export default function App() {
   const [calendarLabLiveTimelineProjection, setCalendarLabLiveTimelineProjection] =
     useState<LiveTimelineProjectionResult | null>(null);
   const [useLiveProjectedTimeline, setUseLiveProjectedTimeline] = useState(false);
+  const [calendarLabParsedEventCount, setCalendarLabParsedEventCount] = useState(0);
+  const [calendarLabSessionMessage, setCalendarLabSessionMessage] = useState("");
   const [rotationToolBanner, setRotationToolBanner] = useState<RotationToolBanner | null>(null);
   const [contractCopilotStarterQuestion, setContractCopilotStarterQuestion] = useState("");
   const [quickContacts, setQuickContacts] = useState<QuickContacts>({
@@ -2407,6 +2450,10 @@ export default function App() {
       authoritativeSource,
     };
   }, [displayedRotationDashboard?.parsedRotation.sourceFormat, displayedRotationDashboard?.source, tripWatchBaselineSnapshot]);
+  const calendarLabBaselineKey = useMemo(
+    () => buildCalendarLabBaselineKey(calendarLabBaselineSnapshot),
+    [calendarLabBaselineSnapshot],
+  );
   const tripWatchBaselineDashboardDebug = useMemo(() => {
     const summarizeDeadheadishLegs = (dashboard?: RotationDashboardData | null) =>
       (dashboard?.legs ?? [])
@@ -2472,12 +2519,90 @@ export default function App() {
     }
   }, [rotationDashboard?.snapshot.rotationNumber, rotationDashboard?.snapshot.tripDates]);
   useEffect(() => {
+    if (Platform.OS !== "web" || typeof window === "undefined") {
+      return;
+    }
+    if (rotationDebugEnabled) {
+      return;
+    }
+    window.sessionStorage.removeItem(CALENDAR_LAB_SESSION_STORAGE_KEY);
+    setCalendarLabSessionMessage("");
+  }, [rotationDebugEnabled]);
+  useEffect(() => {
     if (!calendarLabBaselineSnapshot || calendarLabUpdateEvents.length === 0) {
       setCalendarLabFilteredEvents(null);
       return;
     }
     setCalendarLabFilteredEvents(filterCalendarEventsForBaseline(calendarLabBaselineSnapshot, calendarLabUpdateEvents));
   }, [calendarLabBaselineSnapshot, calendarLabUpdateEvents]);
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof window === "undefined" || !rotationDebugEnabled || !calendarLabBaselineKey) {
+      return;
+    }
+    try {
+      const raw = window.sessionStorage.getItem(CALENDAR_LAB_SESSION_STORAGE_KEY);
+      if (!raw) {
+        return;
+      }
+      const parsed = JSON.parse(raw) as CalendarLabSessionState;
+      if (parsed.version !== 1) {
+        window.sessionStorage.removeItem(CALENDAR_LAB_SESSION_STORAGE_KEY);
+        return;
+      }
+      if (parsed.baselineKey !== calendarLabBaselineKey) {
+        window.sessionStorage.removeItem(CALENDAR_LAB_SESSION_STORAGE_KEY);
+        setCalendarLabSessionMessage("Live projection cleared because baseline changed");
+        return;
+      }
+      if (!parsed.projection && !parsed.liveTimelineProjection) {
+        return;
+      }
+      setCalendarLabParsedEventCount(parsed.parsedEventCount ?? 0);
+      setCalendarLabFilteredEvents(parsed.filteredEvents ?? null);
+      setCalendarLabProjection(parsed.projection ?? null);
+      setCalendarLabProjectionSummary(parsed.projectionSummary ?? null);
+      setCalendarLabLiveTimelineProjection(parsed.liveTimelineProjection ?? null);
+      setUseLiveProjectedTimeline(Boolean(parsed.useLiveProjectedTimeline));
+      setCalendarLabSessionMessage("Live projection restored from this session");
+    } catch {
+      window.sessionStorage.removeItem(CALENDAR_LAB_SESSION_STORAGE_KEY);
+    }
+  }, [calendarLabBaselineKey, rotationDebugEnabled]);
+  useEffect(() => {
+    if (
+      Platform.OS !== "web" ||
+      typeof window === "undefined" ||
+      !rotationDebugEnabled ||
+      !calendarLabBaselineKey ||
+      (!calendarLabProjection && !calendarLabLiveTimelineProjection)
+    ) {
+      return;
+    }
+    try {
+      const sessionState: CalendarLabSessionState = {
+        version: 1,
+        baselineKey: calendarLabBaselineKey,
+        parsedEventCount: calendarLabParsedEventCount,
+        filteredEvents: calendarLabFilteredEvents,
+        projection: calendarLabProjection,
+        projectionSummary: calendarLabProjectionSummary,
+        liveTimelineProjection: calendarLabLiveTimelineProjection,
+        useLiveProjectedTimeline,
+      };
+      window.sessionStorage.setItem(CALENDAR_LAB_SESSION_STORAGE_KEY, JSON.stringify(sessionState));
+    } catch {
+      // Keep the live projection in memory if session storage is unavailable.
+    }
+  }, [
+    calendarLabBaselineKey,
+    calendarLabFilteredEvents,
+    calendarLabLiveTimelineProjection,
+    calendarLabParsedEventCount,
+    calendarLabProjection,
+    calendarLabProjectionSummary,
+    rotationDebugEnabled,
+    useLiveProjectedTimeline,
+  ]);
   const tripWatchHeaderComparisonItems = useMemo(() => {
     if (
       !tripWatchResult ||
@@ -2665,6 +2790,21 @@ export default function App() {
       ),
     [calendarLabLiveTimelineProjection?.dutySummaries],
   );
+  const calendarLabParsedEventDisplayCount = calendarLabParsedEvents.length || calendarLabParsedEventCount;
+  const liveProjectedTimelineStatusStripVisible =
+    rotationDebugEnabled && useLiveProjectedTimeline && Boolean(calendarLabLiveTimelineProjection && calendarLabProjection);
+  const liveProjectedTimelineStatusCounts = useMemo(() => {
+    if (!calendarLabProjectionSummary || !calendarLabLiveTimelineProjection) {
+      return null;
+    }
+    return {
+      matched: calendarLabProjectionSummary.matchedEvents.length,
+      rtg: calendarLabProjectionSummary.sameAirportEvents.length,
+      reroute:
+        calendarLabProjectionSummary.unmatchedEvents.length +
+        calendarLabProjectionSummary.structuralChangeEvents.length,
+    };
+  }, [calendarLabLiveTimelineProjection, calendarLabProjectionSummary]);
 
   const formatLegFlightDisplay = (leg: RotationDashboardData["legs"][number]) => {
     const carrierPrefix =
@@ -3105,6 +3245,7 @@ export default function App() {
     setCalendarLabUrl("");
     setCalendarLabUrlMessage("");
     setCalendarLabParsedEvents([]);
+    setCalendarLabParsedEventCount(0);
     setCalendarLabUpdateEvents([]);
     setCalendarLabFilteredEvents(null);
     setCalendarLabShowIgnoredEvents(false);
@@ -3112,6 +3253,15 @@ export default function App() {
     setCalendarLabProjection(null);
     setCalendarLabProjectionSummary(null);
     setCalendarLabLiveTimelineProjection(null);
+    setUseLiveProjectedTimeline(false);
+    setCalendarLabSessionMessage("");
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      try {
+        window.sessionStorage.removeItem(CALENDAR_LAB_SESSION_STORAGE_KEY);
+      } catch {
+        // Ignore storage failures in dev lab cleanup.
+      }
+    }
   };
 
   const parseCalendarSyncLab = () => {
@@ -3120,6 +3270,8 @@ export default function App() {
     setCalendarLabProjectionSummary(null);
     setCalendarLabLiveTimelineProjection(null);
     setCalendarLabFilteredEvents(null);
+    setUseLiveProjectedTimeline(false);
+    setCalendarLabSessionMessage("");
 
     const trimmedRawIcs = calendarLabRawIcs.trim();
     const trimmedUrl = calendarLabUrl.trim();
@@ -3130,6 +3282,7 @@ export default function App() {
         if (!normalizedUrl) {
           setCalendarLabUrlMessage("Calendar URL is malformed. Paste raw ICS text instead.");
           setCalendarLabParsedEvents([]);
+          setCalendarLabParsedEventCount(0);
           setCalendarLabUpdateEvents([]);
           setCalendarLabFilteredEvents(null);
           return;
@@ -3142,6 +3295,7 @@ export default function App() {
         }
         setCalendarLabUrlMessage(`URL normalized for ${hostLabel}. Fetch blocked or unavailable. Paste raw ICS text instead.`);
         setCalendarLabParsedEvents([]);
+        setCalendarLabParsedEventCount(0);
         setCalendarLabUpdateEvents([]);
         setCalendarLabFilteredEvents(null);
         return;
@@ -3149,6 +3303,7 @@ export default function App() {
 
       setCalendarLabParseError("Paste raw ICS text to parse calendar events.");
       setCalendarLabParsedEvents([]);
+      setCalendarLabParsedEventCount(0);
       setCalendarLabUpdateEvents([]);
       setCalendarLabFilteredEvents(null);
       return;
@@ -3177,6 +3332,7 @@ export default function App() {
 
       if (parsedEvents.length === 0) {
         setCalendarLabParsedEvents([]);
+        setCalendarLabParsedEventCount(0);
         setCalendarLabUpdateEvents([]);
         setCalendarLabFilteredEvents(null);
         setCalendarLabParseError("No VEVENT entries found in the pasted ICS text.");
@@ -3184,12 +3340,14 @@ export default function App() {
       }
 
       setCalendarLabParsedEvents(parsedEvents);
+      setCalendarLabParsedEventCount(parsedEvents.length);
       setCalendarLabUpdateEvents(updateEvents);
       setCalendarLabFilteredEvents(
         calendarLabBaselineSnapshot ? filterCalendarEventsForBaseline(calendarLabBaselineSnapshot, updateEvents) : null,
       );
     } catch (error) {
       setCalendarLabParsedEvents([]);
+      setCalendarLabParsedEventCount(0);
       setCalendarLabUpdateEvents([]);
       setCalendarLabFilteredEvents(null);
       setCalendarLabLiveTimelineProjection(null);
@@ -3224,6 +3382,7 @@ export default function App() {
       setCalendarLabProjection(projected);
       setCalendarLabProjectionSummary(summary);
       setCalendarLabLiveTimelineProjection(liveTimelineProjection);
+      setCalendarLabSessionMessage("");
       setCalendarLabParseError("");
     } catch (error) {
       setCalendarLabProjection(null);
@@ -5741,6 +5900,18 @@ export default function App() {
                       ) : null}
                     </View>
                   ) : null}
+                  {liveProjectedTimelineStatusStripVisible && liveProjectedTimelineStatusCounts ? (
+                    <View style={[styles.resultPanelSubtle, styles.tripWatchSectionCard, styles.tripBoardLiveProjectionStrip]}>
+                      <Text style={styles.resultSupportMetaText}>Projected from calendar</Text>
+                      <Text style={styles.tripBoardTimelineMeta}>
+                        Matched {liveProjectedTimelineStatusCounts.matched} · RTG {liveProjectedTimelineStatusCounts.rtg} · Reroute {liveProjectedTimelineStatusCounts.reroute}
+                      </Text>
+                      <Text style={styles.tripBoardTimelineMeta}>117/block monitoring active</Text>
+                      <Text style={styles.tripBoardTimelineMeta}>
+                        Refresh MiCrew for confirmation of final pay and schedule treatment
+                      </Text>
+                    </View>
+                  ) : null}
                   {isCompactMobile ? (
                     <View style={styles.tripBoardSummaryStrip}>
                       <View style={styles.tripBoardSummaryStripRow}>
@@ -7104,13 +7275,21 @@ export default function App() {
                         {calendarLabUrlMessage ? (
                           <Text style={styles.resultSupportMetaText}>{calendarLabUrlMessage}</Text>
                         ) : null}
+                        {calendarLabSessionMessage ? (
+                          <Text style={styles.resultSupportMetaText}>{calendarLabSessionMessage}</Text>
+                        ) : null}
+                        {calendarLabSessionMessage === "Live projection restored from this session" ? (
+                          <Text style={styles.tripBoardTimelineMeta}>
+                            Raw ICS text was not persisted for this session. Re-paste it if you want to inspect the source feed again.
+                          </Text>
+                        ) : null}
                         {calendarLabParseError ? (
                           <Text style={styles.inlineValidationText}>{calendarLabParseError}</Text>
                         ) : null}
-                        {calendarLabParsedEvents.length > 0 ? (
+                        {calendarLabParsedEventDisplayCount > 0 ? (
                           <View style={styles.sectionStack}>
                             <Text style={styles.resultSupportMetaText}>
-                              Parsed calendar events: {calendarLabParsedEvents.length}
+                              Parsed calendar events: {calendarLabParsedEventDisplayCount}
                             </Text>
                             {calendarLabFilteredEvents ? (
                               <View style={styles.sectionStack}>
@@ -14369,6 +14548,9 @@ const styles = StyleSheet.create({
     gap: 8,
     borderWidth: 1,
     borderColor: appStylePalette.borderSubtle,
+  },
+  tripBoardLiveProjectionStrip: {
+    marginBottom: 10,
   },
   tripWatchSectionCard: {
     gap: 8,
