@@ -369,7 +369,7 @@ function make7707BaselineSnapshot(): BaselineRotationSnapshot {
     makeLeg({ id: "7707-2", dayLabel: "07MAY", flightNumber: "3726", carrier: "OO", origin: "SLC", destination: "IDA", departureTime: "13:30", arrivalTime: "14:24", scheduledBlockMinutes: 54, isDeadhead: true, legKind: "deadhead", segmentType: "deadhead", excludeFromLogbookExport: true }),
     makeLeg({ id: "7707-3", dayLabel: "07MAY", flightNumber: "2335", origin: "IDA", destination: "SLC", departureTime: "15:30", arrivalTime: "16:39", scheduledBlockMinutes: 69 }),
     makeLeg({ id: "7707-4", dayLabel: "08MAY", flightNumber: "2601", origin: "SLC", destination: "DFW", departureTime: "05:00", arrivalTime: "08:05", scheduledBlockMinutes: 185 }),
-    makeLeg({ id: "7707-5", dayLabel: "08MAY", flightNumber: "2798", origin: "DFW", destination: "SLC", departureTime: "12:00", arrivalTime: "14:45", scheduledBlockMinutes: 165 }),
+    makeLeg({ id: "7707-5", dayLabel: "08MAY", flightNumber: "2798", origin: "DFW", destination: "SLC", departureTime: "13:14", arrivalTime: "14:57", scheduledBlockMinutes: 163 }),
     makeLeg({ id: "7707-6", dayLabel: "08MAY", flightNumber: "1470", origin: "SLC", destination: "BOI", departureTime: "17:00", arrivalTime: "18:15", scheduledBlockMinutes: 75 }),
   ];
 
@@ -405,7 +405,7 @@ function make7707BaselineSnapshot(): BaselineRotationSnapshot {
     { source: "calendar_sync", legSequenceNumber: 2, carrier: "OO", flightNumber: "3726", origin: "SLC", destination: "IDA", occurredAt: "2026-05-07T13:30:00Z", scheduledOut: "13:35", scheduledIn: "14:29", confidence: "high" },
     { source: "calendar_sync", legSequenceNumber: 3, carrier: "DL", flightNumber: "2335", origin: "IDA", destination: "SLC", occurredAt: "2026-05-07T15:30:00Z", scheduledOut: "15:40", scheduledIn: "16:49", confidence: "high" },
     { source: "calendar_sync", legSequenceNumber: 4, carrier: "DL", flightNumber: "2601", origin: "SLC", destination: "DFW", occurredAt: "2026-05-08T05:00:00Z", scheduledOut: "05:05", scheduledIn: "08:10", confidence: "high" },
-    { source: "calendar_sync", legSequenceNumber: 5, carrier: "DL", flightNumber: "2798", origin: "DFW", destination: "SLC", occurredAt: "2026-05-08T12:00:00Z", scheduledOut: "12:05", scheduledIn: "14:50", confidence: "high" },
+    { source: "calendar_sync", legSequenceNumber: 5, carrier: "DL", flightNumber: "2798", origin: "DFW", destination: "SLC", occurredAt: "2026-05-08T13:14:00Z", scheduledOut: "13:14", scheduledIn: "14:57", confidence: "high" },
     { source: "calendar_sync", legSequenceNumber: 6, carrier: "DL", flightNumber: "1470", origin: "SLC", destination: "BOI", occurredAt: "2026-05-08T17:00:00Z", scheduledOut: "17:05", scheduledIn: "18:20", confidence: "high" },
     { source: "calendar_sync", carrier: "DL", flightNumber: "2798", origin: "DFW", destination: "DFW", occurredAt: "2026-05-08T12:19:00Z", scheduledOut: "12:19", scheduledIn: "12:38", confidence: "high" },
   ];
@@ -413,6 +413,22 @@ function make7707BaselineSnapshot(): BaselineRotationSnapshot {
   assert(result.changedLegCount >= 6, `7707 projection should mark changed legs, got ${result.changedLegCount}`);
   assert(result.insertedSameAirportEventCount === 1, `7707 projection should insert one RTG item, got ${result.insertedSameAirportEventCount}`);
   assert(result.items.some((item) => item.status === "same_airport_event" && item.origin === "DFW" && item.destination === "DFW"), "7707 projection should include DFW-DFW RTG item");
+  const legSequence = result.items
+    .filter((item) => item.type === "leg")
+    .map((item) => `${item.origin}-${item.destination}`);
+  assert(
+    JSON.stringify(legSequence) === JSON.stringify(["SLC-DEN", "SLC-IDA", "IDA-SLC", "SLC-DFW", "DFW-DFW", "DFW-SLC", "SLC-BOI"]),
+    `7707 projected timeline order mismatch: ${JSON.stringify(legSequence)}`,
+  );
+  assert(
+    result.items.some((item) => item.type === "leg" && item.origin === "DFW" && item.destination === "SLC"),
+    "7707 projected timeline should preserve the baseline DFW-SLC leg after RTG insertion",
+  );
+  const dutySummary = result.dutySummaries.find((summary) => summary.dateKey === "08MAY");
+  assert(
+    Boolean(dutySummary?.badges.some((badge) => /RTG|Calendar projection active/i.test(badge))),
+    "7707 projected duty summary should carry RTG/calendar badges",
+  );
 }
 
 {

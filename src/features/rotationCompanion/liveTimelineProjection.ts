@@ -537,14 +537,6 @@ function getInsertionIndex(
   if (sameDayIndices.length === 0) {
     return items.length;
   }
-  if (options.preferAfterSameFlight && event.flightNumber) {
-    const sameFlight = sameDayIndices
-      .filter(({ item }) => item.flightNumber === event.flightNumber)
-      .at(-1);
-    if (sameFlight) {
-      return sameFlight.index + 1;
-    }
-  }
   const eventOutMinutes = parseClockToMinutes(event.scheduledOut) ?? parseIsoClockToMinutes(event.occurredAt);
   if (eventOutMinutes != null) {
     let targetIndex = sameDayIndices.at(-1)!.index + 1;
@@ -556,6 +548,14 @@ function getInsertionIndex(
       }
     }
     return targetIndex;
+  }
+  if (options.preferAfterSameFlight && event.flightNumber) {
+    const sameFlight = sameDayIndices
+      .filter(({ item }) => item.flightNumber === event.flightNumber)
+      .at(-1);
+    if (sameFlight) {
+      return sameFlight.index + 1;
+    }
   }
   return sameDayIndices.at(-1)!.index + 1;
 }
