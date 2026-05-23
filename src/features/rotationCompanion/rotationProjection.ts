@@ -41,6 +41,7 @@ export type BaselineRotationSnapshot = TripWatchRotationSnapshot & {
 export type CalendarUpdateEvent = {
   source: LiveUpdateSource;
   eventId?: string;
+  uid?: string;
   legSequenceNumber?: number;
   removed?: boolean;
   carrier?: string;
@@ -58,6 +59,13 @@ export type CalendarUpdateEvent = {
   releaseTime?: string;
   isDeadhead?: boolean;
   occurredAt?: string;
+  receivedAt?: string;
+  sequence?: number;
+  lastModified?: string;
+  location?: string;
+  rawSummary?: string;
+  rawDescription?: string;
+  confidence?: ProjectionConfidence;
 };
 
 export type ProjectedRotationSnapshot = TripWatchRotationSnapshot & {
