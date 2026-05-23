@@ -104,6 +104,10 @@ import {
   type CalendarUpdateEvent,
   type ProjectedRotationSnapshot,
 } from "./src/features/rotationCompanion/rotationProjection";
+import {
+  buildLiveTimelineProjection,
+  type LiveTimelineProjectionResult,
+} from "./src/features/rotationCompanion/liveTimelineProjection";
 import type { RotationChainCandidate } from "./src/features/rotationCompanion/rotationChainBuilder";
 import { fliegerTypography, getFliegerPalette } from "./src/theme/flieger";
 import type {
@@ -2295,6 +2299,8 @@ export default function App() {
   const [calendarLabProjection, setCalendarLabProjection] = useState<ProjectedRotationSnapshot | null>(null);
   const [calendarLabProjectionSummary, setCalendarLabProjectionSummary] =
     useState<CalendarProjectionEventSummary | null>(null);
+  const [calendarLabLiveTimelineProjection, setCalendarLabLiveTimelineProjection] =
+    useState<LiveTimelineProjectionResult | null>(null);
   const [rotationToolBanner, setRotationToolBanner] = useState<RotationToolBanner | null>(null);
   const [contractCopilotStarterQuestion, setContractCopilotStarterQuestion] = useState("");
   const [quickContacts, setQuickContacts] = useState<QuickContacts>({
@@ -2458,6 +2464,7 @@ export default function App() {
       setTripWatchExpanded(false);
       setCalendarLabProjection(null);
       setCalendarLabProjectionSummary(null);
+      setCalendarLabLiveTimelineProjection(null);
     }
   }, [rotationDashboard?.snapshot.rotationNumber, rotationDashboard?.snapshot.tripDates]);
   useEffect(() => {
@@ -3093,12 +3100,14 @@ export default function App() {
     setCalendarLabParseError("");
     setCalendarLabProjection(null);
     setCalendarLabProjectionSummary(null);
+    setCalendarLabLiveTimelineProjection(null);
   };
 
   const parseCalendarSyncLab = () => {
     setCalendarLabParseError("");
     setCalendarLabProjection(null);
     setCalendarLabProjectionSummary(null);
+    setCalendarLabLiveTimelineProjection(null);
     setCalendarLabFilteredEvents(null);
 
     const trimmedRawIcs = calendarLabRawIcs.trim();
@@ -3172,6 +3181,7 @@ export default function App() {
       setCalendarLabParsedEvents([]);
       setCalendarLabUpdateEvents([]);
       setCalendarLabFilteredEvents(null);
+      setCalendarLabLiveTimelineProjection(null);
       setCalendarLabParseError(error instanceof Error ? error.message : "Unable to parse the pasted ICS text.");
     }
   };
@@ -3196,13 +3206,18 @@ export default function App() {
       ];
       const projected = buildProjectedRotationSnapshot(calendarLabBaselineSnapshot, applicableEvents);
       const summary = summarizeCalendarProjectionEvents(calendarLabBaselineSnapshot, calendarLabUpdateEvents);
+      const liveTimelineProjection = displayedRotationDashboard
+        ? buildLiveTimelineProjection(displayedRotationDashboard, applicableEvents)
+        : buildLiveTimelineProjection(calendarLabBaselineSnapshot, applicableEvents);
       setCalendarLabFilteredEvents(filteredEvents);
       setCalendarLabProjection(projected);
       setCalendarLabProjectionSummary(summary);
+      setCalendarLabLiveTimelineProjection(liveTimelineProjection);
       setCalendarLabParseError("");
     } catch (error) {
       setCalendarLabProjection(null);
       setCalendarLabProjectionSummary(null);
+      setCalendarLabLiveTimelineProjection(null);
       setCalendarLabParseError(error instanceof Error ? error.message : "Unable to apply calendar projection.");
     }
   };
@@ -7130,6 +7145,24 @@ export default function App() {
                               <Text style={styles.resultSupportMetaText}>
                                 refreshReasons={calendarLabProjectionSummary.refreshReasons.join(" | ")}
                               </Text>
+                            ) : null}
+                            {calendarLabLiveTimelineProjection ? (
+                              <View style={styles.sectionStack}>
+                                <Text style={styles.resultSupportMetaText}>Live timeline projection:</Text>
+                                <Text style={styles.tripBoardTimelineMeta}>
+                                  Updated leg count {calendarLabLiveTimelineProjection.updatedLegCount} • Changed leg count {calendarLabLiveTimelineProjection.changedLegCount} • Inserted same-airport/RTG {calendarLabLiveTimelineProjection.insertedSameAirportEventCount} • Possible reroute {calendarLabLiveTimelineProjection.possibleRerouteCount} • Duty summaries changed {calendarLabLiveTimelineProjection.dutySummaries.filter((summary) => summary.monitoringStatus !== "baseline_only").length}
+                                </Text>
+                                {calendarLabLiveTimelineProjection.items
+                                  .filter((item) => item.status !== "baseline" || item.type !== "leg")
+                                  .slice(0, 8)
+                                  .map((item) => (
+                                    <Text key={`calendar-live-item-${item.key}`} style={styles.tripBoardTimelineMeta}>
+                                      {item.type === "layover"
+                                        ? `LAYOVER ${item.city ?? "UNK"}`
+                                        : `${item.carrier ?? "??"}${item.flightNumber ?? "TBD"} ${item.origin ?? "UNK"}-${item.destination ?? "UNK"} ${item.currentDepartureTime ?? "??:??"}-${item.currentArrivalTime ?? "??:??"} • ${item.status}`}
+                                    </Text>
+                                  ))}
+                              </View>
                             ) : null}
                           </View>
                         ) : null}
