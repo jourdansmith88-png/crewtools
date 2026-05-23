@@ -88,6 +88,20 @@ import {
 import { buildPayWatchSummary } from "./src/features/rotationCompanion/payWatch";
 import { buildDutyTimelineHeaderRows, buildDutyWatchSummary } from "./src/features/rotationCompanion/dutyLimitWatch";
 import { buildTodayTimelineItems, type TodayTimelineItem } from "./src/features/rotationCompanion/timelineItems";
+import {
+  buildCalendarUpdateEvents,
+  normalizeWebcalUrl,
+  parseICalendarFeed,
+  type ParsedICalendarEvent,
+} from "./src/features/rotationCompanion/calendarFeedIngestion";
+import {
+  buildProjectedRotationSnapshot,
+  summarizeCalendarProjectionEvents,
+  type BaselineRotationSnapshot,
+  type CalendarProjectionEventSummary,
+  type CalendarUpdateEvent,
+  type ProjectedRotationSnapshot,
+} from "./src/features/rotationCompanion/rotationProjection";
 import type { RotationChainCandidate } from "./src/features/rotationCompanion/rotationChainBuilder";
 import { fliegerTypography, getFliegerPalette } from "./src/theme/flieger";
 import type {
@@ -2267,6 +2281,15 @@ export default function App() {
   const [tripWatchResult, setTripWatchResult] = useState<TripWatchComparisonResult | null>(null);
   const [tripWatchDebugPayload, setTripWatchDebugPayload] = useState<Record<string, unknown> | null>(null);
   const [tripWatchCopiedDebugJson, setTripWatchCopiedDebugJson] = useState(false);
+  const [calendarLabRawIcs, setCalendarLabRawIcs] = useState("");
+  const [calendarLabUrl, setCalendarLabUrl] = useState("");
+  const [calendarLabUrlMessage, setCalendarLabUrlMessage] = useState("");
+  const [calendarLabParsedEvents, setCalendarLabParsedEvents] = useState<ParsedICalendarEvent[]>([]);
+  const [calendarLabUpdateEvents, setCalendarLabUpdateEvents] = useState<CalendarUpdateEvent[]>([]);
+  const [calendarLabParseError, setCalendarLabParseError] = useState("");
+  const [calendarLabProjection, setCalendarLabProjection] = useState<ProjectedRotationSnapshot | null>(null);
+  const [calendarLabProjectionSummary, setCalendarLabProjectionSummary] =
+    useState<CalendarProjectionEventSummary | null>(null);
   const [rotationToolBanner, setRotationToolBanner] = useState<RotationToolBanner | null>(null);
   const [contractCopilotStarterQuestion, setContractCopilotStarterQuestion] = useState("");
   const [quickContacts, setQuickContacts] = useState<QuickContacts>({
@@ -2355,6 +2378,21 @@ export default function App() {
       return null;
     }
   }, [displayedRotationDashboard]);
+  const calendarLabBaselineSnapshot = useMemo<BaselineRotationSnapshot | null>(() => {
+    if (!tripWatchBaselineSnapshot) {
+      return null;
+    }
+    const authoritativeSource =
+      displayedRotationDashboard?.source === "screenshots"
+        ? "screenshot_update"
+        : displayedRotationDashboard?.parsedRotation.sourceFormat === "icrew_printout"
+          ? "paste_update"
+          : "unknown";
+    return {
+      ...tripWatchBaselineSnapshot,
+      authoritativeSource,
+    };
+  }, [displayedRotationDashboard?.parsedRotation.sourceFormat, displayedRotationDashboard?.source, tripWatchBaselineSnapshot]);
   const tripWatchBaselineDashboardDebug = useMemo(() => {
     const summarizeDeadheadishLegs = (dashboard?: RotationDashboardData | null) =>
       (dashboard?.legs ?? [])
@@ -2413,6 +2451,8 @@ export default function App() {
   useEffect(() => {
     if (rotationDashboard) {
       setTripWatchExpanded(false);
+      setCalendarLabProjection(null);
+      setCalendarLabProjectionSummary(null);
     }
   }, [rotationDashboard?.snapshot.rotationNumber, rotationDashboard?.snapshot.tripDates]);
   const tripWatchHeaderComparisonItems = useMemo(() => {
@@ -2704,6 +2744,7 @@ export default function App() {
     setTripWatchResult(null);
     setTripWatchDebugPayload(null);
     setTripWatchCopiedDebugJson(false);
+    clearCalendarSyncLab();
     setActiveTab("today");
   };
 
@@ -3026,6 +3067,112 @@ export default function App() {
       setTimeout(() => setTripWatchCopiedDebugJson(false), 2000);
     } catch (error) {
       setRotationAnalyzeError(error instanceof Error ? error.message : "Unable to copy Trip Watch debug JSON.");
+    }
+  };
+
+  const clearCalendarSyncLab = () => {
+    setCalendarLabRawIcs("");
+    setCalendarLabUrl("");
+    setCalendarLabUrlMessage("");
+    setCalendarLabParsedEvents([]);
+    setCalendarLabUpdateEvents([]);
+    setCalendarLabParseError("");
+    setCalendarLabProjection(null);
+    setCalendarLabProjectionSummary(null);
+  };
+
+  const parseCalendarSyncLab = () => {
+    setCalendarLabParseError("");
+    setCalendarLabProjection(null);
+    setCalendarLabProjectionSummary(null);
+
+    const trimmedRawIcs = calendarLabRawIcs.trim();
+    const trimmedUrl = calendarLabUrl.trim();
+
+    if (!trimmedRawIcs) {
+      if (trimmedUrl) {
+        const normalizedUrl = normalizeWebcalUrl(trimmedUrl);
+        if (!normalizedUrl) {
+          setCalendarLabUrlMessage("Calendar URL is malformed. Paste raw ICS text instead.");
+          setCalendarLabParsedEvents([]);
+          setCalendarLabUpdateEvents([]);
+          return;
+        }
+        let hostLabel = "calendar host";
+        try {
+          hostLabel = new URL(normalizedUrl).host || hostLabel;
+        } catch {
+          // Keep redacted fallback.
+        }
+        setCalendarLabUrlMessage(`URL normalized for ${hostLabel}. Fetch blocked or unavailable. Paste raw ICS text instead.`);
+        setCalendarLabParsedEvents([]);
+        setCalendarLabUpdateEvents([]);
+        return;
+      }
+
+      setCalendarLabParseError("Paste raw ICS text to parse calendar events.");
+      setCalendarLabParsedEvents([]);
+      setCalendarLabUpdateEvents([]);
+      return;
+    }
+
+    try {
+      if (trimmedUrl) {
+        const normalizedUrl = normalizeWebcalUrl(trimmedUrl);
+        if (!normalizedUrl) {
+          setCalendarLabUrlMessage("Calendar URL is malformed. Paste raw ICS text instead.");
+        } else {
+          let hostLabel = "calendar host";
+          try {
+            hostLabel = new URL(normalizedUrl).host || hostLabel;
+          } catch {
+            // Keep redacted fallback.
+          }
+          setCalendarLabUrlMessage(`Using pasted ICS text. URL normalized for ${hostLabel}, but live fetch is not enabled here.`);
+        }
+      } else {
+        setCalendarLabUrlMessage("");
+      }
+
+      const parsedEvents = parseICalendarFeed(trimmedRawIcs);
+      const updateEvents = buildCalendarUpdateEvents(trimmedRawIcs);
+
+      if (parsedEvents.length === 0) {
+        setCalendarLabParsedEvents([]);
+        setCalendarLabUpdateEvents([]);
+        setCalendarLabParseError("No VEVENT entries found in the pasted ICS text.");
+        return;
+      }
+
+      setCalendarLabParsedEvents(parsedEvents);
+      setCalendarLabUpdateEvents(updateEvents);
+    } catch (error) {
+      setCalendarLabParsedEvents([]);
+      setCalendarLabUpdateEvents([]);
+      setCalendarLabParseError(error instanceof Error ? error.message : "Unable to parse the pasted ICS text.");
+    }
+  };
+
+  const applyCalendarSyncLabToLoadedTrip = () => {
+    if (!calendarLabBaselineSnapshot) {
+      setCalendarLabParseError("Load a baseline rotation before applying calendar projection.");
+      return;
+    }
+    if (calendarLabUpdateEvents.length === 0) {
+      setCalendarLabParseError("Parse ICS first so CrewTools has calendar events to project.");
+      return;
+    }
+
+    try {
+      const projected = buildProjectedRotationSnapshot(calendarLabBaselineSnapshot, calendarLabUpdateEvents);
+      const summary = summarizeCalendarProjectionEvents(calendarLabBaselineSnapshot, calendarLabUpdateEvents);
+      setCalendarLabProjection(projected);
+      setCalendarLabProjectionSummary(summary);
+      setCalendarLabParseError("");
+    } catch (error) {
+      setCalendarLabProjection(null);
+      setCalendarLabProjectionSummary(null);
+      setCalendarLabParseError(error instanceof Error ? error.message : "Unable to apply calendar projection.");
     }
   };
 
@@ -6741,6 +6888,138 @@ export default function App() {
                           ) : null}
                         </View>
                       ) : null}
+                    </View>
+                  ) : null}
+                  {rotationDebugEnabled ? (
+                    <View
+                      style={[
+                        styles.resultPanelSubtle,
+                        styles.tripWatchSectionCard,
+                        isCompactMobile && styles.tripWatchSectionCardCompact,
+                      ]}
+                    >
+                      <Text style={styles.resultSupportMetaText}>Calendar Sync Lab</Text>
+                      <Text style={styles.tripBoardTimelineMeta}>
+                        Dev-only ICS projection sandbox. Baseline stays authoritative; calendar events are projected on top.
+                      </Text>
+                      <View style={styles.sectionStack}>
+                        <View style={styles.inputGroup}>
+                          <InstrumentField
+                            label="Calendar feed URL"
+                            value={calendarLabUrl}
+                            onChangeText={setCalendarLabUrl}
+                            placeholder="webcal:// or https:// (optional)"
+                            autoCapitalize="none"
+                          />
+                        </View>
+                        <View style={styles.inputGroup}>
+                          <InstrumentField
+                            label="Raw ICS text"
+                            value={calendarLabRawIcs}
+                            onChangeText={setCalendarLabRawIcs}
+                            placeholder="Paste raw .ics text here…"
+                            multiline
+                            minHeight={140}
+                            autoCapitalize="none"
+                          />
+                        </View>
+                        <View style={[styles.quickActionGrid, isCompactMobile && styles.quickActionGridCompact]}>
+                          <TouchableOpacity
+                            style={[styles.quickActionButton, isCompactMobile && styles.quickActionButtonCompact]}
+                            onPress={parseCalendarSyncLab}
+                          >
+                            <Text style={[styles.quickActionButtonText, isCompactMobile && styles.quickActionButtonTextCompact]}>
+                              Parse ICS
+                            </Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.quickActionButton, isCompactMobile && styles.quickActionButtonCompact]}
+                            onPress={clearCalendarSyncLab}
+                          >
+                            <Text style={[styles.quickActionButtonText, isCompactMobile && styles.quickActionButtonTextCompact]}>
+                              Clear ICS
+                            </Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.quickActionButton, isCompactMobile && styles.quickActionButtonCompact]}
+                            onPress={applyCalendarSyncLabToLoadedTrip}
+                          >
+                            <Text style={[styles.quickActionButtonText, isCompactMobile && styles.quickActionButtonTextCompact]}>
+                              Apply to loaded trip
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                        {calendarLabUrlMessage ? (
+                          <Text style={styles.resultSupportMetaText}>{calendarLabUrlMessage}</Text>
+                        ) : null}
+                        {calendarLabParseError ? (
+                          <Text style={styles.inlineValidationText}>{calendarLabParseError}</Text>
+                        ) : null}
+                        {calendarLabParsedEvents.length > 0 ? (
+                          <View style={styles.sectionStack}>
+                            <Text style={styles.resultSupportMetaText}>
+                              Parsed events: {calendarLabParsedEvents.length} • Calendar updates: {calendarLabUpdateEvents.length}
+                            </Text>
+                            {calendarLabUpdateEvents.map((event, index) => (
+                              <Text key={`calendar-lab-event-${event.uid ?? event.eventId ?? index}`} style={styles.tripBoardTimelineMeta}>
+                                {`${event.carrier ?? "??"}${event.flightNumber ?? "TBD"} ${event.origin ?? "UNK"}-${event.destination ?? "UNK"} ${event.scheduledOut ?? "??:??"}-${event.scheduledIn ?? "??:??"} • uid=${event.uid ?? "none"} • confidence=${event.confidence ?? "unknown"} • ${event.rawSummary ?? "No summary"}`}
+                              </Text>
+                            ))}
+                          </View>
+                        ) : null}
+                        {calendarLabProjection ? (
+                          <View style={styles.sectionStack}>
+                            <View style={styles.tripWatchChipRow}>
+                              <View style={styles.tripWatchDeltaChip}>
+                                <Text style={styles.tripWatchDeltaChipText}>
+                                  Projected from calendar • confidence {calendarLabProjection.confidence}
+                                </Text>
+                              </View>
+                              <View style={styles.tripWatchActionChip}>
+                                <Text style={styles.tripWatchActionChipText}>
+                                  Possible pay impact {calendarLabProjection.possiblePayImpact ? "yes" : "no"}
+                                </Text>
+                              </View>
+                              <View style={styles.tripWatchActionChip}>
+                                <Text style={styles.tripWatchActionChipText}>
+                                  Possible duty impact {calendarLabProjection.possibleDutyImpact ? "yes" : "no"}
+                                </Text>
+                              </View>
+                            </View>
+                            <Text style={styles.tripBoardTimelineMeta}>
+                              {calendarLabProjection.refreshRecommendation.message}
+                            </Text>
+                            <Text style={styles.resultSupportMetaText}>
+                              Matched {calendarLabProjectionSummary?.matchedEvents.length ?? 0} • Unmatched {calendarLabProjectionSummary?.unmatchedEvents.length ?? 0} • Timing-only {calendarLabProjectionSummary?.timeOnlyUpdates.length ?? 0} • Structural {calendarLabProjectionSummary?.structuralChangeEvents.length ?? 0}
+                            </Text>
+                            {calendarLabProjectionSummary?.matchedEvents.length ? (
+                              <Text style={styles.resultSupportMetaText}>
+                                matchedEvents={calendarLabProjectionSummary.matchedEvents.join(" | ")}
+                              </Text>
+                            ) : null}
+                            {calendarLabProjectionSummary?.unmatchedEvents.length ? (
+                              <Text style={styles.resultSupportMetaText}>
+                                unmatchedEvents={calendarLabProjectionSummary.unmatchedEvents.join(" | ")}
+                              </Text>
+                            ) : null}
+                            {calendarLabProjectionSummary?.timeOnlyUpdates.length ? (
+                              <Text style={styles.resultSupportMetaText}>
+                                timeOnlyUpdates={calendarLabProjectionSummary.timeOnlyUpdates.join(" | ")}
+                              </Text>
+                            ) : null}
+                            {calendarLabProjectionSummary?.structuralChangeEvents.length ? (
+                              <Text style={styles.resultSupportMetaText}>
+                                structuralChangeEvents={calendarLabProjectionSummary.structuralChangeEvents.join(" | ")}
+                              </Text>
+                            ) : null}
+                            {calendarLabProjectionSummary?.refreshReasons.length ? (
+                              <Text style={styles.resultSupportMetaText}>
+                                refreshReasons={calendarLabProjectionSummary.refreshReasons.join(" | ")}
+                              </Text>
+                            ) : null}
+                          </View>
+                        ) : null}
+                      </View>
                     </View>
                   ) : null}
                 </View>

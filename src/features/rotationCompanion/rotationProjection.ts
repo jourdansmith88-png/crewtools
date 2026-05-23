@@ -86,6 +86,14 @@ export type ProjectedRotationSnapshot = TripWatchRotationSnapshot & {
   refreshRecommendation: RefreshRecommendation;
 };
 
+export type CalendarProjectionEventSummary = {
+  matchedEvents: string[];
+  unmatchedEvents: string[];
+  timeOnlyUpdates: string[];
+  structuralChangeEvents: string[];
+  refreshReasons: string[];
+};
+
 const BASELINE_ONLY_FIELDS: ProjectedRotationSnapshot["baselineOnlyFieldsPreserved"] = [
   "layovers",
   "hotels",
@@ -99,6 +107,8 @@ const BASELINE_ONLY_FIELDS: ProjectedRotationSnapshot["baselineOnlyFieldsPreserv
 function cloneLeg(leg: RotationDashboardData["legs"][number]): RotationDashboardData["legs"][number] {
   return { ...leg };
 }
+
+const MONTH_ABBREVIATIONS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 
 function cloneSnapshot(snapshot: BaselineRotationSnapshot): TripWatchRotationSnapshot {
   return {
@@ -193,6 +203,53 @@ function buildSyntheticLegFromEvent(
   };
 }
 
+function toDayLabelFromOccurredAt(value?: string) {
+  if (!value) {
+    return undefined;
+  }
+  const normalized = value.endsWith("Z") ? value : `${value}Z`;
+  const parsed = new Date(normalized);
+  if (Number.isNaN(parsed.getTime())) {
+    return undefined;
+  }
+  const day = String(parsed.getUTCDate()).padStart(2, "0");
+  const month = MONTH_ABBREVIATIONS[parsed.getUTCMonth()];
+  return month ? `${day}${month}` : undefined;
+}
+
+function eventMatchesLeg(
+  event: CalendarUpdateEvent,
+  leg: RotationDashboardData["legs"][number],
+) {
+  if (event.flightNumber && event.flightNumber !== leg.flightNumber) {
+    return false;
+  }
+  if (event.carrier && event.carrier !== leg.carrier) {
+    return false;
+  }
+  if (event.origin && event.origin !== leg.origin) {
+    return false;
+  }
+  if (event.destination && event.destination !== leg.destination) {
+    return false;
+  }
+  const eventDayLabel = toDayLabelFromOccurredAt(event.occurredAt);
+  if (eventDayLabel && leg.dayLabel && eventDayLabel !== leg.dayLabel) {
+    return false;
+  }
+  return Boolean(event.flightNumber || event.carrier || event.origin || event.destination || eventDayLabel);
+}
+
+function describeCalendarEvent(event: CalendarUpdateEvent) {
+  const flightCode = `${event.carrier ?? "??"}${event.flightNumber ?? "TBD"}`;
+  const route = event.origin && event.destination ? `${event.origin}-${event.destination}` : "route TBD";
+  const timing =
+    event.scheduledOut || event.scheduledIn
+      ? `${event.scheduledOut ?? "??:??"}-${event.scheduledIn ?? "??:??"}`
+      : "time TBD";
+  return `${flightCode} ${route} ${timing}`.trim();
+}
+
 function getEventTargetIndex(
   event: CalendarUpdateEvent,
   legs: RotationDashboardData["legs"],
@@ -202,19 +259,7 @@ function getEventTargetIndex(
   }
 
   return legs.findIndex((leg) => {
-    if (event.flightNumber && leg.flightNumber !== event.flightNumber) {
-      return false;
-    }
-    if (event.carrier && leg.carrier !== event.carrier) {
-      return false;
-    }
-    if (event.origin && leg.origin !== event.origin) {
-      return false;
-    }
-    if (event.destination && leg.destination !== event.destination) {
-      return false;
-    }
-    return Boolean(event.flightNumber || event.carrier || event.origin || event.destination);
+    return eventMatchesLeg(event, leg);
   });
 }
 
@@ -451,4 +496,63 @@ export function buildProjectedRotationSnapshot(
 
   provisional.refreshRecommendation = evaluateRefreshRecommendation(baselineSnapshot, provisional, updateEvents);
   return provisional;
+}
+
+export function summarizeCalendarProjectionEvents(
+  baselineSnapshot: BaselineRotationSnapshot,
+  updateEvents: CalendarUpdateEvent[],
+): CalendarProjectionEventSummary {
+  const matchedEvents: string[] = [];
+  const unmatchedEvents: string[] = [];
+  const timeOnlyUpdates: string[] = [];
+  const structuralChangeEvents: string[] = [];
+
+  for (const event of updateEvents) {
+    const targetIndex = getEventTargetIndex(event, baselineSnapshot.legs);
+    const description = describeCalendarEvent(event);
+
+    if (targetIndex < 0 || targetIndex >= baselineSnapshot.legs.length) {
+      unmatchedEvents.push(description);
+      if (event.origin || event.destination || event.flightNumber) {
+        structuralChangeEvents.push(description);
+      }
+      continue;
+    }
+
+    const leg = baselineSnapshot.legs[targetIndex];
+    matchedEvents.push(description);
+
+    const structuralChange =
+      Boolean(event.removed) ||
+      (Boolean(event.flightNumber) && event.flightNumber !== leg.flightNumber) ||
+      (Boolean(event.carrier) && event.carrier !== leg.carrier) ||
+      (Boolean(event.origin) && event.origin !== leg.origin) ||
+      (Boolean(event.destination) && event.destination !== leg.destination) ||
+      (typeof event.isDeadhead === "boolean" && event.isDeadhead !== Boolean(leg.isDeadhead));
+
+    if (structuralChange) {
+      structuralChangeEvents.push(description);
+      continue;
+    }
+
+    const timingOnlyChange =
+      (Boolean(event.scheduledOut) && event.scheduledOut !== leg.departureTime) ||
+      (Boolean(event.scheduledIn) && event.scheduledIn !== leg.arrivalTime) ||
+      (Boolean(event.actualOut) && event.actualOut !== leg.actualOut) ||
+      (Boolean(event.actualIn) && event.actualIn !== leg.actualIn) ||
+      (isFiniteMinutes(event.actualBlockMinutes) && event.actualBlockMinutes !== leg.actualBlockMinutes);
+
+    if (timingOnlyChange) {
+      timeOnlyUpdates.push(description);
+    }
+  }
+
+  const projectedSnapshot = buildProjectedRotationSnapshot(baselineSnapshot, updateEvents);
+  return {
+    matchedEvents,
+    unmatchedEvents,
+    timeOnlyUpdates,
+    structuralChangeEvents,
+    refreshReasons: projectedSnapshot.refreshRecommendation.reasons,
+  };
 }

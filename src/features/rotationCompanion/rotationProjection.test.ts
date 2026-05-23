@@ -1,6 +1,6 @@
 import type { RotationDashboardData } from "../../utils/rotationCompanion.ts";
 import type { BaselineRotationSnapshot, CalendarUpdateEvent } from "./rotationProjection.ts";
-import { buildProjectedRotationSnapshot } from "./rotationProjection.ts";
+import { buildProjectedRotationSnapshot, summarizeCalendarProjectionEvents } from "./rotationProjection.ts";
 
 function assert(condition: unknown, message: string) {
   if (!condition) {
@@ -233,6 +233,47 @@ function makeTimingUpdate(overrides: Partial<CalendarUpdateEvent> = {}): Calenda
     projected.refreshRecommendation.message.includes("Refresh from MiCrew") ||
       projected.refreshRecommendation.message.includes("Upload updated MiCrew rotation"),
     "Structural change should direct the user back to MiCrew refresh",
+  );
+}
+
+{
+  const baseline = makeBaselineSnapshot();
+  const summary = summarizeCalendarProjectionEvents(baseline, [
+    makeTimingUpdate({
+      legSequenceNumber: 2,
+      flightNumber: "1156",
+      carrier: "DL",
+      origin: "AUS",
+      destination: "BOS",
+      occurredAt: "2026-05-07T12:47:00Z",
+      scheduledOut: "13:20",
+      scheduledIn: "18:20",
+    }),
+  ]);
+  assert(summary.matchedEvents.length === 1, "Flight/city/date matching should match the baseline leg");
+  assert(summary.timeOnlyUpdates.length === 1, "Matched time-only update should be classified as timing-only");
+  assert(summary.structuralChangeEvents.length === 0, "Time-only update should not be structural");
+}
+
+{
+  const baseline = makeBaselineSnapshot();
+  const summary = summarizeCalendarProjectionEvents(baseline, [
+    {
+      source: "calendar_sync",
+      flightNumber: "9999",
+      carrier: "DL",
+      origin: "ORD",
+      destination: "SLC",
+      occurredAt: "2026-05-08T12:00:00Z",
+      scheduledOut: "12:00",
+      scheduledIn: "14:30",
+    },
+  ]);
+  assert(summary.unmatchedEvents.length === 1, "Unmatched calendar leg should be reported");
+  assert(summary.structuralChangeEvents.length === 1, "Unmatched calendar leg should be structural");
+  assert(
+    summary.refreshReasons.some((reason) => /leg added|calendar sequence/i.test(reason)),
+    "Unmatched leg should feed refresh reasons",
   );
 }
 
