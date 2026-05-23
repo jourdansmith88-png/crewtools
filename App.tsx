@@ -96,7 +96,9 @@ import {
 } from "./src/features/rotationCompanion/calendarFeedIngestion";
 import {
   buildProjectedRotationSnapshot,
+  filterCalendarEventsForBaseline,
   summarizeCalendarProjectionEvents,
+  type CalendarBaselineEventFilterResult,
   type BaselineRotationSnapshot,
   type CalendarProjectionEventSummary,
   type CalendarUpdateEvent,
@@ -2286,6 +2288,9 @@ export default function App() {
   const [calendarLabUrlMessage, setCalendarLabUrlMessage] = useState("");
   const [calendarLabParsedEvents, setCalendarLabParsedEvents] = useState<ParsedICalendarEvent[]>([]);
   const [calendarLabUpdateEvents, setCalendarLabUpdateEvents] = useState<CalendarUpdateEvent[]>([]);
+  const [calendarLabFilteredEvents, setCalendarLabFilteredEvents] =
+    useState<CalendarBaselineEventFilterResult | null>(null);
+  const [calendarLabShowIgnoredEvents, setCalendarLabShowIgnoredEvents] = useState(false);
   const [calendarLabParseError, setCalendarLabParseError] = useState("");
   const [calendarLabProjection, setCalendarLabProjection] = useState<ProjectedRotationSnapshot | null>(null);
   const [calendarLabProjectionSummary, setCalendarLabProjectionSummary] =
@@ -2455,6 +2460,13 @@ export default function App() {
       setCalendarLabProjectionSummary(null);
     }
   }, [rotationDashboard?.snapshot.rotationNumber, rotationDashboard?.snapshot.tripDates]);
+  useEffect(() => {
+    if (!calendarLabBaselineSnapshot || calendarLabUpdateEvents.length === 0) {
+      setCalendarLabFilteredEvents(null);
+      return;
+    }
+    setCalendarLabFilteredEvents(filterCalendarEventsForBaseline(calendarLabBaselineSnapshot, calendarLabUpdateEvents));
+  }, [calendarLabBaselineSnapshot, calendarLabUpdateEvents]);
   const tripWatchHeaderComparisonItems = useMemo(() => {
     if (
       !tripWatchResult ||
@@ -3076,6 +3088,8 @@ export default function App() {
     setCalendarLabUrlMessage("");
     setCalendarLabParsedEvents([]);
     setCalendarLabUpdateEvents([]);
+    setCalendarLabFilteredEvents(null);
+    setCalendarLabShowIgnoredEvents(false);
     setCalendarLabParseError("");
     setCalendarLabProjection(null);
     setCalendarLabProjectionSummary(null);
@@ -3085,6 +3099,7 @@ export default function App() {
     setCalendarLabParseError("");
     setCalendarLabProjection(null);
     setCalendarLabProjectionSummary(null);
+    setCalendarLabFilteredEvents(null);
 
     const trimmedRawIcs = calendarLabRawIcs.trim();
     const trimmedUrl = calendarLabUrl.trim();
@@ -3096,6 +3111,7 @@ export default function App() {
           setCalendarLabUrlMessage("Calendar URL is malformed. Paste raw ICS text instead.");
           setCalendarLabParsedEvents([]);
           setCalendarLabUpdateEvents([]);
+          setCalendarLabFilteredEvents(null);
           return;
         }
         let hostLabel = "calendar host";
@@ -3107,12 +3123,14 @@ export default function App() {
         setCalendarLabUrlMessage(`URL normalized for ${hostLabel}. Fetch blocked or unavailable. Paste raw ICS text instead.`);
         setCalendarLabParsedEvents([]);
         setCalendarLabUpdateEvents([]);
+        setCalendarLabFilteredEvents(null);
         return;
       }
 
       setCalendarLabParseError("Paste raw ICS text to parse calendar events.");
       setCalendarLabParsedEvents([]);
       setCalendarLabUpdateEvents([]);
+      setCalendarLabFilteredEvents(null);
       return;
     }
 
@@ -3140,15 +3158,20 @@ export default function App() {
       if (parsedEvents.length === 0) {
         setCalendarLabParsedEvents([]);
         setCalendarLabUpdateEvents([]);
+        setCalendarLabFilteredEvents(null);
         setCalendarLabParseError("No VEVENT entries found in the pasted ICS text.");
         return;
       }
 
       setCalendarLabParsedEvents(parsedEvents);
       setCalendarLabUpdateEvents(updateEvents);
+      setCalendarLabFilteredEvents(
+        calendarLabBaselineSnapshot ? filterCalendarEventsForBaseline(calendarLabBaselineSnapshot, updateEvents) : null,
+      );
     } catch (error) {
       setCalendarLabParsedEvents([]);
       setCalendarLabUpdateEvents([]);
+      setCalendarLabFilteredEvents(null);
       setCalendarLabParseError(error instanceof Error ? error.message : "Unable to parse the pasted ICS text.");
     }
   };
@@ -3164,8 +3187,16 @@ export default function App() {
     }
 
     try {
-      const projected = buildProjectedRotationSnapshot(calendarLabBaselineSnapshot, calendarLabUpdateEvents);
+      const filteredEvents =
+        calendarLabFilteredEvents ?? filterCalendarEventsForBaseline(calendarLabBaselineSnapshot, calendarLabUpdateEvents);
+      const applicableEvents = [
+        ...filteredEvents.matchedEvents,
+        ...filteredEvents.sameAirportEvents,
+        ...filteredEvents.possibleMatches.filter((event) => event.confidence === "high"),
+      ];
+      const projected = buildProjectedRotationSnapshot(calendarLabBaselineSnapshot, applicableEvents);
       const summary = summarizeCalendarProjectionEvents(calendarLabBaselineSnapshot, calendarLabUpdateEvents);
+      setCalendarLabFilteredEvents(filteredEvents);
       setCalendarLabProjection(projected);
       setCalendarLabProjectionSummary(summary);
       setCalendarLabParseError("");
@@ -6958,13 +6989,83 @@ export default function App() {
                         {calendarLabParsedEvents.length > 0 ? (
                           <View style={styles.sectionStack}>
                             <Text style={styles.resultSupportMetaText}>
-                              Parsed events: {calendarLabParsedEvents.length} • Calendar updates: {calendarLabUpdateEvents.length}
+                              Parsed calendar events: {calendarLabParsedEvents.length}
                             </Text>
-                            {calendarLabUpdateEvents.map((event, index) => (
-                              <Text key={`calendar-lab-event-${event.uid ?? event.eventId ?? index}`} style={styles.tripBoardTimelineMeta}>
-                                {`${event.carrier ?? "??"}${event.flightNumber ?? "TBD"} ${event.origin ?? "UNK"}-${event.destination ?? "UNK"} ${event.scheduledOut ?? "??:??"}-${event.scheduledIn ?? "??:??"} • uid=${event.uid ?? "none"} • confidence=${event.confidence ?? "unknown"} • ${event.rawSummary ?? "No summary"}`}
-                              </Text>
-                            ))}
+                            {calendarLabFilteredEvents ? (
+                              <View style={styles.sectionStack}>
+                                <View style={styles.sectionStack}>
+                                  <Text style={styles.resultSupportMetaText}>Matched to loaded trip:</Text>
+                                  {calendarLabFilteredEvents.matchedEvents.length > 0 ? (
+                                    calendarLabFilteredEvents.matchedEvents.map((event, index) => (
+                                      <Text key={`calendar-lab-matched-${event.uid ?? event.eventId ?? index}`} style={styles.tripBoardTimelineMeta}>
+                                        {`${event.carrier ?? "??"}${event.flightNumber ?? "TBD"} ${event.origin ?? "UNK"}-${event.destination ?? "UNK"} ${event.scheduledOut ?? "??:??"}-${event.scheduledIn ?? "??:??"} • uid=${event.uid ?? "none"} • confidence=${event.confidence ?? "unknown"} • ${event.rawSummary ?? "No summary"}`}
+                                      </Text>
+                                    ))
+                                  ) : (
+                                    <Text style={styles.tripBoardTimelineMeta}>None</Text>
+                                  )}
+                                </View>
+                                <View style={styles.sectionStack}>
+                                  <Text style={styles.resultSupportMetaText}>Same-airport/RTG candidates:</Text>
+                                  {calendarLabFilteredEvents.sameAirportEvents.length > 0 ? (
+                                    calendarLabFilteredEvents.sameAirportEvents.map((event, index) => (
+                                      <Text key={`calendar-lab-same-airport-${event.uid ?? event.eventId ?? index}`} style={styles.tripBoardTimelineMeta}>
+                                        {`${event.carrier ?? "??"}${event.flightNumber ?? "TBD"} ${event.origin ?? "UNK"}-${event.destination ?? "UNK"} ${event.scheduledOut ?? "??:??"}-${event.scheduledIn ?? "??:??"} • uid=${event.uid ?? "none"} • confidence=${event.confidence ?? "unknown"} • ${event.rawSummary ?? "No summary"}`}
+                                      </Text>
+                                    ))
+                                  ) : (
+                                    <Text style={styles.tripBoardTimelineMeta}>None</Text>
+                                  )}
+                                </View>
+                                <View style={styles.sectionStack}>
+                                  <Text style={styles.resultSupportMetaText}>Possible matches:</Text>
+                                  {calendarLabFilteredEvents.possibleMatches.length > 0 ? (
+                                    calendarLabFilteredEvents.possibleMatches.map((event, index) => (
+                                      <Text key={`calendar-lab-possible-${event.uid ?? event.eventId ?? index}`} style={styles.tripBoardTimelineMeta}>
+                                        {`${event.carrier ?? "??"}${event.flightNumber ?? "TBD"} ${event.origin ?? "UNK"}-${event.destination ?? "UNK"} ${event.scheduledOut ?? "??:??"}-${event.scheduledIn ?? "??:??"} • uid=${event.uid ?? "none"} • confidence=${event.confidence ?? "unknown"} • ${event.rawSummary ?? "No summary"}`}
+                                      </Text>
+                                    ))
+                                  ) : (
+                                    <Text style={styles.tripBoardTimelineMeta}>None</Text>
+                                  )}
+                                </View>
+                                <View style={styles.sectionStack}>
+                                  <Text style={styles.resultSupportMetaText}>Unmatched flight events:</Text>
+                                  {calendarLabFilteredEvents.unmatchedFlightEvents.length > 0 ? (
+                                    calendarLabFilteredEvents.unmatchedFlightEvents.map((event, index) => (
+                                      <Text key={`calendar-lab-unmatched-${event.uid ?? event.eventId ?? index}`} style={styles.tripBoardTimelineMeta}>
+                                        {`${event.carrier ?? "??"}${event.flightNumber ?? "TBD"} ${event.origin ?? "UNK"}-${event.destination ?? "UNK"} ${event.scheduledOut ?? "??:??"}-${event.scheduledIn ?? "??:??"} • uid=${event.uid ?? "none"} • confidence=${event.confidence ?? "unknown"} • ${event.rawSummary ?? "No summary"}`}
+                                      </Text>
+                                    ))
+                                  ) : (
+                                    <Text style={styles.tripBoardTimelineMeta}>None</Text>
+                                  )}
+                                </View>
+                                <View style={styles.sectionStack}>
+                                  <Text style={styles.resultSupportMetaText}>
+                                    Ignored: {calendarLabFilteredEvents.ignoredNonFlightEvents.length} non-flight/low-confidence events • {calendarLabFilteredEvents.ignoredOutsideTripWindow.length} outside trip window
+                                  </Text>
+                                  <TouchableOpacity onPress={() => setCalendarLabShowIgnoredEvents((current) => !current)}>
+                                    <Text style={styles.tripWatchMoreChangesText}>
+                                      {calendarLabShowIgnoredEvents ? "Hide ignored events" : "Show ignored events"}
+                                    </Text>
+                                  </TouchableOpacity>
+                                  {calendarLabShowIgnoredEvents ? (
+                                    calendarLabFilteredEvents.ignoredEvents.map((event, index) => (
+                                      <Text key={`calendar-lab-ignored-${event.uid ?? event.eventId ?? index}`} style={styles.tripBoardTimelineMeta}>
+                                        {`${event.carrier ?? "??"}${event.flightNumber ?? "TBD"} ${event.origin ?? "UNK"}-${event.destination ?? "UNK"} ${event.scheduledOut ?? "??:??"}-${event.scheduledIn ?? "??:??"} • ${event.rawSummary ?? "No summary"}`}
+                                      </Text>
+                                    ))
+                                  ) : null}
+                                </View>
+                              </View>
+                            ) : (
+                              calendarLabUpdateEvents.map((event, index) => (
+                                <Text key={`calendar-lab-event-${event.uid ?? event.eventId ?? index}`} style={styles.tripBoardTimelineMeta}>
+                                  {`${event.carrier ?? "??"}${event.flightNumber ?? "TBD"} ${event.origin ?? "UNK"}-${event.destination ?? "UNK"} ${event.scheduledOut ?? "??:??"}-${event.scheduledIn ?? "??:??"} • uid=${event.uid ?? "none"} • confidence=${event.confidence ?? "unknown"} • ${event.rawSummary ?? "No summary"}`}
+                                </Text>
+                              ))
+                            )}
                           </View>
                         ) : null}
                         {calendarLabProjection ? (
@@ -6987,11 +7088,24 @@ export default function App() {
                               </View>
                             </View>
                             <Text style={styles.tripBoardTimelineMeta}>
-                              {calendarLabProjection.refreshRecommendation.message}
+                              {calendarLabProjection.monitoringSummary.primaryMessage}
                             </Text>
+                            <Text style={styles.tripBoardTimelineMeta}>
+                              {calendarLabProjection.monitoringSummary.actionMessage}
+                            </Text>
+                            {calendarLabFilteredEvents?.unmatchedFlightEvents.length ? (
+                              <Text style={styles.tripBoardTimelineMeta}>
+                                Calendar has flight events not found in baseline. Refresh from MiCrew may be needed.
+                              </Text>
+                            ) : null}
                             <Text style={styles.resultSupportMetaText}>
-                              Matched {calendarLabProjectionSummary?.matchedEvents.length ?? 0} • Unmatched {calendarLabProjectionSummary?.unmatchedEvents.length ?? 0} • Timing-only {calendarLabProjectionSummary?.timeOnlyUpdates.length ?? 0} • Structural {calendarLabProjectionSummary?.structuralChangeEvents.length ?? 0}
+                              Matched {calendarLabProjectionSummary?.matchedEvents.length ?? 0} • Same-airport/RTG candidates {calendarLabProjectionSummary?.sameAirportEvents.length ?? 0} • Unmatched {calendarLabProjectionSummary?.unmatchedEvents.length ?? 0} • Timing-only {calendarLabProjectionSummary?.timeOnlyUpdates.length ?? 0} • Structural {calendarLabProjectionSummary?.structuralChangeEvents.length ?? 0}
                             </Text>
+                            {calendarLabProjectionSummary?.sameAirportEvents.length ? (
+                              <Text style={styles.resultSupportMetaText}>
+                                sameAirportEvents={calendarLabProjectionSummary.sameAirportEvents.join(" | ")}
+                              </Text>
+                            ) : null}
                             {calendarLabProjectionSummary?.matchedEvents.length ? (
                               <Text style={styles.resultSupportMetaText}>
                                 matchedEvents={calendarLabProjectionSummary.matchedEvents.join(" | ")}

@@ -1,6 +1,10 @@
 import type { RotationDashboardData } from "../../utils/rotationCompanion.ts";
 import type { BaselineRotationSnapshot, CalendarUpdateEvent } from "./rotationProjection.ts";
-import { buildProjectedRotationSnapshot, summarizeCalendarProjectionEvents } from "./rotationProjection.ts";
+import {
+  buildProjectedRotationSnapshot,
+  filterCalendarEventsForBaseline,
+  summarizeCalendarProjectionEvents,
+} from "./rotationProjection.ts";
 
 function assert(condition: unknown, message: string) {
   if (!condition) {
@@ -135,6 +139,8 @@ function makeTimingUpdate(overrides: Partial<CalendarUpdateEvent> = {}): Calenda
   assert(projected.legs[1]?.arrivalTime === "18:05", "Timing update should change scheduled in");
   assert(projected.layovers.join(",") === "LGA,ORD", "Timing update should preserve baseline layovers");
   assert(projected.refreshRecommendation.message === "Calendar update changed flight timing. Projection updated.", "Timing-only update should stay informational");
+  assert(projected.monitoringSummary.monitoringStatus === "timing_updates_detected", "Timing-only update should activate timing monitoring");
+  assert(projected.monitoringSummary.refreshUrgency === "none", "Timing-only update should not require refresh");
 }
 
 {
@@ -234,6 +240,7 @@ function makeTimingUpdate(overrides: Partial<CalendarUpdateEvent> = {}): Calenda
       projected.refreshRecommendation.message.includes("Upload updated MiCrew rotation"),
     "Structural change should direct the user back to MiCrew refresh",
   );
+  assert(projected.monitoringSummary.monitoringStatus === "possible_reroute_monitoring" || projected.monitoringSummary.monitoringStatus === "refresh_required_for_final_confirmation", "Non-same-airport extra leg should trigger reroute monitoring");
 }
 
 {
@@ -275,6 +282,138 @@ function makeTimingUpdate(overrides: Partial<CalendarUpdateEvent> = {}): Calenda
     summary.refreshReasons.some((reason) => /leg added|calendar sequence/i.test(reason)),
     "Unmatched leg should feed refresh reasons",
   );
+}
+
+{
+  const baseline = makeBaselineSnapshot();
+  const filtered = filterCalendarEventsForBaseline(baseline, [
+    {
+      source: "calendar_sync",
+      rawSummary: "PB Personal Block",
+      rawDescription: "PB all day event",
+      confidence: "needs_refresh",
+      occurredAt: "2026-05-07T00:00:00Z",
+    },
+    {
+      source: "calendar_sync",
+      rawSummary: "LC",
+      rawDescription: "Low-confidence calendar item",
+      confidence: "needs_refresh",
+      occurredAt: "2026-05-07T00:00:00Z",
+    },
+    {
+      source: "calendar_sync",
+      carrier: "DL",
+      flightNumber: "1156",
+      origin: "AUS",
+      destination: "BOS",
+      occurredAt: "2026-05-07T12:47:00Z",
+      scheduledOut: "13:00",
+      scheduledIn: "18:00",
+      confidence: "high",
+    },
+    {
+      source: "calendar_sync",
+      carrier: "DL",
+      flightNumber: "7777",
+      origin: "ORD",
+      destination: "SLC",
+      occurredAt: "2026-05-10T12:00:00Z",
+      scheduledOut: "12:00",
+      scheduledIn: "14:30",
+      confidence: "high",
+    },
+    {
+      source: "calendar_sync",
+      carrier: "DL",
+      flightNumber: "2985",
+      origin: "LGA",
+      destination: "ORD",
+      occurredAt: "2026-05-08T09:04:00Z",
+      scheduledOut: "09:10",
+      scheduledIn: "10:55",
+      confidence: "high",
+    },
+  ]);
+  assert(filtered.ignoredNonFlightEvents.length === 2, "PB/LC style events should be ignored by default");
+  assert(filtered.matchedEvents.length === 2, "Trip-window flight matches should be kept");
+  assert(filtered.ignoredOutsideTripWindow.length === 1, "Outside-trip flights should be ignored separately");
+}
+
+{
+  const baseline = makeBaselineSnapshot();
+  const filtered = filterCalendarEventsForBaseline(baseline, [
+    {
+      source: "calendar_sync",
+      carrier: "DL",
+      flightNumber: "2798",
+      origin: "DFW",
+      destination: "DFW",
+      occurredAt: "2026-05-08T12:19:00Z",
+      scheduledOut: "12:19",
+      scheduledIn: "12:38",
+      confidence: "high",
+    },
+  ]);
+  assert(filtered.sameAirportEvents.length === 1, "Same-airport RTG-style event should be classified separately");
+  const projected = buildProjectedRotationSnapshot(baseline, filtered.sameAirportEvents);
+  assert(projected.monitoringSummary.monitoringStatus === "same_airport_event_monitoring", "Same-airport event should activate RTG-style monitoring");
+  assert(projected.monitoringSummary.primaryMessage.includes("RTG-style event detected"), "Same-airport event should not use generic reroute language");
+  assert(projected.monitoringSummary.projectionUsable === true, "Same-airport event should keep the projection usable");
+  assert(projected.monitoringSummary.refreshUrgency === "recommended", "Same-airport event should recommend refresh for final confirmation");
+  assert(projected.monitoringSummary.actionMessage.includes("Refresh MiCrew"), "Same-airport event should point back to MiCrew for final confirmation");
+}
+
+{
+  const baseline = makeBaselineSnapshot();
+  const filtered = filterCalendarEventsForBaseline(baseline, [
+    {
+      source: "calendar_sync",
+      carrier: "DL",
+      flightNumber: "5555",
+      origin: "AUS",
+      destination: "BOS",
+      occurredAt: "2026-05-07T12:40:00Z",
+      scheduledOut: "12:50",
+      scheduledIn: "17:55",
+      confidence: "high",
+    },
+  ]);
+  assert(filtered.possibleMatches.length === 1, "Same route/close time should be treated as a possible match");
+}
+
+{
+  const baseline = makeBaselineSnapshot();
+  const updates: CalendarUpdateEvent[] = [
+    {
+      source: "calendar_sync",
+      carrier: "DL",
+      flightNumber: "1156",
+      origin: "AUS",
+      destination: "BOS",
+      occurredAt: "2026-05-07T12:47:00Z",
+      scheduledOut: "13:20",
+      scheduledIn: "18:20",
+      confidence: "high",
+    },
+    {
+      source: "calendar_sync",
+      carrier: "DL",
+      flightNumber: "9999",
+      origin: "ORD",
+      destination: "SLC",
+      occurredAt: "2026-05-10T12:00:00Z",
+      scheduledOut: "12:00",
+      scheduledIn: "14:30",
+      confidence: "high",
+    },
+  ];
+  const filtered = filterCalendarEventsForBaseline(baseline, updates);
+  const projected = buildProjectedRotationSnapshot(baseline, filtered.matchedEvents);
+  assert(projected.legs.length === baseline.legs.length, "Matched-only projection should not add unmatched flight events");
+  assert(projected.layovers.join(",") === baseline.layovers.join(","), "Matched-only projection should still preserve baseline layovers");
+  assert(projected.dutyPeriodLimits?.[0]?.pwaActualMaxFdpMinutes === 810, "Matched-only projection should preserve baseline PWA data");
+  assert(!projected.monitoringSummary.primaryMessage.includes("owed"), "Monitoring summary should never make final pay claims");
 }
 
 console.log("rotationProjection passed");
