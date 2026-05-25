@@ -95,6 +95,11 @@ import {
   type ParsedICalendarEvent,
 } from "./src/features/rotationCompanion/calendarFeedIngestion";
 import {
+  buildCalendarSyncSetupState,
+  getCalendarSyncDisplayHost,
+  type CalendarSyncConnectionTestResult,
+} from "./src/features/rotationCompanion/calendarSyncSetup";
+import {
   buildProjectedRotationSnapshot,
   filterCalendarEventsForBaseline,
   summarizeCalendarProjectionEvents,
@@ -218,6 +223,23 @@ function formatTripWatchDebugMinutes(value?: number | null) {
     return null;
   }
   return `${Math.floor(value / 60)}:${String(Math.abs(value % 60)).padStart(2, "0")}`;
+}
+
+function formatLiveTimelineBadgeLabel(label: string, compact: boolean) {
+  if (!compact) {
+    return label;
+  }
+  const normalized = label.trim().toLowerCase();
+  if (normalized === "calendar update") {
+    return "Calendar";
+  }
+  if (normalized === "possible pay impact") {
+    return "Pay impact";
+  }
+  if (normalized === "refresh micrew for confirmation") {
+    return "Refresh";
+  }
+  return label;
 }
 
 function buildCalendarLabBaselineKey(snapshot?: BaselineRotationSnapshot | null) {
@@ -2345,6 +2367,13 @@ export default function App() {
   const [calendarLabLiveTimelineProjection, setCalendarLabLiveTimelineProjection] =
     useState<LiveTimelineProjectionResult | null>(null);
   const [useLiveProjectedTimeline, setUseLiveProjectedTimeline] = useState(false);
+  const [calendarSetupUrlInput, setCalendarSetupUrlInput] = useState("");
+  const [calendarSetupHasUrl, setCalendarSetupHasUrl] = useState(false);
+  const [calendarSetupInvalidUrl, setCalendarSetupInvalidUrl] = useState(false);
+  const [calendarSetupTestMessage, setCalendarSetupTestMessage] = useState("");
+  const [calendarSetupConnectionTestResult, setCalendarSetupConnectionTestResult] =
+    useState<CalendarSyncConnectionTestResult | null>(null);
+  const [calendarSetupPrivacyAcknowledged, setCalendarSetupPrivacyAcknowledged] = useState(false);
   const [calendarLabParsedEventCount, setCalendarLabParsedEventCount] = useState(0);
   const [calendarLabSessionMessage, setCalendarLabSessionMessage] = useState("");
   const [rotationToolBanner, setRotationToolBanner] = useState<RotationToolBanner | null>(null);
@@ -2805,6 +2834,25 @@ export default function App() {
         calendarLabProjectionSummary.structuralChangeEvents.length,
     };
   }, [calendarLabLiveTimelineProjection, calendarLabProjectionSummary]);
+  const calendarSyncSetupState = useMemo(
+    () =>
+      buildCalendarSyncSetupState({
+        calendarUrlEntered: calendarSetupHasUrl,
+        normalizedHost: calendarSetupConnectionTestResult?.normalizedHost,
+        baselineLoaded: Boolean(displayedRotationDashboard),
+        privacyAcknowledged: calendarSetupPrivacyAcknowledged,
+        instructionsViewed: true,
+        invalidUrl: calendarSetupInvalidUrl,
+        lastTestResult: calendarSetupConnectionTestResult,
+      }),
+    [
+      calendarSetupConnectionTestResult,
+      calendarSetupHasUrl,
+      calendarSetupInvalidUrl,
+      calendarSetupPrivacyAcknowledged,
+      displayedRotationDashboard,
+    ],
+  );
 
   const formatLegFlightDisplay = (leg: RotationDashboardData["legs"][number]) => {
     const carrierPrefix =
@@ -3391,6 +3439,190 @@ export default function App() {
       setCalendarLabParseError(error instanceof Error ? error.message : "Unable to apply calendar projection.");
     }
   };
+
+  const testCalendarSyncSetup = () => {
+    const trimmedUrl = calendarSetupUrlInput.trim();
+    if (!trimmedUrl) {
+      setCalendarSetupInvalidUrl(false);
+      setCalendarSetupTestMessage("Paste your calendar subscription link first.");
+      setCalendarSetupConnectionTestResult(null);
+      setCalendarSetupHasUrl(false);
+      return;
+    }
+    const normalizedUrl = normalizeWebcalUrl(trimmedUrl);
+    if (!normalizedUrl) {
+      setCalendarSetupInvalidUrl(true);
+      setCalendarSetupTestMessage("Calendar link looks invalid. Check the webcal:// or https:// address and try again.");
+      setCalendarSetupConnectionTestResult(null);
+      setCalendarSetupHasUrl(false);
+      return;
+    }
+    const normalizedHost = getCalendarSyncDisplayHost(normalizedUrl);
+    const testResult: CalendarSyncConnectionTestResult = {
+      success: false,
+      normalizedHost,
+      lastTestedAt: new Date().toISOString(),
+      message:
+        "Connection test is limited in this preview. Full calendar sync will use secure server-side monitoring later.",
+      errorCode: "fetch_blocked",
+    };
+    setCalendarSetupConnectionTestResult(testResult);
+    setCalendarSetupHasUrl(true);
+    setCalendarSetupInvalidUrl(false);
+    setCalendarSetupPrivacyAcknowledged(true);
+    setCalendarSetupTestMessage(testResult.message);
+    setCalendarSetupUrlInput("");
+  };
+
+  const clearCalendarSyncSetup = () => {
+    setCalendarSetupUrlInput("");
+    setCalendarSetupHasUrl(false);
+    setCalendarSetupInvalidUrl(false);
+    setCalendarSetupTestMessage("");
+    setCalendarSetupConnectionTestResult(null);
+  };
+
+  const renderCalendarSyncSetupPanel = () => (
+    <View
+      style={[
+        styles.resultPanel,
+        styles.calendarSyncSetupPanel,
+        isCompactMobile && styles.resultPanelCompact,
+        isCompactMobile && styles.calendarSyncSetupPanelCompact,
+      ]}
+    >
+      <Text style={styles.inputLabel}>Calendar Sync Setup</Text>
+      <Text style={styles.resultBodyText}>
+        Connect your MiCrew calendar so CrewTools can watch your trip in real time.
+      </Text>
+      <Text style={styles.resultSupportMetaText}>
+        CrewTools can use calendar updates to help monitor 117 margins, reroutes, RTG events, delays, and other trip disruptions as they happen.
+      </Text>
+      <Text style={styles.resultSupportMetaText}>
+        MiCrew rotation upload still gives CrewTools the official baseline for pay, hotels, deadheads, and contract details.
+      </Text>
+      <View style={styles.sectionStack}>
+        <View style={[styles.resultPanelSubtle, styles.tripWatchSectionCard, isCompactMobile && styles.tripWatchSectionCardCompact]}>
+          <Text style={styles.resultSupportMetaText}>Step 1</Text>
+          <Text style={styles.tripBoardTimelineMeta}>Set refresh rate</Text>
+          <Text style={[styles.tripBoardTimelineMeta, styles.tripBoardTimelineMetaMuted, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+            MiCrew → ☰ Menu → Settings → Connectivity
+          </Text>
+          <Text style={[styles.tripBoardTimelineMeta, styles.tripBoardTimelineMetaMuted, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+            Set Schedule Refresh Rate to 5 minutes
+          </Text>
+        </View>
+        <View style={[styles.resultPanelSubtle, styles.tripWatchSectionCard, isCompactMobile && styles.tripWatchSectionCardCompact]}>
+          <Text style={styles.resultSupportMetaText}>Step 2</Text>
+          <Text style={styles.tripBoardTimelineMeta}>Turn on flight-by-flight sync</Text>
+          <Text style={[styles.tripBoardTimelineMeta, styles.tripBoardTimelineMetaMuted, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+            MiCrew → ☰ Menu → Settings → Calendar
+          </Text>
+          <Text style={[styles.tripBoardTimelineMeta, styles.tripBoardTimelineMetaMuted, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+            Turn ON:
+          </Text>
+          <Text style={[styles.tripBoardTimelineMeta, styles.tripBoardTimelineMetaMuted, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+            • Auto-Sync
+          </Text>
+          <Text style={[styles.tripBoardTimelineMeta, styles.tripBoardTimelineMetaMuted, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+            • Sync by Flight
+          </Text>
+          <Text style={[styles.tripBoardTimelineMeta, styles.tripBoardTimelineMetaMuted, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+            • Hide Rest Activities
+          </Text>
+        </View>
+        <View style={[styles.resultPanelSubtle, styles.tripWatchSectionCard, isCompactMobile && styles.tripWatchSectionCardCompact]}>
+          <Text style={styles.resultSupportMetaText}>Step 3</Text>
+          <Text style={styles.tripBoardTimelineMeta}>Paste calendar link</Text>
+          <Text style={[styles.tripBoardTimelineMeta, styles.tripBoardTimelineMetaMuted, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+            Copy your calendar subscription/webcal link and paste it into CrewTools.
+          </Text>
+          {calendarSyncSetupState?.normalizedHost ? (
+            <Text style={[styles.tripBoardTimelineMeta, styles.tripBoardTimelineMetaMuted, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+              Calendar host recognized: {calendarSyncSetupState.normalizedHost}
+            </Text>
+          ) : null}
+        </View>
+      </View>
+      <View style={styles.sectionStack}>
+        {(calendarSyncSetupState?.checklist ?? [])
+          .filter((item) => item.completed)
+          .map((item) => (
+            <View key={item.key} style={styles.calendarSyncChecklistRow}>
+              <Text style={styles.calendarSyncChecklistMarker}>✓</Text>
+              <View style={styles.calendarSyncChecklistBody}>
+                <Text style={styles.tripBoardTimelineMeta}>{item.title}</Text>
+              </View>
+            </View>
+          ))}
+      </View>
+      <View style={styles.inputGroup}>
+        <InstrumentField
+          label="Calendar feed URL"
+          value={calendarSetupUrlInput}
+          onChangeText={(value) => {
+            setCalendarSetupUrlInput(value);
+            setCalendarSetupInvalidUrl(false);
+            setCalendarSetupTestMessage("");
+          }}
+          placeholder="webcal:// or https://"
+          autoCapitalize="none"
+        />
+      </View>
+      <Text style={styles.resultSupportMetaText}>
+        Treat this link like a password. Anyone with it may be able to view this calendar.
+      </Text>
+      <View style={[styles.quickActionGrid, isCompactMobile && styles.quickActionGridCompact]}>
+        <TouchableOpacity
+          style={[styles.quickActionButton, isCompactMobile && styles.quickActionButtonCompact]}
+          onPress={testCalendarSyncSetup}
+        >
+          <Text style={[styles.quickActionButtonText, isCompactMobile && styles.quickActionButtonTextCompact]}>
+            Test calendar feed
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.quickActionButton, isCompactMobile && styles.quickActionButtonCompact]}
+          onPress={clearCalendarSyncSetup}
+        >
+          <Text style={[styles.quickActionButtonText, isCompactMobile && styles.quickActionButtonTextCompact]}>
+            Clear calendar link
+          </Text>
+        </TouchableOpacity>
+      </View>
+      {calendarSetupTestMessage ? (
+        <Text style={calendarSyncSetupState?.setupStatus === "error" ? styles.inlineValidationText : styles.resultSupportMetaText}>
+          {calendarSetupTestMessage}
+        </Text>
+      ) : null}
+      <View style={[styles.resultPanelSubtle, styles.tripWatchSectionCard, isCompactMobile && styles.tripWatchSectionCardCompact]}>
+        <Text style={styles.resultSupportMetaText}>Privacy note</Text>
+        <Text style={styles.tripBoardTimelineMeta}>CrewTools does not need your Delta password.</Text>
+        <Text style={styles.tripBoardTimelineMeta}>Treat your calendar link like a password.</Text>
+        <Text style={styles.tripBoardTimelineMeta}>Calendar sync monitors timing and trip changes.</Text>
+        <Text style={styles.tripBoardTimelineMeta}>MiCrew upload confirms pay, 117, hotels, and deadheads.</Text>
+      </View>
+      <View style={[styles.resultPanelSubtle, styles.tripWatchSectionCard, isCompactMobile && styles.tripWatchSectionCardCompact]}>
+        <Text style={styles.resultSupportMetaText}>Next step</Text>
+        {displayedRotationDashboard ? (
+          <Text style={styles.tripBoardTimelineMeta}>
+            Baseline loaded. Calendar sync can monitor timing changes for this trip.
+          </Text>
+        ) : (
+          <Text style={styles.tripBoardTimelineMeta}>
+            Calendar setup started. Upload or forward your MiCrew rotation to unlock Pay Watch, 117 Watch, hotels, and live monitoring.
+          </Text>
+        )}
+      </View>
+      <View style={[styles.resultPanelSubtle, styles.tripWatchSectionCard, isCompactMobile && styles.tripWatchSectionCardCompact]}>
+        <Text style={styles.resultSupportMetaText}>Coming next</Text>
+        <Text style={styles.tripBoardTimelineMeta}>MiCrew rotation email forwarding</Text>
+        <Text style={[styles.tripBoardTimelineMeta, styles.tripBoardTimelineMetaMuted, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+          CrewTools will provide a private inbound address so you can forward MiCrew rotation emails for automatic baseline parsing.
+        </Text>
+      </View>
+    </View>
+  );
 
   const parseRotationScreenshots = async (
     analysisRunId: number,
@@ -6449,37 +6681,67 @@ export default function App() {
                                           : "OP"}
                                   </Text>
                                   {isLiveTimelineLegItem(item)
-                                    ? item.badgeLabels.slice(0, 3).map((badge) => (
+                                    ? item.badgeLabels
+                                        .filter((badge) =>
+                                          isCompactMobile ? !/refresh micrew/i.test(badge) : true,
+                                        )
+                                        .slice(0, isCompactMobile ? 4 : 3)
+                                        .map((badge) => (
                                         <Text key={`${item.key}-${badge}`} style={[styles.statusBadge, styles.statusBadgeCompact]}>
-                                          {badge}
+                                          {formatLiveTimelineBadgeLabel(badge, isCompactMobile)}
                                         </Text>
                                       ))
                                     : null}
                                 </View>
-                                <Text style={[styles.tripBoardTimelineTime, isCompactMobile && styles.tripBoardTimelineTimeCompact]}>
-                                  {isLiveTimelineLegItem(item)
-                                    ? `${item.currentDepartureTime ?? "TBD"} - ${item.currentArrivalTime ?? "TBD"}`
-                                    : `${item.leg.departureTime ?? "TBD"} - ${item.leg.arrivalTime ?? "TBD"}`}
-                                </Text>
+                                {!isCompactMobile ? (
+                                  <Text style={[styles.tripBoardTimelineTime, isCompactMobile && styles.tripBoardTimelineTimeCompact]}>
+                                    {isLiveTimelineLegItem(item)
+                                      ? `${item.currentDepartureTime ?? "TBD"} - ${item.currentArrivalTime ?? "TBD"}`
+                                      : `${item.leg.departureTime ?? "TBD"} - ${item.leg.arrivalTime ?? "TBD"}`}
+                                  </Text>
+                                ) : null}
                               </View>
-                              <Text style={[styles.tripBoardTimelineCityPair, isCompactMobile && styles.tripBoardTimelineCityPairCompact]}>
-                                {(isLiveTimelineLegItem(item) ? item.origin : item.leg.origin)} {"->"} {(isLiveTimelineLegItem(item) ? item.destination : item.leg.destination)}
-                              </Text>
+                              {isCompactMobile ? (
+                                <>
+                                  <Text style={[styles.tripBoardTimelineCityPair, styles.tripBoardTimelineCityPairCompact]}>
+                                    {(isLiveTimelineLegItem(item) ? item.origin : item.leg.origin)} {"->"} {(isLiveTimelineLegItem(item) ? item.destination : item.leg.destination)}
+                                  </Text>
+                                  <Text style={[styles.tripBoardTimelineTime, styles.tripBoardTimelineTimeCompact, styles.tripBoardTimelineTimeStandalone]}>
+                                    {isLiveTimelineLegItem(item)
+                                      ? `${item.currentDepartureTime ?? "TBD"} - ${item.currentArrivalTime ?? "TBD"}`
+                                      : `${item.leg.departureTime ?? "TBD"} - ${item.leg.arrivalTime ?? "TBD"}`}
+                                  </Text>
+                                </>
+                              ) : (
+                                <Text style={[styles.tripBoardTimelineCityPair, isCompactMobile && styles.tripBoardTimelineCityPairCompact]}>
+                                  {(isLiveTimelineLegItem(item) ? item.origin : item.leg.origin)} {"->"} {(isLiveTimelineLegItem(item) ? item.destination : item.leg.destination)}
+                                </Text>
+                              )}
                               {isLiveTimelineLegItem(item) && item.baselineDepartureTime && (item.baselineDepartureTime !== item.currentDepartureTime || item.baselineArrivalTime !== item.currentArrivalTime) ? (
                                 <Text style={[styles.tripBoardTimelineMeta, styles.tripBoardTimelineMetaMuted, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
                                   Baseline {item.baselineDepartureTime ?? "TBD"} - {item.baselineArrivalTime ?? "TBD"}
                                 </Text>
                               ) : null}
-                              <View style={[styles.tripBoardTimelineMetaRow, isCompactMobile && styles.tripBoardTimelineMetaRowCompact]}>
-                                <Text style={[styles.tripBoardTimelineMeta, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+                              {isCompactMobile ? (
+                                <Text style={[styles.tripBoardTimelineMeta, styles.tripBoardTimelineMetaCompact]}>
                                   {isLiveTimelineLegItem(item)
                                     ? `Flight ${`${item.carrier ?? ""}${item.flightNumber ?? "TBD"}`.trim()}`
-                                    : formatLegFlightDisplay(item.leg)}
+                                    : formatLegFlightDisplay(item.leg)}{" · "}
+                                  {(isLiveTimelineLegItem(item) ? item.isDeadhead : item.leg.isDeadhead) ? "DH block" : "Block"}{" "}
+                                  {rotationFormatMinutes(isLiveTimelineLegItem(item) ? item.currentBlockMinutes : item.leg.scheduledBlockMinutes)}
                                 </Text>
-                                <Text style={[styles.tripBoardTimelineMeta, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
-                                  {(isLiveTimelineLegItem(item) ? item.isDeadhead : item.leg.isDeadhead) ? "DH block" : "Block"} {rotationFormatMinutes(isLiveTimelineLegItem(item) ? item.currentBlockMinutes : item.leg.scheduledBlockMinutes)}
-                                </Text>
-                              </View>
+                              ) : (
+                                <View style={[styles.tripBoardTimelineMetaRow, isCompactMobile && styles.tripBoardTimelineMetaRowCompact]}>
+                                  <Text style={[styles.tripBoardTimelineMeta, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+                                    {isLiveTimelineLegItem(item)
+                                      ? `Flight ${`${item.carrier ?? ""}${item.flightNumber ?? "TBD"}`.trim()}`
+                                      : formatLegFlightDisplay(item.leg)}
+                                  </Text>
+                                  <Text style={[styles.tripBoardTimelineMeta, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+                                    {(isLiveTimelineLegItem(item) ? item.isDeadhead : item.leg.isDeadhead) ? "DH block" : "Block"} {rotationFormatMinutes(isLiveTimelineLegItem(item) ? item.currentBlockMinutes : item.leg.scheduledBlockMinutes)}
+                                  </Text>
+                                </View>
+                              )}
                               {isLiveTimelineLegItem(item) && item.blockDeltaMinutes != null && item.blockDeltaMinutes !== 0 ? (
                                 <Text style={[styles.tripBoardTimelineMeta, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
                                   Block {rotationFormatMinutes(item.currentBlockMinutes)} · {item.blockDeltaMinutes > 0 ? "+" : "-"}{rotationFormatMinutes(Math.abs(item.blockDeltaMinutes))}
@@ -6652,6 +6914,8 @@ export default function App() {
                     </View>
                   </View>
                 ) : null}
+
+                {renderCalendarSyncSetupPanel()}
 
                 <View style={[styles.resultPanel, isCompactMobile && styles.resultPanelCompact]}>
                   <Text style={styles.inputLabel}>Trip Watch</Text>
@@ -7611,6 +7875,8 @@ export default function App() {
                     ))}
                   </View>
                 </View>
+
+                {renderCalendarSyncSetupPanel()}
 
                 <View style={[styles.resultPanel, isCompactMobile && styles.resultPanelCompact]}>
                   <Text style={styles.inputLabel}>Trip Watch</Text>
@@ -14541,6 +14807,12 @@ const styles = StyleSheet.create({
     gap: 8,
     borderRadius: 12,
   },
+  calendarSyncSetupPanel: {
+    marginBottom: 12,
+  },
+  calendarSyncSetupPanelCompact: {
+    marginBottom: 96,
+  },
   resultPanelSubtle: {
     backgroundColor: appStylePalette.surfaceRaised,
     borderRadius: 12,
@@ -14551,6 +14823,24 @@ const styles = StyleSheet.create({
   },
   tripBoardLiveProjectionStrip: {
     marginBottom: 10,
+  },
+  calendarSyncChecklistRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+  },
+  calendarSyncChecklistMarker: {
+    width: 16,
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: "900",
+    color: appStylePalette.accent,
+    textAlign: "center",
+  },
+  calendarSyncChecklistBody: {
+    flex: 1,
+    gap: 2,
+    minWidth: 0,
   },
   tripWatchSectionCard: {
     gap: 8,
@@ -15260,15 +15550,19 @@ const styles = StyleSheet.create({
   },
   tripBoardTimelineHeaderCompact: {
     gap: 6,
+    alignItems: "flex-start",
   },
   tripBoardTimelineBadgeRow: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 6,
     alignItems: "center",
+    minWidth: 0,
+    flex: 1,
   },
   tripBoardTimelineBadgeRowCompact: {
     gap: 4,
+    justifyContent: "flex-start",
   },
   tripBoardTimelineCityPair: {
     fontSize: 19,
@@ -15284,9 +15578,13 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: appStylePalette.textMuted,
     fontVariant: ["tabular-nums"],
+    flexShrink: 0,
   },
   tripBoardTimelineTimeCompact: {
     fontSize: 11,
+  },
+  tripBoardTimelineTimeStandalone: {
+    alignSelf: "flex-start",
   },
   tripBoardTimelineInlineCity: {
     fontSize: 12,
@@ -15302,6 +15600,7 @@ const styles = StyleSheet.create({
   },
   tripBoardTimelineMetaRowCompact: {
     gap: 6,
+    justifyContent: "flex-start",
   },
   tripBoardTimelineMeta: {
     fontSize: 12,
