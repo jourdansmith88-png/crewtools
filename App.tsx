@@ -101,6 +101,11 @@ import {
 } from "./src/features/rotationCompanion/calendarSyncSetup";
 import { getRotationOnboardingState } from "./src/features/rotationCompanion/rotationOnboarding";
 import {
+  buildPilotProfileClaimState,
+  buildBetaLoginIdentifier,
+  type PilotProfileClaimState,
+} from "./src/features/account/pilotProfileClaim";
+import {
   buildProjectedRotationSnapshot,
   filterCalendarEventsForBaseline,
   summarizeCalendarProjectionEvents,
@@ -2854,7 +2859,6 @@ export default function App() {
       displayedRotationDashboard,
     ],
   );
-
   const hasCalendarSetup = useMemo(
     () =>
       Boolean(
@@ -2961,6 +2965,10 @@ export default function App() {
   const [actualAdjustments, setActualAdjustments] = useState("0");
   const [actualPostedTotal, setActualPostedTotal] = useState("0");
   const [reserveStatus, setReserveStatus] = useState(false);
+  const [betaSeniorityUsernameInput, setBetaSeniorityUsernameInput] = useState("");
+  const [betaEmailInput, setBetaEmailInput] = useState("");
+  const [betaPasswordInput, setBetaPasswordInput] = useState("");
+  const [betaClaimState, setBetaClaimState] = useState<PilotProfileClaimState | null>(null);
   const [pilotHistoryCache, setPilotHistoryCache] = useState<Record<string, PilotHistoryRecord>>({});
   const [loadedPilotHistoryShards, setLoadedPilotHistoryShards] = useState<Record<string, true>>(
     {}
@@ -3704,6 +3712,83 @@ export default function App() {
       </View>
     );
   };
+
+  const createBetaPilotAccount = () => {
+    const claimState = buildPilotProfileClaimState({
+      seniorityNumberUsername: betaSeniorityUsernameInput,
+      email: betaEmailInput,
+      password: betaPasswordInput,
+      pilotDirectory: deltaSnapshot.pilotDirectory.map((pilot) => ({
+        seniorityNumber: pilot.seniorityNumber,
+        name: pilot.name,
+        currentBase: pilot.currentBase,
+        currentFleet: pilot.currentFleet,
+        currentSeat: pilot.currentSeat,
+        employeeNumber: pilot.employeeNumber,
+      })),
+    });
+    setBetaClaimState(claimState);
+  };
+
+  const renderBetaPilotAccountCard = () => (
+    <View style={[styles.resultPanel, styles.rotationOnboardingPanel, isCompactMobile && styles.resultPanelCompact]}>
+      <Text style={styles.inputLabel}>Create your CrewTools beta account</Text>
+      <Text style={styles.resultBodyText}>
+        Use your Delta seniority number as your CrewTools username. CrewTools uses it to match your seniority profile and unlock personalized tools.
+      </Text>
+      <View style={styles.inputGroup}>
+        <InstrumentField
+          label="Delta seniority number"
+          value={betaSeniorityUsernameInput}
+          onChangeText={setBetaSeniorityUsernameInput}
+          placeholder="Seniority number"
+          keyboardType="number-pad"
+        />
+        <InstrumentField
+          label="Email"
+          value={betaEmailInput}
+          onChangeText={setBetaEmailInput}
+          placeholder="name@example.com"
+          autoCapitalize="none"
+        />
+        <InstrumentField
+          label="Password"
+          value={betaPasswordInput}
+          onChangeText={setBetaPasswordInput}
+          placeholder="Create a password"
+          autoCapitalize="none"
+          secureTextEntry
+        />
+      </View>
+      <Text style={styles.resultSupportMetaText}>
+        Your seniority number is your username, not your password.
+      </Text>
+      <TouchableOpacity
+        style={[styles.quickActionButton, isCompactMobile && styles.quickActionButtonCompact]}
+        onPress={createBetaPilotAccount}
+      >
+        <Text style={[styles.quickActionButtonText, isCompactMobile && styles.quickActionButtonTextCompact]}>
+          Create beta account
+        </Text>
+      </TouchableOpacity>
+      {betaClaimState ? (
+        <View style={[styles.resultPanelSubtle, styles.tripWatchSectionCard, isCompactMobile && styles.tripWatchSectionCardCompact]}>
+          <Text style={styles.tripBoardTimelineMeta}>{betaClaimState.statusMessage}</Text>
+          <Text style={[styles.tripBoardTimelineMeta, styles.tripBoardTimelineMetaMuted, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+            Username: {buildBetaLoginIdentifier(betaSeniorityUsernameInput) || "TBD"}
+          </Text>
+          {betaClaimState.claimedPilotName ? (
+            <Text style={[styles.tripBoardTimelineMeta, styles.tripBoardTimelineMetaMuted, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+              {betaClaimState.claimedPilotName} · {betaClaimState.base ?? "Base TBD"} · {betaClaimState.equipment ?? "Fleet TBD"} · {betaClaimState.seat ?? "Seat TBD"}
+            </Text>
+          ) : null}
+          <Text style={[styles.tripBoardTimelineMeta, styles.tripBoardTimelineMetaMuted, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+            Unlocked tools: {betaClaimState.unlockedTools.join(", ")}
+          </Text>
+        </View>
+      ) : null}
+    </View>
+  );
 
   const parseRotationScreenshots = async (
     analysisRunId: number,
@@ -4637,9 +4722,20 @@ export default function App() {
     openRotationExternalUrl(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`);
   };
 
+  const claimedPilot = useMemo(() => {
+    if (betaClaimState?.claimStatus !== "matched" || !betaClaimState.seniorityNumberUsername) {
+      return null;
+    }
+    return (
+      deltaSnapshot.pilotDirectory.find(
+        (pilot) => String(pilot.seniorityNumber) === betaClaimState.seniorityNumberUsername,
+      ) ?? null
+    );
+  }, [betaClaimState]);
+
   const currentPilot = useMemo(
-    () => findPilotByEmployeeNumber(deltaSnapshot.pilotDirectory, employeeNumberInput),
-    [employeeNumberInput]
+    () => claimedPilot ?? findPilotByEmployeeNumber(deltaSnapshot.pilotDirectory, employeeNumberInput),
+    [claimedPilot, employeeNumberInput]
   );
 
   useEffect(() => {
@@ -4757,6 +4853,19 @@ export default function App() {
 
   const userSeniorityNumber = currentPilot?.seniorityNumber ?? 0;
   const currentCategoryKey = currentPilot?.currentCategoryKey ?? null;
+  const betaUnlockedTools = betaClaimState?.unlockedTools ?? [
+    "rotation_companion",
+    "trip_board",
+    "trip_watch",
+    "pay_watch",
+    "duty_watch",
+    "calendar_sync",
+    "calendar_sync_setup",
+  ];
+  const seniorityToolsUnlocked =
+    betaUnlockedTools.includes("seniority_dashboard") &&
+    betaUnlockedTools.includes("seniority_explorer") &&
+    betaUnlockedTools.includes("ae_tracker");
 
   const tripHealth = useMemo(
     () =>
@@ -8641,21 +8750,39 @@ export default function App() {
             title="Tools"
             description="The trip-first companion is the main experience now. Legacy Seniority, AE, Schedule, and Pay tools stay here as the free hook."
           >
+            <View style={styles.sectionStack}>
+              {renderBetaPilotAccountCard()}
+            </View>
             <View style={styles.payToolGrid}>
               {toolDestinationCards.map((tool) => (
+                (() => {
+                  const toolRequiresClaim =
+                    tool.key === "home" || tool.key === "seniority" || tool.key === "ae";
+                  const toolUnlocked = !toolRequiresClaim || seniorityToolsUnlocked;
+                  return (
                 <TouchableOpacity
                   key={tool.key}
                   activeOpacity={0.9}
-                  style={styles.payToolCard}
-                  onPress={() => setActiveTab(tool.key)}
+                  style={[styles.payToolCard, !toolUnlocked && styles.auditButtonDisabled]}
+                  onPress={() => {
+                    if (!toolUnlocked) {
+                      return;
+                    }
+                    setActiveTab(tool.key);
+                  }}
                 >
                   <View style={styles.payToolHero}>
                     <Text style={styles.payToolGlyph}>{tool.title.slice(0, 2).toUpperCase()}</Text>
-                    <Text style={styles.payToolBadge}>{tool.badge}</Text>
+                    <Text style={styles.payToolBadge}>{toolUnlocked ? tool.badge : "Locked"}</Text>
                   </View>
                   <View style={styles.payToolBody}>
                     <Text style={styles.payToolTitle}>{tool.title}</Text>
                     <Text style={styles.payToolSubtitle}>{tool.subtitle}</Text>
+                    {!toolUnlocked ? (
+                      <Text style={styles.resultSupportMetaText}>
+                        Unlock with a matched seniority profile claim.
+                      </Text>
+                    ) : null}
                     {tool.key === "schedule" ? (
                       <Text style={styles.resultSupportMetaText}>
                         Reuses {rotationCompanionToolRegistry.contractCopilot.ui}
@@ -8674,14 +8801,25 @@ export default function App() {
                       </Text>
                     ) : null}
                   </View>
-                  <Text style={styles.payToolButton}>Open</Text>
+                  <Text style={styles.payToolButton}>{toolUnlocked ? "Open" : "Claim profile"}</Text>
                 </TouchableOpacity>
+                  );
+                })()
               ))}
             </View>
           </SectionCard>
         )}
 
-        {activeTab === "home" && (
+        {activeTab === "home" && !seniorityToolsUnlocked && (
+          <SectionCard
+            title="Seniority Dashboard"
+            description="Claim your beta pilot profile to unlock seniority and AE tools."
+          >
+            {renderBetaPilotAccountCard()}
+          </SectionCard>
+        )}
+
+        {activeTab === "home" && seniorityToolsUnlocked && (
           <MobileHomeDashboard
             currentPilot={currentPilot}
             employeeNumberInput={employeeNumberInput}
@@ -9779,7 +9917,16 @@ export default function App() {
           </SectionCard>
         )}
 
-        {activeTab === "seniority" && (
+        {activeTab === "seniority" && !seniorityToolsUnlocked && (
+          <SectionCard
+            title="Seniority"
+            description="Claim your beta pilot profile to unlock seniority and AE tools."
+          >
+            {renderBetaPilotAccountCard()}
+          </SectionCard>
+        )}
+
+        {activeTab === "seniority" && seniorityToolsUnlocked && (
           <SectionCard
             title="Seniority"
             description="Green means you can hold it. Neutral means it is close. Red means the category is still senior to you. Current marks your present category."
@@ -10108,7 +10255,16 @@ export default function App() {
           </SectionCard>
         )}
 
-        {activeTab === "ae" && (
+        {activeTab === "ae" && !seniorityToolsUnlocked && (
+          <SectionCard
+            title="AE"
+            description="Claim your beta pilot profile to unlock seniority and AE tools."
+          >
+            {renderBetaPilotAccountCard()}
+          </SectionCard>
+        )}
+
+        {activeTab === "ae" && seniorityToolsUnlocked && (
           <SectionCard
             title="AE"
             description="Spoiler: you probably didn't get 350A. Let's see what actually moved."
