@@ -1,0 +1,61 @@
+{
+  "fixtureId": "lax-350-domestic-dh-control-001",
+  "sourcePairingNumber": "1501",
+  "sourceBase": "LAX",
+  "sourceFleet": "350",
+  "sourcePosition": "A,B",
+  "inputFormat": "generated_micrew_from_bid_package",
+  "expected": {
+    "shouldParse": true,
+    "rotationNumber": "1501",
+    "tripDates": "05JUN - 05JUN",
+    "base": "LAX",
+    "creditMinutes": 561,
+    "blockMinutes": 295,
+    "deadheadBlockMinutes": 266,
+    "finalArrival": "LAX",
+    "legCount": 2,
+    "operatingLegCount": 1,
+    "deadheadLegCount": 1,
+    "layovers": [],
+    "cityChain": [
+      "LAX-DTW",
+      "DTW-LAX"
+    ],
+    "legs": [
+      {
+        "carrier": "DL",
+        "flightNumber": "733",
+        "origin": "LAX",
+        "destination": "DTW",
+        "isDeadhead": true
+      },
+      {
+        "carrier": "DL",
+        "flightNumber": "883",
+        "origin": "DTW",
+        "destination": "LAX",
+        "isDeadhead": false
+      }
+    ]
+  },
+  "sourceDutySequence": [
+    {
+      "dutyLetter": "A",
+      "date": "05JUN",
+      "route": "LAX-DTW",
+      "isDeadhead": true
+    },
+    {
+      "dutyLetter": "A",
+      "date": "05JUN",
+      "route": "DTW-LAX",
+      "isDeadhead": false
+    }
+  ],
+  "notes": [
+    "Derived from LAX35BJUN.zip pilaxr.35b pairing #1501.",
+    "Expected JSON asserts parser-verifiable structure only.",
+    "Duty/date source sequence is preserved separately because the current generated-fixture parse path labels both legs as Day 1 rather than 05JUN."
+  ]
+}

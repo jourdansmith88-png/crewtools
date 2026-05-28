@@ -1,0 +1,94 @@
+{
+  "fixtureId": "lax-350-aug-dh-ams-001",
+  "sourcePairingNumber": "A413",
+  "sourceBase": "LAX",
+  "sourceFleet": "350",
+  "sourcePosition": "B",
+  "inputFormat": "generated_micrew_from_bid_package",
+  "expected": {
+    "shouldParse": true,
+    "rotationNumber": "A413",
+    "tripDates": "11JUN - 15JUN",
+    "base": "LAX",
+    "creditMinutes": 1575,
+    "blockMinutes": 1002,
+    "deadheadBlockMinutes": 455,
+    "finalArrival": "LAX",
+    "legCount": 4,
+    "operatingLegCount": 2,
+    "deadheadLegCount": 2,
+    "layovers": [
+      "MSP",
+      "AMS",
+      "MSP"
+    ],
+    "cityChain": [
+      "LAX-MSP",
+      "MSP-AMS",
+      "AMS-MSP",
+      "MSP-LAX"
+    ],
+    "legs": [
+      {
+        "carrier": "DL",
+        "flightNumber": "2198",
+        "origin": "LAX",
+        "destination": "MSP",
+        "isDeadhead": true
+      },
+      {
+        "carrier": "DL",
+        "flightNumber": "160",
+        "origin": "MSP",
+        "destination": "AMS",
+        "isDeadhead": false
+      },
+      {
+        "carrier": "DL",
+        "flightNumber": "161",
+        "origin": "AMS",
+        "destination": "MSP",
+        "isDeadhead": false
+      },
+      {
+        "carrier": "DL",
+        "flightNumber": "2110",
+        "origin": "MSP",
+        "destination": "LAX",
+        "isDeadhead": true
+      }
+    ]
+  },
+  "sourceDutySequence": [
+    {
+      "dutyLetter": "A",
+      "date": "11JUN",
+      "route": "LAX-MSP",
+      "isDeadhead": true
+    },
+    {
+      "dutyLetter": "B",
+      "date": "12JUN",
+      "route": "MSP-AMS",
+      "isDeadhead": false
+    },
+    {
+      "dutyLetter": "D",
+      "date": "14JUN",
+      "route": "AMS-MSP",
+      "isDeadhead": false
+    },
+    {
+      "dutyLetter": "E",
+      "date": "15JUN",
+      "route": "MSP-LAX",
+      "isDeadhead": true
+    }
+  ],
+  "notes": [
+    "Derived from LAX35BJUN.zip pilaxr.35b pairing #A413.",
+    "Augmented/FDP source evidence exists in the bid package, but this file does not assert final FAR 117 legality conclusions.",
+    "Current parser recovers totals, layovers, and deadhead classification from the normalized generated fixture.",
+    "Current generated-fixture parse path does not preserve the original A/B/D/E duty letters and instead labels the parsed legs as Day 2, Day 3, Day 4, Day 4."
+  ]
+}
