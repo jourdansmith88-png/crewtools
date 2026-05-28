@@ -99,6 +99,7 @@ import {
   getCalendarSyncDisplayHost,
   type CalendarSyncConnectionTestResult,
 } from "./src/features/rotationCompanion/calendarSyncSetup";
+import { getRotationOnboardingState } from "./src/features/rotationCompanion/rotationOnboarding";
 import {
   buildProjectedRotationSnapshot,
   filterCalendarEventsForBaseline,
@@ -2854,6 +2855,33 @@ export default function App() {
     ],
   );
 
+  const hasCalendarSetup = useMemo(
+    () =>
+      Boolean(
+        calendarSyncSetupState.calendarUrlEntered ||
+          calendarSetupConnectionTestResult?.success ||
+          calendarSyncSetupState.normalizedHost,
+      ),
+    [
+      calendarSetupConnectionTestResult?.success,
+      calendarSyncSetupState.calendarUrlEntered,
+      calendarSyncSetupState.normalizedHost,
+    ],
+  );
+  const onboardingLiveMonitoringActive = Boolean(
+    rotationDebugEnabled && useLiveProjectedTimeline && calendarLabLiveTimelineProjection,
+  );
+  const rotationOnboardingState = useMemo(
+    () =>
+      getRotationOnboardingState({
+        hasCalendarSetup,
+        hasLoadedBaseline: Boolean(displayedRotationDashboard),
+        hasLiveProjection: onboardingLiveMonitoringActive,
+        isDebugMode: rotationDebugEnabled,
+      }),
+    [displayedRotationDashboard, hasCalendarSetup, onboardingLiveMonitoringActive, rotationDebugEnabled],
+  );
+
   const formatLegFlightDisplay = (leg: RotationDashboardData["legs"][number]) => {
     const carrierPrefix =
       leg.flightNumber && leg.carrier && !leg.flightNumber.toUpperCase().startsWith(leg.carrier.toUpperCase())
@@ -2938,7 +2966,10 @@ export default function App() {
     {}
   );
   const scrollRef = useRef<ScrollView | null>(null);
+  const rotationPasteInputRef = useRef<TextInput | null>(null);
   const [whatIfSectionY, setWhatIfSectionY] = useState(0);
+  const [rotationIntakeSectionY, setRotationIntakeSectionY] = useState(0);
+  const [calendarSyncSetupSectionY, setCalendarSyncSetupSectionY] = useState(0);
   const rerouteAnalysisCounterRef = useRef(0);
   const rerouteActiveRequestIdRef = useRef<number | null>(null);
   const rotationAnalysisCounterRef = useRef(0);
@@ -3623,6 +3654,56 @@ export default function App() {
       </View>
     </View>
   );
+
+  const renderRotationOnboardingCard = () => {
+    if (rotationOnboardingState.status === "monitoring_active") {
+      return null;
+    }
+    return (
+      <View style={[styles.resultPanel, styles.rotationOnboardingPanel, isCompactMobile && styles.resultPanelCompact]}>
+        <Text style={styles.inputLabel}>{rotationOnboardingState.headline}</Text>
+        <Text style={styles.resultBodyText}>{rotationOnboardingState.body}</Text>
+        <View style={styles.sectionStack}>
+          {rotationOnboardingState.rows.map((row) => (
+            <View key={row.key} style={styles.calendarSyncChecklistRow}>
+              <Text style={styles.calendarSyncChecklistMarker}>{row.completed ? "✓" : "○"}</Text>
+              <View style={styles.calendarSyncChecklistBody}>
+                <Text style={styles.tripBoardTimelineMeta}>{row.title}</Text>
+                <Text style={[styles.tripBoardTimelineMeta, styles.tripBoardTimelineMetaMuted, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+                  {row.detail}
+                </Text>
+              </View>
+            </View>
+          ))}
+        </View>
+        <View style={[styles.quickActionGrid, isCompactMobile && styles.quickActionGridCompact]}>
+          <TouchableOpacity
+            style={[styles.quickActionButton, isCompactMobile && styles.quickActionButtonCompact]}
+            onPress={() => handleRotationOnboardingAction(rotationOnboardingState.primaryAction)}
+          >
+            <Text style={[styles.quickActionButtonText, isCompactMobile && styles.quickActionButtonTextCompact]}>
+              {rotationOnboardingState.primaryActionLabel}
+            </Text>
+          </TouchableOpacity>
+          {rotationOnboardingState.secondaryActionLabel && rotationOnboardingState.secondaryAction ? (
+            <TouchableOpacity
+              style={[styles.quickActionButton, isCompactMobile && styles.quickActionButtonCompact]}
+              onPress={() => handleRotationOnboardingAction(rotationOnboardingState.secondaryAction)}
+            >
+              <Text style={[styles.quickActionButtonText, isCompactMobile && styles.quickActionButtonTextCompact]}>
+                {rotationOnboardingState.secondaryActionLabel}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+        {!displayedRotationDashboard ? (
+          <Text style={styles.resultSupportMetaText}>
+            Forwarding support coming soon. For now, paste/upload your MiCrew rotation.
+          </Text>
+        ) : null}
+      </View>
+    );
+  };
 
   const parseRotationScreenshots = async (
     analysisRunId: number,
@@ -5850,6 +5931,40 @@ export default function App() {
     }, 80);
   };
 
+  const jumpToCalendarSyncSetup = () => {
+    scrollRef.current?.scrollTo({
+      y: Math.max(0, calendarSyncSetupSectionY - 120),
+      animated: true,
+    });
+  };
+
+  const jumpToRotationUpload = () => {
+    scrollRef.current?.scrollTo({
+      y: Math.max(0, rotationIntakeSectionY - 120),
+      animated: true,
+    });
+    setTimeout(() => {
+      rotationPasteInputRef.current?.focus();
+    }, 120);
+  };
+
+  const handleRotationOnboardingAction = (action: string) => {
+    if (action === "setup_calendar_sync" || action === "review_calendar_sync") {
+      jumpToCalendarSyncSetup();
+      return;
+    }
+    if (action === "upload_micrew_rotation") {
+      jumpToRotationUpload();
+      return;
+    }
+    if (action === "monitor_trip") {
+      scrollRef.current?.scrollTo({
+        y: Math.max(0, rotationIntakeSectionY - 120),
+        animated: true,
+      });
+    }
+  };
+
   return (
     <AppErrorBoundary>
       <SafeAreaView style={[styles.safeArea, { backgroundColor: flieger.background }]}>
@@ -6915,7 +7030,18 @@ export default function App() {
                   </View>
                 ) : null}
 
-                {renderCalendarSyncSetupPanel()}
+                {rotationOnboardingState.status === "ready_for_monitoring" && !onboardingLiveMonitoringActive ? (
+                  <View style={[styles.resultPanelSubtle, styles.rotationOnboardingStatusPanel, isCompactMobile && styles.tripWatchSectionCardCompact]}>
+                    <Text style={styles.tripBoardTimelineMeta}>{rotationOnboardingState.headline}</Text>
+                    <Text style={[styles.tripBoardTimelineMeta, styles.tripBoardTimelineMetaMuted, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+                      {rotationOnboardingState.body}
+                    </Text>
+                  </View>
+                ) : null}
+
+                <View onLayout={(event) => setCalendarSyncSetupSectionY(event.nativeEvent.layout.y)}>
+                  {renderCalendarSyncSetupPanel()}
+                </View>
 
                 <View style={[styles.resultPanel, isCompactMobile && styles.resultPanelCompact]}>
                   <Text style={styles.inputLabel}>Trip Watch</Text>
@@ -7768,9 +7894,13 @@ export default function App() {
                   <Text style={styles.rotationIntakeSubtitle}>Parse MiCrew / iCrew details into your live rotation.</Text>
                 </View>
 
-                <View style={[styles.resultPanel, styles.rotationIntakePanel, isCompactMobile && styles.resultPanelCompact]}>
+                <View
+                  style={[styles.resultPanel, styles.rotationIntakePanel, isCompactMobile && styles.resultPanelCompact]}
+                  onLayout={(event) => setRotationIntakeSectionY(event.nativeEvent.layout.y)}
+                >
                   <Text style={styles.inputLabel}>Paste rotation</Text>
                   <TextInput
+                    ref={rotationPasteInputRef}
                     multiline
                     value={rotationPasteInput}
                     onChangeText={(value) => {
@@ -7876,7 +8006,11 @@ export default function App() {
                   </View>
                 </View>
 
-                {renderCalendarSyncSetupPanel()}
+                {renderRotationOnboardingCard()}
+
+                <View onLayout={(event) => setCalendarSyncSetupSectionY(event.nativeEvent.layout.y)}>
+                  {renderCalendarSyncSetupPanel()}
+                </View>
 
                 <View style={[styles.resultPanel, isCompactMobile && styles.resultPanelCompact]}>
                   <Text style={styles.inputLabel}>Trip Watch</Text>
@@ -14812,6 +14946,12 @@ const styles = StyleSheet.create({
   },
   calendarSyncSetupPanelCompact: {
     marginBottom: 96,
+  },
+  rotationOnboardingPanel: {
+    marginBottom: 8,
+  },
+  rotationOnboardingStatusPanel: {
+    marginBottom: 12,
   },
   resultPanelSubtle: {
     backgroundColor: appStylePalette.surfaceRaised,
