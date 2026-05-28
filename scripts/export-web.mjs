@@ -1,8 +1,11 @@
 import { cpSync, existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 
-const projectRoot = "/Users/StarJ/Desktop/Senority+";
+const currentFilePath = fileURLToPath(import.meta.url);
+const scriptsDir = path.dirname(currentFilePath);
+const projectRoot = path.resolve(scriptsDir, "..");
 const distDir = path.join(projectRoot, "dist");
 const distDataDir = path.join(distDir, "data");
 const parsedDir = path.join(projectRoot, "Delta data", "parsed");
