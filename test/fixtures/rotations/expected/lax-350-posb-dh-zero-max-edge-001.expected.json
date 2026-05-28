@@ -1,0 +1,93 @@
+{
+  "fixtureId": "lax-350-posb-dh-zero-max-edge-001",
+  "sourcePairingNumber": "A414",
+  "sourceBase": "LAX",
+  "sourceFleet": "350",
+  "sourcePosition": "B",
+  "inputFormat": "generated_micrew_from_bid_package",
+  "expected": {
+    "shouldParse": true,
+    "rotationNumber": "A414",
+    "tripDates": "06JUN - 10JUN",
+    "base": "LAX",
+    "creditMinutes": 1575,
+    "blockMinutes": 1002,
+    "deadheadBlockMinutes": 450,
+    "finalArrival": "LAX",
+    "legCount": 4,
+    "operatingLegCount": 2,
+    "deadheadLegCount": 2,
+    "layovers": [
+      "MSP",
+      "AMS",
+      "MSP"
+    ],
+    "cityChain": [
+      "LAX-MSP",
+      "MSP-AMS",
+      "AMS-MSP",
+      "MSP-LAX"
+    ],
+    "legs": [
+      {
+        "carrier": "DL",
+        "flightNumber": "2198",
+        "origin": "LAX",
+        "destination": "MSP",
+        "isDeadhead": true
+      },
+      {
+        "carrier": "DL",
+        "flightNumber": "160",
+        "origin": "MSP",
+        "destination": "AMS",
+        "isDeadhead": false
+      },
+      {
+        "carrier": "DL",
+        "flightNumber": "161",
+        "origin": "AMS",
+        "destination": "MSP",
+        "isDeadhead": false
+      },
+      {
+        "carrier": "DL",
+        "flightNumber": "2110",
+        "origin": "MSP",
+        "destination": "LAX",
+        "isDeadhead": true
+      }
+    ]
+  },
+  "sourceDutySequence": [
+    {
+      "dutyLetter": "A",
+      "date": "06JUN",
+      "route": "LAX-MSP",
+      "isDeadhead": true
+    },
+    {
+      "dutyLetter": "B",
+      "date": "07JUN",
+      "route": "MSP-AMS",
+      "isDeadhead": false
+    },
+    {
+      "dutyLetter": "D",
+      "date": "09JUN",
+      "route": "AMS-MSP",
+      "isDeadhead": false
+    },
+    {
+      "dutyLetter": "E",
+      "date": "10JUN",
+      "route": "MSP-LAX",
+      "isDeadhead": true
+    }
+  ],
+  "notes": [
+    "Derived from LAX35BJUN.zip pilaxr.35b pairing #A414.",
+    "Expected JSON asserts only parser-verifiable structure and totals.",
+    "Visible 0.00/max-style duty metadata is source-real and intentionally not turned into legal assertions."
+  ]
+}

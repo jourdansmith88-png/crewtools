@@ -1,0 +1,30 @@
+ROT 1828 02JUN-04JUN
+PPR REDACTED
+Rpt- 0850 02JUN
+Release- 0600 04JUN
+Credit- 18:32
+TAFB 45:40
+LAYOVER: HNL Rest- 24:08
+
+DL837 : ATL-HNL
+Rpt- 0915 02JUN
+Dep- 0950 02JUN
+Arr- 1336 02JUN
+Blk- 9:46
+Eqp/Ship- 333
+HOTEL HILTON HAWAIIAN
+
+DL309 : HNL-ATL
+Rpt- 1439 03JUN
+Dep- 1514 03JUN
+Arr- 0600 04JUN
+Blk- 8:46
+Eqp/Ship- 333
+
+TOTALS 18:32TL 18:32BL 00:00CR
+
+SOURCE PAIRING 1828
+SOURCE BASE ATL
+SOURCE FLEET 330
+SOURCE POSITION A,B
+SOURCE NOTE Fallback domestic multi-day control from ATL33BJUN because the LAX35BJUN raw source did not include a clean domestic-only multi-day pairing with full leg detail.

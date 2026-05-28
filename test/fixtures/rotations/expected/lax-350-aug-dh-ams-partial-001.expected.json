@@ -1,0 +1,67 @@
+{
+  "fixtureId": "lax-350-aug-dh-ams-partial-001",
+  "sourcePairingNumber": "A413",
+  "sourceBase": "LAX",
+  "sourceFleet": "350",
+  "sourcePosition": "B",
+  "inputFormat": "generated_micrew_from_bid_package_partial",
+  "expected": {
+    "shouldParse": true,
+    "rotationNumber": "A413",
+    "tripDates": "11JUN - 13JUN",
+    "base": "LAX",
+    "creditMinutes": 480,
+    "blockMinutes": 480,
+    "deadheadBlockMinutes": 219,
+    "finalArrival": "AMS",
+    "legCount": 2,
+    "operatingLegCount": 1,
+    "deadheadLegCount": 1,
+    "layovers": [
+      "MSP",
+      "AMS"
+    ],
+    "cityChain": [
+      "LAX-MSP",
+      "MSP-AMS"
+    ],
+    "legs": [
+      {
+        "carrier": "DL",
+        "flightNumber": "2198",
+        "origin": "LAX",
+        "destination": "MSP",
+        "isDeadhead": true
+      },
+      {
+        "carrier": "DL",
+        "flightNumber": "160",
+        "origin": "MSP",
+        "destination": "AMS",
+        "isDeadhead": false
+      }
+    ],
+    "shouldBePartial": true,
+    "partialReasonIncludes": "partial"
+  },
+  "sourceDutySequence": [
+    {
+      "dutyLetter": "A",
+      "date": "11JUN",
+      "route": "LAX-MSP",
+      "isDeadhead": true
+    },
+    {
+      "dutyLetter": "B",
+      "date": "12JUN",
+      "route": "MSP-AMS",
+      "isDeadhead": false
+    }
+  ],
+  "notes": [
+    "Derived from LAX35BJUN.zip pilaxr.35b pairing #A413.",
+    "Truncated at the natural AMS layover boundary before the return chain and before full-trip totals.",
+    "Expected JSON intentionally does not assert a final arrival or full-trip totals.",
+    "If the current generated-fixture parse path stops short of exposing reliable partial status details, partial reason should remain a future assertion rather than forcing parser changes."
+  ]
+}

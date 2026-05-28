@@ -1,0 +1,63 @@
+{
+  "fixtureId": "lax-350-domestic-multiday-weird-sequence-001",
+  "sourcePairingNumber": "1828",
+  "sourceBase": "ATL",
+  "sourceFleet": "330",
+  "sourcePosition": "A,B",
+  "inputFormat": "generated_micrew_from_bid_package_fallback",
+  "expected": {
+    "shouldParse": true,
+    "rotationNumber": "1828",
+    "tripDates": "02JUN - 04JUN",
+    "base": "ATL",
+    "creditMinutes": 1112,
+    "blockMinutes": 1112,
+    "deadheadBlockMinutes": 0,
+    "finalArrival": "ATL",
+    "legCount": 2,
+    "operatingLegCount": 2,
+    "deadheadLegCount": 0,
+    "layovers": [
+      "HNL"
+    ],
+    "cityChain": [
+      "ATL-HNL",
+      "HNL-ATL"
+    ],
+    "legs": [
+      {
+        "carrier": "DL",
+        "flightNumber": "837",
+        "origin": "ATL",
+        "destination": "HNL",
+        "isDeadhead": false
+      },
+      {
+        "carrier": "DL",
+        "flightNumber": "309",
+        "origin": "HNL",
+        "destination": "ATL",
+        "isDeadhead": false
+      }
+    ]
+  },
+  "sourceDutySequence": [
+    {
+      "dutyLetter": "A",
+      "date": "02JUN",
+      "route": "ATL-HNL",
+      "isDeadhead": false
+    },
+    {
+      "dutyLetter": "B",
+      "date": "03JUN",
+      "route": "HNL-ATL",
+      "isDeadhead": false
+    }
+  ],
+  "notes": [
+    "Selected as the domestic multi-day fallback from ATL33BJUN piatlr.33b pairing #1828.",
+    "Used because the LAX35BJUN source did not include a clean domestic-only multi-day pairing with full leg detail.",
+    "Expected JSON asserts parser-verifiable structure only and does not try to infer anything beyond the visible source rows."
+  ]
+}

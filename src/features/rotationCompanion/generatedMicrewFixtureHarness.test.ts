@@ -27,6 +27,8 @@ type GeneratedFixtureExpected = {
   layovers?: string[];
   cityChain?: string[];
   legs?: ExpectedLeg[];
+  shouldBePartial?: boolean;
+  partialReasonIncludes?: string | string[];
 };
 
 type GeneratedFixtureFile = {
@@ -213,6 +215,25 @@ for (const fixturePath of generatedFixturePaths) {
         );
       }
     });
+  }
+
+  if (typeof expected.shouldBePartial === "boolean") {
+    assert(
+      dashboard.parsedRotation.isPartial === expected.shouldBePartial,
+      `Generated fixture ${fixtureId} partial-status mismatch: expected ${expected.shouldBePartial}, got ${dashboard.parsedRotation.isPartial}`,
+    );
+  }
+  if (expected.partialReasonIncludes) {
+    const actualPartialReason = String(dashboard.parsedRotation.partialReason ?? "").toLowerCase();
+    const requiredFragments = Array.isArray(expected.partialReasonIncludes)
+      ? expected.partialReasonIncludes
+      : [expected.partialReasonIncludes];
+    for (const fragment of requiredFragments) {
+      assert(
+        actualPartialReason.includes(fragment.toLowerCase()),
+        `Generated fixture ${fixtureId} partial reason mismatch: expected fragment ${fragment}, got ${dashboard.parsedRotation.partialReason}`,
+      );
+    }
   }
 
   if (expected.base) {

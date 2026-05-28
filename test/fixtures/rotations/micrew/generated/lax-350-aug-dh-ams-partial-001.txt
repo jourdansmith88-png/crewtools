@@ -1,0 +1,31 @@
+ROT A413 11JUN-13JUN
+PPR REDACTED
+Rpt- 1425 11JUN
+Credit- PARTIAL
+TAFB PARTIAL
+LAYOVER: MSP Rest- 16:51
+
+D DL2198 : LAX-MSP
+Rpt- 1450 11JUN
+Dep- 1525 11JUN
+Arr- 2104 11JUN
+Blk- 3:39
+Eqp/Ship- 3N1
+HOTEL MARRIOTT CITY CENTRE
+
+LAYOVER: AMS Rest- 24:45
+
+DL160 : MSP-AMS
+Rpt- 1520 12JUN
+Dep- 1555 12JUN
+Arr- 0655 13JUN
+Blk- 8:00
+Eqp/Ship- 35J
+HOTEL WILL ADVISE
+
+SOURCE PAIRING A413
+SOURCE BASE LAX
+SOURCE FLEET 350
+SOURCE POSITION B
+SOURCE PARTIAL Truncated at the natural AMS layover boundary before the return chain and full totals.
+SOURCE NOTE This fixture is intended to prove safe incomplete handling without inventing a return to base.
