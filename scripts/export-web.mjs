@@ -8,8 +8,14 @@ const distDataDir = path.join(distDir, "data");
 const parsedDir = path.join(projectRoot, "Delta data", "parsed");
 const pilotHistorySource = path.join(parsedDir, "pilot-history");
 const pilotHistoryTarget = path.join(distDataDir, "pilot-history");
+const expoBinary = path.join(
+  projectRoot,
+  "node_modules",
+  ".bin",
+  process.platform === "win32" ? "expo.cmd" : "expo",
+);
 
-execFileSync("npx", ["expo", "export", "--platform", "web"], {
+execFileSync(expoBinary, ["export", "--platform", "web"], {
   cwd: projectRoot,
   stdio: "inherit",
 });
