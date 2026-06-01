@@ -9,8 +9,8 @@ const noCalendarNoBaseline = getRotationOnboardingState({
 });
 assert.equal(noCalendarNoBaseline.status, "calendar_setup_needed");
 assert.equal(noCalendarNoBaseline.primaryActionLabel, "Set up Calendar Sync");
-assert.match(noCalendarNoBaseline.body, /calendar/i);
-assert.match(noCalendarNoBaseline.body, /MiCrew rotation/i);
+assert.match(noCalendarNoBaseline.body, /reroutes/i);
+assert.match(noCalendarNoBaseline.body, /117\/block margins/i);
 
 const calendarNoBaseline = getRotationOnboardingState({
   hasCalendarSetup: true,
@@ -18,7 +18,9 @@ const calendarNoBaseline = getRotationOnboardingState({
   hasLiveProjection: false,
 });
 assert.equal(calendarNoBaseline.status, "baseline_needed");
+assert.equal(calendarNoBaseline.headline, "Calendar sync ready");
 assert.equal(calendarNoBaseline.primaryActionLabel, "Upload MiCrew Rotation");
+assert.match(calendarNoBaseline.body, /deadheads/i);
 
 const baselineNoProjection = getRotationOnboardingState({
   hasCalendarSetup: true,
@@ -27,6 +29,16 @@ const baselineNoProjection = getRotationOnboardingState({
 });
 assert.equal(baselineNoProjection.status, "ready_for_monitoring");
 assert.equal(baselineNoProjection.primaryActionLabel, "Review Calendar Sync");
+assert.equal(baselineNoProjection.secondaryActionLabel, undefined);
+assert.match(baselineNoProjection.body, /Calendar sync ready/i);
+
+const baselineNoCalendar = getRotationOnboardingState({
+  hasCalendarSetup: false,
+  hasLoadedBaseline: true,
+  hasLiveProjection: false,
+});
+assert.equal(baselineNoCalendar.status, "ready_for_monitoring");
+assert.match(baselineNoCalendar.body, /Add Calendar Sync for live updates/i);
 
 const liveProjectionActive = getRotationOnboardingState({
   hasCalendarSetup: true,
@@ -34,9 +46,10 @@ const liveProjectionActive = getRotationOnboardingState({
   hasLiveProjection: true,
 });
 assert.equal(liveProjectionActive.status, "monitoring_active");
+assert.match(liveProjectionActive.body, /Projected from calendar/i);
 
 const rowsSummary = noCalendarNoBaseline.rows.map((row) => `${row.title}:${row.detail}`).join(" | ");
-assert.match(rowsSummary, /Calendar Sync:Detect trips and timing changes/);
+assert.match(rowsSummary, /Calendar Sync:Detect trips and live timing changes/);
 assert.match(rowsSummary, /MiCrew Rotation:Official baseline for pay, 117, hotels, deadheads/);
 
 console.log("rotationOnboarding passed");

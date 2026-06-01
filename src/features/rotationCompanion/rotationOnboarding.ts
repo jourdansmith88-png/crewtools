@@ -52,7 +52,7 @@ export function getRotationOnboardingState(
     {
       key: "calendar-sync",
       title: "Calendar Sync",
-      detail: "Detect trips and timing changes",
+      detail: "Detect trips and live timing changes",
       completed: args.hasCalendarSetup,
     },
     {
@@ -74,7 +74,7 @@ export function getRotationOnboardingState(
       currentStep: "ready_to_monitor",
       status: "monitoring_active",
       headline: "Live monitoring active",
-      body: "Calendar updates are currently being projected onto this trip while MiCrew remains the official baseline.",
+      body: "Projected from calendar. Calendar updates are being applied to your trip timeline.",
       primaryActionLabel: "Monitor this trip",
       primaryAction: "monitor_trip",
       calendarSyncReady: true,
@@ -89,11 +89,11 @@ export function getRotationOnboardingState(
       currentStep: "ready_to_monitor",
       status: "ready_for_monitoring",
       headline: "Baseline loaded",
-      body: "Calendar sync can monitor timing changes for this trip when connected.",
+      body: args.hasCalendarSetup
+        ? "Calendar sync ready. CrewTools can monitor timing changes for this trip."
+        : "Add Calendar Sync for live updates on this trip.",
       primaryActionLabel: "Review Calendar Sync",
       primaryAction: "review_calendar_sync",
-      secondaryActionLabel: "Upload MiCrew Rotation",
-      secondaryAction: "upload_micrew_rotation",
       calendarSyncReady: args.hasCalendarSetup,
       baselineReady: true,
       liveMonitoringReady: false,
@@ -105,8 +105,8 @@ export function getRotationOnboardingState(
     return {
       currentStep: "setup_micrew_baseline",
       status: "baseline_needed",
-      headline: "Calendar setup started",
-      body: "Upload or forward your MiCrew rotation to unlock Pay Watch, 117 Watch, hotels, and live monitoring.",
+      headline: "Calendar sync ready",
+      body: "Upload or forward your MiCrew rotation to unlock Pay Watch, 117 Watch, hotels, deadheads, and live monitoring.",
       primaryActionLabel: "Upload MiCrew Rotation",
       primaryAction: "upload_micrew_rotation",
       secondaryActionLabel: "Review Calendar Sync",
@@ -122,7 +122,7 @@ export function getRotationOnboardingState(
     currentStep: "connect_calendar",
     status: "calendar_setup_needed",
     headline: "Get CrewTools ready to watch your trips",
-    body: "Connect MiCrew Calendar Sync once, then upload or forward your MiCrew rotation before each trip. CrewTools uses the calendar for live timing updates and the MiCrew rotation as the official baseline for pay, 117, hotels, and deadheads.",
+    body: "Set up MiCrew Calendar Sync once, then upload your MiCrew rotation before each trip. CrewTools uses calendar updates to monitor timing changes, reroutes, RTG events, and 117/block margins.",
     primaryActionLabel: "Set up Calendar Sync",
     primaryAction: "setup_calendar_sync",
     secondaryActionLabel: "Upload MiCrew Rotation",
