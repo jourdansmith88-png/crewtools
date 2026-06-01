@@ -2380,6 +2380,7 @@ export default function App() {
   const [calendarSetupConnectionTestResult, setCalendarSetupConnectionTestResult] =
     useState<CalendarSyncConnectionTestResult | null>(null);
   const [calendarSetupPrivacyAcknowledged, setCalendarSetupPrivacyAcknowledged] = useState(false);
+  const [calendarSetupAdvancedOpen, setCalendarSetupAdvancedOpen] = useState(false);
   const [calendarLabParsedEventCount, setCalendarLabParsedEventCount] = useState(0);
   const [calendarLabSessionMessage, setCalendarLabSessionMessage] = useState("");
   const [rotationToolBanner, setRotationToolBanner] = useState<RotationToolBanner | null>(null);
@@ -3482,6 +3483,7 @@ export default function App() {
   const testCalendarSyncSetup = () => {
     const trimmedUrl = calendarSetupUrlInput.trim();
     if (!trimmedUrl) {
+      setCalendarSetupAdvancedOpen(true);
       setCalendarSetupInvalidUrl(false);
       setCalendarSetupTestMessage("Paste your calendar subscription link first.");
       setCalendarSetupConnectionTestResult(null);
@@ -3490,6 +3492,7 @@ export default function App() {
     }
     const normalizedUrl = normalizeWebcalUrl(trimmedUrl);
     if (!normalizedUrl) {
+      setCalendarSetupAdvancedOpen(true);
       setCalendarSetupInvalidUrl(true);
       setCalendarSetupTestMessage("Calendar link looks invalid. Check the webcal:// or https:// address and try again.");
       setCalendarSetupConnectionTestResult(null);
@@ -3509,6 +3512,7 @@ export default function App() {
     setCalendarSetupHasUrl(true);
     setCalendarSetupInvalidUrl(false);
     setCalendarSetupPrivacyAcknowledged(true);
+    setCalendarSetupAdvancedOpen(true);
     setCalendarSetupTestMessage(testResult.message);
     setCalendarSetupUrlInput("");
   };
@@ -3543,7 +3547,7 @@ export default function App() {
       <View style={styles.sectionStack}>
         <View style={[styles.resultPanelSubtle, styles.tripWatchSectionCard, isCompactMobile && styles.tripWatchSectionCardCompact]}>
           <Text style={styles.resultSupportMetaText}>Step 1</Text>
-          <Text style={styles.tripBoardTimelineMeta}>Set refresh rate</Text>
+          <Text style={styles.tripBoardTimelineMeta}>Set MiCrew refresh rate</Text>
           <Text style={[styles.tripBoardTimelineMeta, styles.tripBoardTimelineMetaMuted, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
             MiCrew → ☰ Menu → Settings → Connectivity
           </Text>
@@ -3553,7 +3557,7 @@ export default function App() {
         </View>
         <View style={[styles.resultPanelSubtle, styles.tripWatchSectionCard, isCompactMobile && styles.tripWatchSectionCardCompact]}>
           <Text style={styles.resultSupportMetaText}>Step 2</Text>
-          <Text style={styles.tripBoardTimelineMeta}>Turn on flight-by-flight sync</Text>
+          <Text style={styles.tripBoardTimelineMeta}>Turn on flight-by-flight calendar sync</Text>
           <Text style={[styles.tripBoardTimelineMeta, styles.tripBoardTimelineMetaMuted, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
             MiCrew → ☰ Menu → Settings → Calendar
           </Text>
@@ -3572,15 +3576,20 @@ export default function App() {
         </View>
         <View style={[styles.resultPanelSubtle, styles.tripWatchSectionCard, isCompactMobile && styles.tripWatchSectionCardCompact]}>
           <Text style={styles.resultSupportMetaText}>Step 3</Text>
-          <Text style={styles.tripBoardTimelineMeta}>Paste calendar link</Text>
+          <Text style={styles.tripBoardTimelineMeta}>Connect calendar in CrewTools</Text>
           <Text style={[styles.tripBoardTimelineMeta, styles.tripBoardTimelineMetaMuted, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
-            Copy your calendar subscription/webcal link and paste it into CrewTools.
+            Allow calendar access and choose the MiCrew calendar.
           </Text>
-          {calendarSyncSetupState?.normalizedHost ? (
-            <Text style={[styles.tripBoardTimelineMeta, styles.tripBoardTimelineMetaMuted, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
-              Calendar host recognized: {calendarSyncSetupState.normalizedHost}
-            </Text>
-          ) : null}
+          <Text style={[styles.tripBoardTimelineMeta, styles.tripBoardTimelineMetaMuted, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+            CrewTools will only use flight-like events from the calendar you select.
+          </Text>
+        </View>
+        <View style={[styles.resultPanelSubtle, styles.tripWatchSectionCard, isCompactMobile && styles.tripWatchSectionCardCompact]}>
+          <Text style={styles.resultSupportMetaText}>Step 4</Text>
+          <Text style={styles.tripBoardTimelineMeta}>Upload MiCrew rotation</Text>
+          <Text style={[styles.tripBoardTimelineMeta, styles.tripBoardTimelineMetaMuted, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+            Before each trip, upload or forward your MiCrew rotation so CrewTools has the official baseline for pay, 117, hotels, and deadheads.
+          </Text>
         </View>
       </View>
       <View style={styles.sectionStack}>
@@ -3595,50 +3604,86 @@ export default function App() {
             </View>
           ))}
       </View>
-      <View style={styles.inputGroup}>
-        <InstrumentField
-          label="Calendar feed URL"
-          value={calendarSetupUrlInput}
-          onChangeText={(value) => {
-            setCalendarSetupUrlInput(value);
-            setCalendarSetupInvalidUrl(false);
-            setCalendarSetupTestMessage("");
-          }}
-          placeholder="webcal:// or https://"
-          autoCapitalize="none"
-        />
-      </View>
-      <Text style={styles.resultSupportMetaText}>
-        Treat this link like a password. Anyone with it may be able to view this calendar.
-      </Text>
-      <View style={[styles.quickActionGrid, isCompactMobile && styles.quickActionGridCompact]}>
+      <View style={[styles.resultPanelSubtle, styles.tripWatchSectionCard, isCompactMobile && styles.tripWatchSectionCardCompact]}>
         <TouchableOpacity
-          style={[styles.quickActionButton, isCompactMobile && styles.quickActionButtonCompact]}
-          onPress={testCalendarSyncSetup}
+          style={styles.evidenceAccordionHeader}
+          onPress={() => setCalendarSetupAdvancedOpen((current) => !current)}
+          activeOpacity={0.85}
         >
-          <Text style={[styles.quickActionButtonText, isCompactMobile && styles.quickActionButtonTextCompact]}>
-            Test calendar feed
-          </Text>
+          <View style={styles.evidenceAccordionHeaderTextBlock}>
+            <Text style={styles.tripBoardTimelineMeta}>Advanced: paste calendar link manually</Text>
+            <Text
+              style={[
+                styles.tripBoardTimelineMeta,
+                styles.tripBoardTimelineMetaMuted,
+                isCompactMobile && styles.tripBoardTimelineMetaCompact,
+              ]}
+            >
+              Most pilots will not need this. Use it only if you have a webcal/iCal subscription link available.
+            </Text>
+          </View>
+          <Text style={styles.evidenceAccordionChevron}>{calendarSetupAdvancedOpen ? "−" : "+"}</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.quickActionButton, isCompactMobile && styles.quickActionButtonCompact]}
-          onPress={clearCalendarSyncSetup}
-        >
-          <Text style={[styles.quickActionButtonText, isCompactMobile && styles.quickActionButtonTextCompact]}>
-            Clear calendar link
-          </Text>
-        </TouchableOpacity>
+        {calendarSetupAdvancedOpen ? (
+          <View style={styles.sectionStack}>
+            <View style={styles.inputGroup}>
+              <InstrumentField
+                label="Calendar feed URL"
+                value={calendarSetupUrlInput}
+                onChangeText={(value) => {
+                  setCalendarSetupUrlInput(value);
+                  setCalendarSetupInvalidUrl(false);
+                  setCalendarSetupTestMessage("");
+                }}
+                placeholder="webcal:// or https://"
+                autoCapitalize="none"
+              />
+            </View>
+            <Text style={styles.resultSupportMetaText}>
+              Treat this link like a password. Anyone with it may be able to view this calendar.
+            </Text>
+            {calendarSyncSetupState?.normalizedHost ? (
+              <Text style={styles.resultSupportMetaText}>
+                Calendar host recognized: {calendarSyncSetupState.normalizedHost}
+              </Text>
+            ) : null}
+            <View style={[styles.quickActionGrid, isCompactMobile && styles.quickActionGridCompact]}>
+              <TouchableOpacity
+                style={[styles.quickActionButton, isCompactMobile && styles.quickActionButtonCompact]}
+                onPress={testCalendarSyncSetup}
+              >
+                <Text style={[styles.quickActionButtonText, isCompactMobile && styles.quickActionButtonTextCompact]}>
+                  Test calendar feed
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.quickActionButton, isCompactMobile && styles.quickActionButtonCompact]}
+                onPress={clearCalendarSyncSetup}
+              >
+                <Text style={[styles.quickActionButtonText, isCompactMobile && styles.quickActionButtonTextCompact]}>
+                  Clear calendar link
+                </Text>
+              </TouchableOpacity>
+            </View>
+            {calendarSetupTestMessage ? (
+              <Text
+                style={
+                  calendarSyncSetupState?.setupStatus === "error"
+                    ? styles.inlineValidationText
+                    : styles.resultSupportMetaText
+                }
+              >
+                {calendarSetupTestMessage}
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
       </View>
-      {calendarSetupTestMessage ? (
-        <Text style={calendarSyncSetupState?.setupStatus === "error" ? styles.inlineValidationText : styles.resultSupportMetaText}>
-          {calendarSetupTestMessage}
-        </Text>
-      ) : null}
       <View style={[styles.resultPanelSubtle, styles.tripWatchSectionCard, isCompactMobile && styles.tripWatchSectionCardCompact]}>
         <Text style={styles.resultSupportMetaText}>Privacy note</Text>
         <Text style={styles.tripBoardTimelineMeta}>CrewTools does not need your Delta password.</Text>
-        <Text style={styles.tripBoardTimelineMeta}>Treat your calendar link like a password.</Text>
-        <Text style={styles.tripBoardTimelineMeta}>Calendar sync monitors timing and trip changes.</Text>
+        <Text style={styles.tripBoardTimelineMeta}>Choose the MiCrew calendar when prompted.</Text>
+        <Text style={styles.tripBoardTimelineMeta}>CrewTools only uses flight-like events for trip monitoring.</Text>
         <Text style={styles.tripBoardTimelineMeta}>MiCrew upload confirms pay, 117, hotels, and deadheads.</Text>
       </View>
       <View style={[styles.resultPanelSubtle, styles.tripWatchSectionCard, isCompactMobile && styles.tripWatchSectionCardCompact]}>
@@ -3652,6 +3697,13 @@ export default function App() {
             Calendar setup started. Upload or forward your MiCrew rotation to unlock Pay Watch, 117 Watch, hotels, and live monitoring.
           </Text>
         )}
+      </View>
+      <View style={[styles.resultPanelSubtle, styles.tripWatchSectionCard, isCompactMobile && styles.tripWatchSectionCardCompact]}>
+        <Text style={styles.resultSupportMetaText}>Mobile app flow</Text>
+        <Text style={styles.tripBoardTimelineMeta}>Calendar permission and automatic MiCrew detection</Text>
+        <Text style={[styles.tripBoardTimelineMeta, styles.tripBoardTimelineMetaMuted, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+          CrewTools mobile app will ask for calendar permission and detect MiCrew events automatically.
+        </Text>
       </View>
       <View style={[styles.resultPanelSubtle, styles.tripWatchSectionCard, isCompactMobile && styles.tripWatchSectionCardCompact]}>
         <Text style={styles.resultSupportMetaText}>Coming next</Text>
@@ -3684,9 +3736,20 @@ export default function App() {
             </View>
           ))}
         </View>
-        <View style={[styles.quickActionGrid, isCompactMobile && styles.quickActionGridCompact]}>
+        <View
+          style={[
+            styles.quickActionGrid,
+            styles.rotationOnboardingActionGrid,
+            isCompactMobile && styles.rotationOnboardingActionGridCompact,
+          ]}
+        >
           <TouchableOpacity
-            style={[styles.quickActionButton, isCompactMobile && styles.quickActionButtonCompact]}
+            style={[
+              styles.quickActionButton,
+              styles.rotationOnboardingActionButton,
+              isCompactMobile && styles.quickActionButtonCompact,
+              isCompactMobile && styles.rotationOnboardingActionButtonCompact,
+            ]}
             onPress={() => handleRotationOnboardingAction(rotationOnboardingState.primaryAction)}
           >
             <Text style={[styles.quickActionButtonText, isCompactMobile && styles.quickActionButtonTextCompact]}>
@@ -3695,7 +3758,12 @@ export default function App() {
           </TouchableOpacity>
           {rotationOnboardingState.secondaryActionLabel && rotationOnboardingState.secondaryAction ? (
             <TouchableOpacity
-              style={[styles.quickActionButton, isCompactMobile && styles.quickActionButtonCompact]}
+              style={[
+                styles.quickActionButton,
+                styles.rotationOnboardingActionButton,
+                isCompactMobile && styles.quickActionButtonCompact,
+                isCompactMobile && styles.rotationOnboardingActionButtonCompact,
+              ]}
               onPress={() => handleRotationOnboardingAction(rotationOnboardingState.secondaryAction)}
             >
               <Text style={[styles.quickActionButtonText, isCompactMobile && styles.quickActionButtonTextCompact]}>
@@ -8003,6 +8071,12 @@ export default function App() {
                   <Text style={styles.rotationIntakeSubtitle}>Parse MiCrew / iCrew details into your live rotation.</Text>
                 </View>
 
+                {renderRotationOnboardingCard()}
+
+                <View onLayout={(event) => setCalendarSyncSetupSectionY(event.nativeEvent.layout.y)}>
+                  {renderCalendarSyncSetupPanel()}
+                </View>
+
                 <View
                   style={[styles.resultPanel, styles.rotationIntakePanel, isCompactMobile && styles.resultPanelCompact]}
                   onLayout={(event) => setRotationIntakeSectionY(event.nativeEvent.layout.y)}
@@ -8113,12 +8187,6 @@ export default function App() {
                       </View>
                     ))}
                   </View>
-                </View>
-
-                {renderRotationOnboardingCard()}
-
-                <View onLayout={(event) => setCalendarSyncSetupSectionY(event.nativeEvent.layout.y)}>
-                  {renderCalendarSyncSetupPanel()}
                 </View>
 
                 <View style={[styles.resultPanel, isCompactMobile && styles.resultPanelCompact]}>
@@ -15105,6 +15173,20 @@ const styles = StyleSheet.create({
   },
   rotationOnboardingPanel: {
     marginBottom: 8,
+  },
+  rotationOnboardingActionGrid: {
+    marginTop: 2,
+  },
+  rotationOnboardingActionGridCompact: {
+    flexDirection: "column",
+    alignItems: "stretch",
+  },
+  rotationOnboardingActionButton: {
+    flexGrow: 1,
+  },
+  rotationOnboardingActionButtonCompact: {
+    width: "100%",
+    minWidth: 0,
   },
   rotationOnboardingStatusPanel: {
     marginBottom: 12,

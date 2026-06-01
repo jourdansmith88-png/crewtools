@@ -17,6 +17,32 @@ export type CalendarSyncConnectionTestResult = {
   errorCode?: "invalid_url" | "fetch_blocked" | "unknown";
 };
 
+export type CalendarEventPrivacyMode =
+  | "selected_calendar_only"
+  | "flight_events_only"
+  | "manual_url_fallback";
+
+export type CalendarSourceCandidate = {
+  id: string;
+  displayName: string;
+  sourceName?: string;
+  likelyMiCrew: boolean;
+  confidence: "high" | "medium" | "low";
+  reason?: string;
+};
+
+export type CalendarSourceSelectionState = {
+  selectedCalendarId?: string;
+  selectedCalendarName?: string;
+  calendarAccessStatus:
+    | "not_requested"
+    | "permission_needed"
+    | "permission_granted"
+    | "permission_denied"
+    | "source_selected";
+  privacyMode: CalendarEventPrivacyMode;
+};
+
 export type CalendarSyncSetupChecklistItem = {
   key: string;
   title: string;
@@ -33,6 +59,7 @@ export type CalendarSyncSetupState = {
   setupStatus: CalendarSyncSetupStatus;
   checklist: CalendarSyncSetupChecklistItem[];
   privacyAcknowledged?: boolean;
+  privacyMode: CalendarEventPrivacyMode;
 };
 
 type BuildCalendarSyncSetupStateArgs = {
@@ -53,39 +80,117 @@ export function getCalendarSyncDisplayHost(input: string) {
   }
 }
 
+type CalendarLikeObject = {
+  id?: string | number;
+  displayName?: string;
+  name?: string;
+  title?: string;
+  sourceName?: string;
+  eventSample?: Array<{
+    title?: string;
+    summary?: string;
+    location?: string;
+    notes?: string;
+  }>;
+};
+
+const FLIGHT_NUMBER_PATTERN = /\b(?:DL|OO|9E|YX)\s?\d{2,4}\b/i;
+const AIRPORT_PAIR_PATTERN = /\b[A-Z]{3}\s*[-–]\s*[A-Z]{3}\b/;
+
+function getCalendarCandidateDisplayName(input: CalendarLikeObject) {
+  return input.displayName?.trim() || input.name?.trim() || input.title?.trim() || "Calendar";
+}
+
+function getCalendarSampleText(input: CalendarLikeObject) {
+  return (input.eventSample ?? [])
+    .flatMap((item) => [item.title, item.summary, item.location, item.notes])
+    .filter(Boolean)
+    .join(" ");
+}
+
+export function classifyCalendarSourceCandidate(input: CalendarLikeObject): CalendarSourceCandidate {
+  const displayName = getCalendarCandidateDisplayName(input);
+  const sourceName = input.sourceName?.trim() || undefined;
+  const combinedName = `${displayName} ${sourceName ?? ""}`.trim();
+  const sampleText = getCalendarSampleText(input);
+  const lowerName = combinedName.toLowerCase();
+
+  let score = 0;
+  const reasons: string[] = [];
+
+  if (lowerName.includes("micrew")) {
+    score += 4;
+    reasons.push("calendar name includes MiCrew");
+  }
+  if (lowerName.includes("delta")) {
+    score += 3;
+    reasons.push("calendar name includes Delta");
+  }
+  if (lowerName.includes("schedule")) {
+    score += 2;
+    reasons.push("calendar name includes schedule");
+  }
+  if (FLIGHT_NUMBER_PATTERN.test(sampleText)) {
+    score += 2;
+    reasons.push("event sample contains flight numbers");
+  }
+  if (AIRPORT_PAIR_PATTERN.test(sampleText)) {
+    score += 2;
+    reasons.push("event sample contains airport pairs");
+  }
+
+  const likelyMiCrew = score >= 4;
+  const confidence = score >= 6 ? "high" : score >= 3 ? "medium" : "low";
+
+  return {
+    id: String(input.id ?? displayName),
+    displayName,
+    sourceName,
+    likelyMiCrew,
+    confidence,
+    reason: reasons.length > 0 ? reasons.join("; ") : undefined,
+  };
+}
+
+type CalendarEventLike = {
+  title?: string;
+  summary?: string;
+  location?: string;
+  notes?: string;
+};
+
+export function shouldImportCalendarEventForCrewTools(event: CalendarEventLike) {
+  const text = [event.title, event.summary, event.location, event.notes].filter(Boolean).join(" ");
+  return FLIGHT_NUMBER_PATTERN.test(text) && AIRPORT_PAIR_PATTERN.test(text);
+}
+
 export function buildCalendarSyncSetupChecklist(args: {
   calendarUrlEntered: boolean;
   baselineLoaded: boolean;
 }): CalendarSyncSetupChecklistItem[] {
   return [
     {
-      key: "micrew-settings",
-      title: "Open MiCrew Settings",
-      detail: "Go to Connectivity → Calendar.",
-      completed: false,
-    },
-    {
-      key: "auto-sync",
-      title: "Turn Auto-Sync ON",
-      detail: "Enable MiCrew Auto-Sync for calendar refreshes.",
-      completed: false,
-    },
-    {
-      key: "sync-by-flight",
-      title: "Turn Sync by Flight ON",
-      detail: "Sync by Flight helps CrewTools track flight-level timing updates.",
-      completed: false,
-    },
-    {
       key: "refresh-rate",
-      title: "Set Schedule Refresh Rate in Minutes",
-      detail: "Use 5 minutes if MiCrew offers it. Hide Rest Activities is optional.",
+      title: "Set MiCrew refresh rate",
+      detail: "Go to MiCrew → Settings → Connectivity and use 5 minutes if available.",
+      completed: false,
+    },
+    {
+      key: "flight-sync",
+      title: "Turn on flight-by-flight calendar sync",
+      detail: "Enable Auto-Sync, Sync by Flight, and Hide Rest Activities.",
+      completed: false,
+    },
+    {
+      key: "calendar-access",
+      title: "Connect calendar in CrewTools",
+      detail: "Allow calendar access, choose the MiCrew calendar, and use only flight-like events for live timing updates.",
       completed: false,
     },
     {
       key: "calendar-link",
-      title: "Copy/paste your calendar subscription link into CrewTools",
-      detail: "CrewTools uses the feed for trip detection and live timing updates.",
+      title: "Advanced: paste calendar link manually",
+      detail: "Only needed if you already have a webcal or iCal subscription link available.",
       completed: args.calendarUrlEntered,
     },
     {
@@ -128,5 +233,6 @@ export function buildCalendarSyncSetupState(
     setupStatus,
     checklist,
     privacyAcknowledged: args.privacyAcknowledged,
+    privacyMode: args.calendarUrlEntered ? "manual_url_fallback" : "selected_calendar_only",
   };
 }
