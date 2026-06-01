@@ -35,14 +35,16 @@ assert.equal(host?.includes("/published/2/example"), false);
 
 const checklistTitles = webcalState.checklist.map((item) => item.title).join(" | ");
 assert.match(checklistTitles, /Connect calendar in CrewTools/);
-assert.match(checklistTitles, /Advanced: paste calendar link manually/);
+assert.match(checklistTitles, /Advanced beta workaround: paste calendar link manually/);
 
 const checklistDetails = webcalState.checklist.map((item) => item.detail ?? "").join(" | ");
 assert.match(checklistDetails, /Auto-Sync/);
 assert.match(checklistDetails, /Sync by Flight/);
+assert.match(checklistDetails, /In the mobile app/i);
 assert.match(checklistDetails, /choose the MiCrew calendar/i);
 assert.match(checklistDetails, /flight-like events/i);
-assert.match(checklistDetails, /Only needed if you already have a webcal or iCal subscription link available/);
+assert.match(checklistDetails, /Only needed during beta testing/i);
+assert.match(checklistDetails, /webcal, iCal, or raw ICS feed/i);
 assert.match(checklistDetails, /authoritative baseline for pay, 117, hotels, and deadheads/i);
 
 const needsBaselineState = buildCalendarSyncSetupState({

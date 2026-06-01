@@ -3578,10 +3578,10 @@ export default function App() {
           <Text style={styles.resultSupportMetaText}>Step 3</Text>
           <Text style={styles.tripBoardTimelineMeta}>Connect calendar in CrewTools</Text>
           <Text style={[styles.tripBoardTimelineMeta, styles.tripBoardTimelineMetaMuted, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
-            Allow calendar access and choose the MiCrew calendar.
+            In the mobile app, CrewTools will ask for calendar access.
           </Text>
           <Text style={[styles.tripBoardTimelineMeta, styles.tripBoardTimelineMetaMuted, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
-            CrewTools will only use flight-like events from the calendar you select.
+            Choose the MiCrew calendar when prompted. CrewTools will only use flight-like events from that calendar.
           </Text>
         </View>
         <View style={[styles.resultPanelSubtle, styles.tripWatchSectionCard, isCompactMobile && styles.tripWatchSectionCardCompact]}>
@@ -3611,7 +3611,7 @@ export default function App() {
           activeOpacity={0.85}
         >
           <View style={styles.evidenceAccordionHeaderTextBlock}>
-            <Text style={styles.tripBoardTimelineMeta}>Advanced: paste calendar link manually</Text>
+            <Text style={styles.tripBoardTimelineMeta}>Advanced beta workaround: paste calendar link manually</Text>
             <Text
               style={[
                 styles.tripBoardTimelineMeta,
@@ -3619,13 +3619,59 @@ export default function App() {
                 isCompactMobile && styles.tripBoardTimelineMetaCompact,
               ]}
             >
-              Most pilots will not need this. Use it only if you have a webcal/iCal subscription link available.
+              Most pilots will not need this.
             </Text>
           </View>
-          <Text style={styles.evidenceAccordionChevron}>{calendarSetupAdvancedOpen ? "−" : "+"}</Text>
+          <View style={styles.calendarSetupAdvancedToggle}>
+            <Text style={styles.calendarSetupAdvancedToggleText}>
+              {calendarSetupAdvancedOpen ? "Collapse" : "Expand"}
+            </Text>
+          </View>
         </TouchableOpacity>
         {calendarSetupAdvancedOpen ? (
           <View style={styles.sectionStack}>
+            <Text style={styles.resultSupportMetaText}>
+              Most pilots will not need this. Use this only during beta testing if you have a webcal/iCal link or raw ICS feed available.
+            </Text>
+            <View style={[styles.resultPanelSubtle, styles.tripWatchSectionCard, isCompactMobile && styles.tripWatchSectionCardCompact]}>
+              <Text style={styles.resultSupportMetaText}>How beta testers can use raw ICS</Text>
+              <Text style={styles.tripBoardTimelineMeta}>Mac/internal beta</Text>
+              <Text style={[styles.tripBoardTimelineMeta, styles.tripBoardTimelineMetaMuted, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+                1. Copy the webcal link if available.
+              </Text>
+              <Text style={[styles.tripBoardTimelineMeta, styles.tripBoardTimelineMetaMuted, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+                2. Replace webcal:// with https://.
+              </Text>
+              <Text style={[styles.tripBoardTimelineMeta, styles.tripBoardTimelineMetaMuted, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+                3. Run:
+              </Text>
+              <View style={styles.resultPanelSubtle}>
+                <Text style={[styles.tripBoardTimelineMeta, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+                  {`curl -L "https://YOUR_CALENDAR_LINK" -o /tmp/micrew-calendar.ics`}
+                </Text>
+                <Text style={[styles.tripBoardTimelineMeta, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+                  {`pbcopy < /tmp/micrew-calendar.ics`}
+                </Text>
+              </View>
+              <Text style={[styles.tripBoardTimelineMeta, styles.tripBoardTimelineMetaMuted, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+                4. Open CrewTools with ?rotationDebug=1.
+              </Text>
+              <Text style={[styles.tripBoardTimelineMeta, styles.tripBoardTimelineMetaMuted, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+                5. Paste into Calendar Sync Lab.
+              </Text>
+              <Text style={[styles.tripBoardTimelineMeta, styles.tripBoardTimelineMetaMuted, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+                6. Parse ICS, apply to loaded trip, then turn on Use live projected timeline.
+              </Text>
+            </View>
+            <View style={[styles.resultPanelSubtle, styles.tripWatchSectionCard, isCompactMobile && styles.tripWatchSectionCardCompact]}>
+              <Text style={styles.tripBoardTimelineMeta}>If you do not have a link</Text>
+              <Text style={[styles.tripBoardTimelineMeta, styles.tripBoardTimelineMetaMuted, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+                MiCrew may only sync directly into your phone calendar. Use the phone calendar to confirm flight-by-flight events are present.
+              </Text>
+              <Text style={[styles.tripBoardTimelineMeta, styles.tripBoardTimelineMetaMuted, isCompactMobile && styles.tripBoardTimelineMetaCompact]}>
+                CrewTools cannot read them from the web app yet; native mobile calendar access is coming later.
+              </Text>
+            </View>
             <View style={styles.inputGroup}>
               <InstrumentField
                 label="Calendar feed URL"
@@ -3641,6 +3687,9 @@ export default function App() {
             </View>
             <Text style={styles.resultSupportMetaText}>
               Treat this link like a password. Anyone with it may be able to view this calendar.
+            </Text>
+            <Text style={styles.resultSupportMetaText}>
+              Treat calendar links and raw ICS files like private schedule data. Do not post them publicly or commit them to source control.
             </Text>
             {calendarSyncSetupState?.normalizedHost ? (
               <Text style={styles.resultSupportMetaText}>
@@ -15219,6 +15268,22 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 2,
     minWidth: 0,
+  },
+  calendarSetupAdvancedToggle: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: appStylePalette.borderStrong,
+    backgroundColor: appStylePalette.surfaceRaised,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    alignSelf: "flex-start",
+  },
+  calendarSetupAdvancedToggleText: {
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 0.4,
+    color: appStylePalette.textPrimary,
+    textTransform: "uppercase",
   },
   tripWatchSectionCard: {
     gap: 8,

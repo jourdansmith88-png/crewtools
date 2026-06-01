@@ -184,13 +184,14 @@ export function buildCalendarSyncSetupChecklist(args: {
     {
       key: "calendar-access",
       title: "Connect calendar in CrewTools",
-      detail: "Allow calendar access, choose the MiCrew calendar, and use only flight-like events for live timing updates.",
+      detail:
+        "In the mobile app, allow calendar access, choose the MiCrew calendar, and use only flight-like events for live timing updates.",
       completed: false,
     },
     {
       key: "calendar-link",
-      title: "Advanced: paste calendar link manually",
-      detail: "Only needed if you already have a webcal or iCal subscription link available.",
+      title: "Advanced beta workaround: paste calendar link manually",
+      detail: "Only needed during beta testing if you already have a webcal, iCal, or raw ICS feed available.",
       completed: args.calendarUrlEntered,
     },
     {
